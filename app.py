@@ -13,7 +13,7 @@ except Exception as e:
     AUDIO_AVAILABLE = False
     AUDIO_ERROR = str(e)
     
-st.set_page_config(page_title="AI Advisor - Haly Style", page_icon="🎙️", layout="wide")
+st.set_page_config(page_title="AI Advisor - Smart Companion", page_icon="🎙️", layout="wide")
 
 st.markdown("""
     <style>
@@ -30,7 +30,7 @@ st.markdown("""
         color: #6C757D;
     }
     
-    /* Successfully validated box (Haly Green) */
+    /* Successfully validated box (Success Green) */
     .status-box-filled { 
         padding: 12px; 
         border-radius: 10px; 
