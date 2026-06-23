@@ -195,7 +195,7 @@ if st.session_state.stage == 6:
     st.balloons()
     st.header("📋 Final Strategic Diagnostic")
     
-    rec_text = "Based on the client profile, Haly recommends a low-risk, phased implementation. "
+    rec_text = "Based on the client profile, Smart Companion recommends a low-risk, phased implementation. "
     if "Excel" in st.session_state.slots['Tech'] or "Manual" in st.session_state.slots['Tech']:
         rec_text += "Priority #1 is migrating manual workflows to a centralized database. "
     if "Time Loss" in st.session_state.slots['Pain'] or "Operational" in st.session_state.slots['Pain']:
@@ -207,7 +207,7 @@ if st.session_state.stage == 6:
 
     st.markdown(f"""
     <div class="recommendation-box">
-        <h3>🤖 Haly's Strategic Advisory:</h3>
+        <h3>🧠 Smart Companion's Strategic Advisory:</h3>
         <p>{rec_text}</p>
         <hr style="border-color: #134074;">
         <small>💡 <b>Sales Pitch Tip:</b> Talk to this client using a <b>{st.session_state.tags['Lens']}</b> approach and address their underlying fear: <i>"{st.session_state.tags['Fear']}"</i>.</small>
