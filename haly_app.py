@@ -1,10 +1,18 @@
 import streamlit as st
 import json
-import pyaudio
-from vosk import Model, KaldiRecognizer
 import time
 import os
 
+# 1. SECURE AUDIO IMPORTS
+try:
+    import pyaudio
+    from vosk import Model, KaldiRecognizer
+    AUDIO_AVAILABLE = True
+    AUDIO_ERROR = None
+except Exception as e:
+    AUDIO_AVAILABLE = False
+    AUDIO_ERROR = str(e)
+    
 st.set_page_config(page_title="AI Advisor - Haly Style", page_icon="🎙️", layout="wide")
 
 st.markdown("""
@@ -12,7 +20,7 @@ st.markdown("""
     .main { background-color: #0E1117; color: white; }
     .stButton>button { width: 100%; border-radius: 50px; height: 3em; background-color: #2E6BFF; color: white; }
     
-    /* Case vide par défaut */
+    /* Default empty status box */
     .status-box-empty { 
         padding: 12px; 
         border-radius: 10px; 
@@ -22,7 +30,7 @@ st.markdown("""
         color: #6C757D;
     }
     
-    /* Case validée avec succès (Vert Haly) */
+    /* Successfully validated box (Haly Green) */
     .status-box-filled { 
         padding: 12px; 
         border-radius: 10px; 
@@ -33,7 +41,7 @@ st.markdown("""
         font-weight: bold;
     }
     
-    /* Encadré de recommandation IA */
+    /* AI Recommendation container */
     .recommendation-box {
         padding: 20px;
         border-radius: 15px;
@@ -45,8 +53,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Only load Vosk if imports were successful
 @st.cache_resource
 def load_vosk():
+    if not AUDIO_AVAILABLE:
+        return None
     model_path = "vosk-model-en-us-0.22"
     if os.path.exists(model_path):
         return Model(model_path)
@@ -72,7 +83,6 @@ stages = {
 def process_text(text):
     text = text.lower()
     
-    # PLUS DE RESTRICTION DE STAGE : On analyse tout, tout le temps !
     if any(w in text for w in ['ceo', 'c e o', 'founder', 'director', 'manager', 'leader', 'head', 'vp', 'vice president', 'executive']): 
         st.session_state.slots['Role'] = 'Executive / Decision Maker'
         
@@ -99,6 +109,9 @@ def process_text(text):
 
 st.title("🎙️ Smart Companion")
 st.markdown("### Stage " + str(st.session_state.stage) + " / 5")
+
+if not AUDIO_AVAILABLE:
+    st.warning(f"⚠️ The audio module could not start properly (Error: {AUDIO_ERROR}). The interface remains accessible.")
 
 col1, col2 = st.columns([2, 1])
 
