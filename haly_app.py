@@ -53,18 +53,21 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Only load Vosk if imports were successful
-@st.cache_resource
-def load_vosk():
-    if not AUDIO_AVAILABLE:
+# Only load Vosk if imports were successful and avoid automatic downloads on startup
+model = None
+if AUDIO_AVAILABLE:
+    @st.cache_resource
+    def load_vosk():
+        model_path = "vosk-model-en-us-0.22"
+        if os.path.exists(model_path):
+            return Model(model_path)
         return None
-    model_path = "vosk-model-en-us-0.22"
-    if os.path.exists(model_path):
-        return Model(model_path)
-    return Model(model_name="vosk-model-en-us-0.22")
-
-with st.spinner("🔄 Loading Haly Voice Engine..."):
-    model = load_vosk()
+    
+    try:
+        model = load_vosk()
+    except Exception as vosk_err:
+        AUDIO_AVAILABLE = False
+        AUDIO_ERROR = f"Vosk initialization failed: {str(vosk_err)}"
 
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'Trigger': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'Success': 'Empty', 'Limits': 'Empty'}
