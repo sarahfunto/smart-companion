@@ -122,26 +122,38 @@ with col1:
     st.info(f"**Agent says:** {stages[st.session_state.stage]}")
     
     # 1. OPTION MICRO
-    if st.button("🔴 Click to Start Speaking"):
+if st.button("🔴 Click to Start Speaking"):
         st.write("Listening for 8 seconds...")
-        recognizer = KaldiRecognizer(model, 16000)
-        p = pyaudio.PyAudio()
-        stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=4000)
-        stream.start_stream()
-        start_time = time.time()
-        while time.time() - start_time < 8:
-            data = stream.read(4000, exception_on_overflow=False)
-            if recognizer.AcceptWaveform(data):
-                res = json.loads(recognizer.Result())
-                text = res.get('text', '')
-                if text:
-                    st.session_state.transcript = text
-                    process_text(text)
-                    break
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
-        st.rerun()
+        
+        # 1. On essaie d'initialiser le moteur vocal
+        try:
+            recognizer = KaldiRecognizer(model, 16000)
+            AUDIO_AVAILABLE = True
+        except Exception as e:
+            st.warning("Le moteur vocal n'a pas pu démarrer sur le serveur. Bascule en mode démo écrite.")
+            AUDIO_AVAILABLE = False
+
+        # 2. On lance l'enregistrement UNIQUEMENT si le moteur vocal est dispo
+        if AUDIO_AVAILABLE:
+            p = pyaudio.PyAudio()
+            stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=4000)
+            stream.start_stream()
+            start_time = time.time()
+            
+            while time.time() - start_time < 8:
+                data = stream.read(4000, exception_on_overflow=False)
+                if recognizer.AcceptWaveform(data):
+                    res = json.loads(recognizer.Result())
+                    text = res.get('text', '')
+                    if text:
+                        st.session_state.transcript = text
+                        process_text(text)
+                        break
+                        
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
+            st.rerun()
     
     st.markdown("---")
     
