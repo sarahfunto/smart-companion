@@ -122,10 +122,10 @@ with col1:
     st.info(f"**Agent says:** {stages[st.session_state.stage]}")
     
     # 1. OPTION MICRO
-if st.button("🔴 Click to Start Speaking"):
+    if st.button("🔴 Click to Start Speaking"):
         st.write("Listening for 8 seconds...")
         
-        # 1. On essaie d'initialiser le moteur vocal
+        # On essaie d'initialiser le moteur vocal
         try:
             recognizer = KaldiRecognizer(model, 16000)
             AUDIO_AVAILABLE = True
@@ -133,7 +133,7 @@ if st.button("🔴 Click to Start Speaking"):
             st.warning("Le moteur vocal n'a pas pu démarrer sur le serveur. Bascule en mode démo écrite.")
             AUDIO_AVAILABLE = False
 
-        # 2. On lance l'enregistrement UNIQUEMENT si le moteur vocal est dispo
+        # On lance l'enregistrement UNIQUEMENT si le moteur vocal est dispo
         if AUDIO_AVAILABLE:
             p = pyaudio.PyAudio()
             stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=4000)
@@ -171,6 +171,7 @@ if st.button("🔴 Click to Start Speaking"):
         st.success(f"Captured: {st.session_state.transcript}")
         
     st.markdown("---")
+    
     # NAVIGATION ALWAYS VISIBLE
     nav_col1, nav_col2 = st.columns(2)
     with nav_col1:
