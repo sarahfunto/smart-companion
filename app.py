@@ -130,7 +130,7 @@ with col1:
             recognizer = KaldiRecognizer(model, 16000)
             AUDIO_AVAILABLE = True
         except Exception as e:
-            st.warning("Le moteur vocal n'a pas pu démarrer sur le serveur. Bascule en mode démo écrite.")
+            st.warning("⚠️ Local voice engine unavailable on Cloud server. Please use the Text Backup mode below for the live demo.")
             AUDIO_AVAILABLE = False
 
         # On lance l'enregistrement UNIQUEMENT si le moteur vocal est dispo
