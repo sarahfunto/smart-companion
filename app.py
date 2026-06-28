@@ -111,6 +111,44 @@ def process_text(text):
         st.session_state.tags['Lens'] = 'Data Driven Preference'
 
 st.title("🎙️ Smart Companion")
+
+# ==========================================
+# 🌐 PRE-MEETING INTELLIGENCE (HUMAN AI)
+# ==========================================
+st.sidebar.markdown("## 🔍 Pre-Meeting Intelligence")
+st.sidebar.markdown("*Use this section to scan the web before the client interview starts.*")
+
+# Inputs for the search query
+search_company = st.sidebar.text_input("🏢 Company Name", placeholder="e.g., Quantemetry")
+search_prospect = st.sidebar.text_input("👤 Prospect Name / Role", placeholder="e.g., CEO")
+
+# Simulated / Mock Search Results for the Demo
+if 'web_context' not in st.session_state:
+    st.session_state.web_context = ""
+
+if st.sidebar.button("⚡ Scan Live Web Context"):
+    if search_company:
+        with st.sidebar.spinner(f"Searching internet for deep insights on {search_company}..."):
+            time.sleep(2)  # Simulates network latency for the demo
+            
+            st.session_state.web_context = f"""
+            **[LIVE WEB INSIGHTS FOR {search_company.upper()}]**
+            • **Core Business:** Premium AI & Data Corporate Consulting.
+            • **Tech Footprint:** High-end Python infrastructure, but known scaling bottlenecks in manual auditing reporting.
+            • **Recent News:** Expanding into automated workflows for mid-market financial firms.
+            • **Strategic Match:** Perfect target for our Smart Companion enterprise automation mapping.
+            """
+            st.sidebar.success("Brain Updated with Web Context!")
+    else:
+        st.sidebar.warning("Please enter at least a company name to scan.")
+
+# Display the findings inside the sidebar if they exist
+if st.session_state.web_context:
+    st.sidebar.info(st.session_state.web_context)
+    if st.sidebar.button("🗑️ Clear Context"):
+        st.session_state.web_context = ""
+        st.rerun()
+        
 st.markdown("### Stage " + str(st.session_state.stage) + " / 5")
 
 if not AUDIO_AVAILABLE:
