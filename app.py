@@ -157,8 +157,17 @@ if not AUDIO_AVAILABLE:
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.info(f"**Agent says:** {stages[st.session_state.stage]}")
-    
+   st.info(f"**Agent says:** {stages[st.session_state.stage]}")
+
+        # 🧠 CONNECTING WEB INTELLIGENCE TO THE LIVE SESSION
+        if st.session_state.web_context:
+            st.markdown(f"""
+            <div style="background-color: #e3f2fd; border-left: 5px solid #2196f3; padding: 12px; border-radius: 4px; margin-bottom: 20px;">
+                <span style="color: #0d47a1; font-weight: bold;">🧠 Contextual Intelligence Active:</span> 
+                <span style="color: #1565c0;">The AI engine has integrated the background insights for <strong>{search_company.upper()}</strong> into this interview's reasoning layer.</span>
+            </div>
+            """, unsafe_allow_html=True)
+        
     # 1. OPTION MICRO
     if st.button("🔴 Click to Start Speaking"):
         st.write("Listening for 8 seconds...")
