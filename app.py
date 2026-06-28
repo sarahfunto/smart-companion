@@ -90,14 +90,14 @@ if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 
 stages = {
-    "0": "Background Research (Pre-Interview Insights & Company Profile Extraction)",
-    "1": "Ice Breaking & Context Alignment (Role, Core Mission & Trigger Identification)",
-    "2": "Organizational Assessment (Tech Infrastructure, Readiness & Internal Complexity)",
-    "3": "Deep Dive Diagnostics (Root Cause Analysis, Operational Pain & Strategic Fit)",
-    "4": "Human Dynamic Evaluation (AI Literacy, Decision Style & Executive Urgency)",
-    "5": "Strategic Anchoring (Growth Profiles, Investment Readiness & Implementation Blockers)",
-    "6": "Validation & Gap Resolution (Active Listening Feedback, Alignment & Gap Closing)",
-    "7": "Value Output (Diagnostic Presentation, Tier-2 Deep Dive Invitation & Conversion Signal)"
+    "0": "Phase 0: Deep Intelligence Gathering (Pre-Interview Profiling & Web Insights Extraction)",
+    "1": "Phase 1: Alignment & Trigger Detection (Role Assessment & Contextual Validation)",
+    "2": "Phase 2: Technical Maturity Diagnostics (Infrastructure Readiness & Organizational Complexity Evaluator)",
+    "3": "Phase 3: Deep Pain Architecture (Operational Pain Discovery & Root Cause Analysis)",
+    "4": "Phase 4: Executive Psychology Profiling (AI Literacy, Decision Style & Emotional Fear Mapping)",
+    "5": "Phase 5: Strategic Anchoring (Growth Alignment, Investment Readiness & Blocker Identification)",
+    "6": "Phase 6: Active Alignment & Gap Closing (Mirroring, Feedback Validation & Sync Confirmation)",
+    "7": "Phase 7: Value Delivery & Conversion (Diagnostic Output, Tier-2 Deep Dive Blueprint)"
 }
 
 def process_text(text):
