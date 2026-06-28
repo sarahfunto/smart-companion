@@ -90,12 +90,14 @@ if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 
 stages = {
-    1: "Hello! Tell me about your role and what brought you here today?",
-    2: "What does your current tech stack look like? (Excel, systems...)",
-    3: "What is the biggest operational pain costing you time or money?",
-    4: "What does personal success look like for you as a leader?",
-    5: "What are your hard constraints? (Budget, timeline...)",
-    6: "Analysis complete! Here is your diagnostic."
+    "0": "Background Research (Pre-Interview Insights & Company Profile Extraction)",
+    "1": "Ice Breaking & Context Alignment (Role, Core Mission & Trigger Identification)",
+    "2": "Organizational Assessment (Tech Infrastructure, Readiness & Internal Complexity)",
+    "3": "Deep Dive Diagnostics (Root Cause Analysis, Operational Pain & Strategic Fit)",
+    "4": "Human Dynamic Evaluation (AI Literacy, Decision Style & Executive Urgency)",
+    "5": "Strategic Anchoring (Growth Profiles, Investment Readiness & Implementation Blockers)",
+    "6": "Validation & Gap Resolution (Active Listening Feedback, Alignment & Gap Closing)",
+    "7": "Value Output (Diagnostic Presentation, Tier-2 Deep Dive Invitation & Conversion Signal)"
 }
 
 def process_text(text):
