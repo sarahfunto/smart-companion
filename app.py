@@ -119,7 +119,7 @@ st.sidebar.markdown("## 🔍 Pre-Meeting Intelligence")
 st.sidebar.markdown("*Use this section to scan the web before the client interview starts.*")
 
 # Inputs for the search query
-search_company = st.sidebar.text_input("🏢 Company Name", placeholder="e.g., Quantemetry")
+search_company = st.sidebar.text_input("🏢 Company Name", placeholder="e.g., Microsoft")
 search_prospect = st.sidebar.text_input("👤 Prospect Name / Role", placeholder="e.g., CEO")
 
 # Simulated / Mock Search Results for the Demo
