@@ -174,7 +174,7 @@ if not AUDIO_AVAILABLE:
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.info(f"**Agent says:** {stages[st.session_state.stage]}")
+    st.info(f"**Agent says:** {stages[str(st.session_state.stage)]}")
 
     # 🧠 CONNECTING WEB INTELLIGENCE TO THE LIVE SESSION
     if st.session_state.web_context:
