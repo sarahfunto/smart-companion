@@ -179,7 +179,7 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     # Live Strategy Guidance Box from the AI
-    st.info(f"**Smart Companion Strategy Insight:** {st.session_state.ai_guidance}"
+    st.info(f"**Smart Companion Strategy Insight:** {st.session_state.ai_guidance}")
     
     st.markdown(f"**Current Phase Objective:** {stages[str(st.session_state.stage)]}")
     
