@@ -149,20 +149,37 @@ st.sidebar.markdown("*Paste background information about the target company or L
 web_context_input = st.sidebar.text_area(
     "📝 Corporate Profile / Web Context", 
     height=200,
-    placeholder="Example: Microsoft Corp. Experiencing significant reporting bottlenecks in mid-market auditing fields. Executive board is highly risk-averse regarding external data compliance..."
+    placeholder="Example: Microsoft Corp. Experiencing significant reporting bottlenecks in mid-market auditing fields..."
 )
 
 if st.sidebar.button("💾 Synchronize Context"):
     st.sidebar.success("Brain updated with the latest background insights!")
 
-# MAIN INTERFACE WORKFLOW
-st.markdown(f"### Stage {st.session_state.stage} / 7")
+# DISPLAY CURRENT STAGE & CONCRETE OPEN QUESTION
+st.markdown(f"### 💬 Interview Progress: Step {st.session_state.stage} / 7")
+
+stage_questions = {
+    "1": "Who am I speaking with today, and what corporate trigger brought you to explore AI automation solutions right now?",
+    "2": "What does your current data and software infrastructure look like? Are your daily workflows mostly manual or already cloud-based?",
+    "3": "Where are your teams losing the most hours or money today? What is the single biggest operational bottleneck you face?",
+    "4": "If we deployed an AI framework tomorrow, what are you most worried about? Is it data privacy, team adoption, or return on investment?",
+    "5": "What are your core resource constraints regarding budget or timeline, and who else on the executive board needs to approve this project?",
+    "6": "Based on what we discussed, does this summary match your expectations, or is there any gap left to close before we move forward?",
+    "7": "Reviewing your strategic diagnostic report: What are your immediate thoughts on this custom automation roadmap?"
+}
+
+# Big user-friendly open question
+st.subheader(f"👉 {stage_questions[str(st.session_state.stage)]}")
+
+# Small methodology subtitle underneath
+st.markdown(f"<small style='color: #888888; font-style: italic;'>Methodology Context — {stages[str(st.session_state.stage)]}</small>", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    # Live Strategy Guidance Box
-    st.info(f"**Smart Companion Strategy:** {st.session_state.ai_guidance}")
+    # Live Strategy Guidance Box from the AI
+    st.info(f"**Smart Companion Strategy Insight:** {st.session_state.ai_guidance}"
     
     st.markdown(f"**Current Phase Objective:** {stages[str(st.session_state.stage)]}")
     
