@@ -168,7 +168,10 @@ with col1:
     
     # MANUAL TEXT INPUT AREA (REPLACING THE VOCAL MODULE)
     st.markdown("---")
-    manual_input = st.text_area("⌨️ Client Input (Type what the prospect says):", height=100, placeholder="Example: We mostly rely on heavy Excel workbooks. It is slow and I am terrified of losing data integrity...")
+    
+    # ON UTILISE UNE CLÉ DYNAMIQUE LIÉE AU STAGE POUR FORCER LA RÉINITIALISATION
+    input_key = f"client_input_stage_{st.session_state.stage}"
+    manual_input = st.text_area("⌨️ Client Input (Type what the prospect says):", height=100, placeholder="Example: We mostly rely on heavy Excel workbooks. It is slow and I am terrified of losing data integrity...", key=input_key)
     
     if st.button("⚡ Validate and Analyze Input"):
         if manual_input:
