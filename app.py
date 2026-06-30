@@ -97,16 +97,20 @@ def analyze_with_openai(user_text, context_web, current_stage):
     Current Psychological Tags: {json.dumps(st.session_state.tags)}
 
     TASK:
-    1. Analyze the client input and update any relevant Slots or Psychological Tags if new information is revealed.
-    2. Formulate the next strategic question or response for the consultant to guide the interview.
+    1. Analyze the client's input. Identify both hard technical facts AND emotional signals (frustration, anxiety about change, skepticism, fatigue, pride).
+    2. Update any relevant Slots or Psychological Tags based on these signals.
+    3. Formulate the next strategic recommendation for the consultant. 
     
+    CRITICAL EMOTIONAL INSTRUCTION:
+    Your 'ai_guidance' response must NOT just be technical. It must guide the consultant on HOW to speak to this person. 
+    Example: If the client sounds terrified of losing data, tell the consultant to use a reassuring, security-first tone, not a tech-heavy jargon tone.
+
     Format your response STRICTLY as a JSON object with these exact keys:
     {{
-        "slots_update": {{ "Role": "...", "Trigger": "...", "Tech": "...", "Pain": "...", "Success": "...", "Limits": "..." }},
-        "tags_update": {{ "Lens": "...", "Fear": "..." }},
-        "ai_guidance": "Your direct strategic advice/next question here"
+        "slots": {{ "Role": "...", "Trigger": "...", "Tech": "...", "Pain": "...", "Success": "...", "Limits": "..." }},
+        "tags": {{ "Lens": "...", "Fear": "..." }},
+        "ai_guidance": "Provide highly tactical, emotionally aware guidance for the consultant here."
     }}
-    Only fill fields in slots_update or tags_update if they change from 'Empty' or 'None'. Otherwise keep current values.
     """
     
     try:
