@@ -86,31 +86,31 @@ stages = {
 
 # AI ANALYSIS ENGINE FUNCTION
 def analyze_with_openai(user_text, context_web, current_stage):
-    if not client:
-        return
-    
-    prompt_analyse = f"""
-    Current Interview Stage: {stages[str(current_stage)]}
-    Manual Web Context Provided: {context_web}
-    Latest Client Input: "{user_text}"
-    Current Slot State: {json.dumps(st.session_state.slots)}
-    Current Psychological Tags: {json.dumps(st.session_state.tags)}
-    TASK:
-    1. Analyze the client's input. Identify both hard technical facts AND emotional signals (frustration, anxiety about change, skepticism, fatigue, pride).
-    2. Update the Slots and Psychological Tags. CRITICAL: You must PRESERVE and carry forward all previously filled slots from the "Current Slot State" if they are not being updated by the latest input. Do NOT overwrite them with "Empty" or blank values.
-    3. Formulate the next strategic recommendation for the consultant. 
-    
-    CRITICAL EMOTIONAL INSTRUCTION:
-    Your 'ai_guidance' response must NOT just be technical. It must guide the consultant on HOW to speak to this person. 
-    Example: If the client sounds terrified of losing data, tell the consultant to use a reassuring, security-first tone, not a tech-heavy jargon tone.
+    if not user_text:
+        return None
 
-    Format your response STRICTLY as a JSON object with these exact keys:
-    {
-        "slots": { "Role": "Keep existing or update", "Trigger": "Keep existing or update", "Tech": "Keep existing or update", "Pain": "Keep existing or update", "Success": "Keep existing or update", "Limits": "Keep existing or update" },
-        "tags": { "Lens": "...", "Fear": "..." },
-        "ai_guidance": "Provide highly tactical, emotionally aware guidance for the consultant here."
-    }
-    """
+    current_slots = st.session_state.slots
+    current_tags = st.session_state.tags
+
+    # Construction du prompt sans formatage JSON brut à l'intérieur pour éviter le bug d'accolades
+    prompt_analyse = (
+        f"Current Interview Stage: {stages[str(current_stage)]}\n"
+        f"Manual Web Context Provided: {context_web}\n"
+        f"Latest Client Input: {user_text}\n"
+        f"Current Slot State (Already Filled): {json.dumps(current_slots)}\n"
+        f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
+        "TASK:\n"
+        "1. Analyze the client's input. Identify technical facts AND emotional signals.\n"
+        "2. Update the Slots and Psychological Tags. CRITICAL MEMORY RULE: You MUST PRESERVE and carry forward all previously filled slots from the 'Current Slot State' if they are not explicitly replaced by the latest input. Do NOT overwrite existing data with 'Empty' or blanks.\n"
+        "3. Formulate the next strategic recommendation for the consultant.\n\n"
+        "Format your response STRICTLY as a JSON object with these exact keys:\n"
+        "{\n"
+        "  \"slots\": { \"Role\": \"...\", \"Trigger\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"Success\": \"...\", \"Limits\": \"...\" },\n"
+        "  \"tags\": { \"Lens\": \"...\", \"Fear\": \"...\" },\n"
+        "  \"ai_guidance\": \"Provide tactical, emotionally aware guidance here.\"\n"
+        "}"
+    )
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -121,23 +121,26 @@ def analyze_with_openai(user_text, context_web, current_stage):
             ],
             temperature=0.3
         )
+        
         result = json.loads(response.choices[0].message.content)
         
-        # Update slots if new values are found
-        for k, v in result.get("slots_update", {}).items():
-            if v and v != "Empty":
-                st.session_state.slots[k] = v
-                
-        # Update tags
-        for k, v in result.get("tags_update", {}).items():
-            if v and v != "None":
-                st.session_state.tags[k] = v
-                
-        # Update agent guidance
-        st.session_state.ai_guidance = result.get("ai_guidance", "Continue the interview building on this response.")
+        # Mise à jour et fusion de la mémoire (Slots)
+        new_slots = result.get("slots", {})
+        for key in st.session_state.slots:
+            if key in new_slots and new_slots[key] not in ["Empty", "", "None", "Keep existing or update"]:
+                st.session_state.slots[key] = new_slots[key]
         
+        # Mise à jour des Tags Psychologiques
+        new_tags = result.get("tags", {})
+        for key in st.session_state.tags:
+            if key in new_tags and new_tags[key] not in ["None", "", "Standard"]:
+                st.session_state.tags[key] = new_tags[key]
+            
+        return result.get("ai_guidance", "Analysis complete.")
+
     except Exception as e:
-        st.error(f"API Analysis Error: {str(e)}")
+        st.error(f"Error calling OpenAI: {e}")
+        return "Error analyzing input."
 
 st.title("🎙️ Smart Companion — Expert Workspace")
 
