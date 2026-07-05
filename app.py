@@ -271,4 +271,5 @@ if st.session_state.stage == 7:
     st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
     st.write(f"• **Tech Maturity:** {st.session_state.slots['Tech']}")
     st.write(f"• **Core Pain:** {st.session_state.slots['Pain']}")
-    st.write(f"• **Core Pain:** {st.session_state.slots['Pain']}")
+    st.write(f"• **Success Metric:** {st.session_state.slots['Success']}")
+    st.write(f"• **Strategic Limits:** {st.session_state.slots['Limits']}")
