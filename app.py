@@ -124,16 +124,17 @@ def analyze_with_openai(user_text, context_web, current_stage):
         
         result = json.loads(response.choices[0].message.content)
         
-        # Mise à jour et fusion de la mémoire (Slots)
+        # Update and merge memory (Slots)
         new_slots = result.get("slots", {})
         for key in st.session_state.slots:
             if key in new_slots and new_slots[key] not in ["Empty", "", "None", "Keep existing or update"]:
                 st.session_state.slots[key] = new_slots[key]
         
-        # Mise à jour des Tags Psychologiques
+        # Dynamic and sensitive update of the Psychological Tags
         new_tags = result.get("tags", {})
         for key in st.session_state.tags:
-            if key in new_tags and new_tags[key] not in ["None", "", "Standard"]:
+            if key in new_tags and new_tags[key] not in ["None", ""]:
+                # If the AI detects a change in posture, update immediately
                 st.session_state.tags[key] = new_tags[key]
             
         return result.get("ai_guidance", "Analysis complete.")
