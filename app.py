@@ -110,7 +110,17 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "tags": { "Lens": "...", "Fear": "..." },
         "ai_guidance": "Provide highly tactical, emotionally aware guidance for the consultant here."
     }
-        
+    """
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt_analyse}
+            ],
+            temperature=0.3
+        )
         result = json.loads(response.choices[0].message.content)
         
         # Update slots if new values are found
