@@ -135,14 +135,16 @@ def analyze_with_openai(user_text, context_web, current_stage):
             if key in new_tags and new_tags[key] not in ["None", ""]:
                 st.session_state.tags[key] = new_tags[key]
         
-        # Smart Sensitivity Override: Ensure the Decision Filter switches dynamically
+        # Smart Sensitivity Override: Forces the update by checking all existing tag keys
         current_role = str(st.session_state.slots.get('Role', '')).upper()
         current_tech = str(st.session_state.slots.get('Tech', '')).upper()
         
-        if "CTO" in current_role or "AWS" in current_tech or "POSTGRESQL" in current_tech:
-            st.session_state.tags['Decision Filter (Lens)'] = "Technical / ROI-Driven"
-        elif "COMPLIANCE" in current_role or "RISK" in current_role or "SERVER" in current_tech:
-            st.session_state.tags['Decision Filter (Lens)'] = "Risk / Compliance-Locked"
+        for tag_key in st.session_state.tags:
+            if "DECISION" in tag_key.upper() or "LENS" in tag_key.upper():
+                if "CTO" in current_role or "AWS" in current_tech or "POSTGRESQL" in current_tech:
+                    st.session_state.tags[tag_key] = "Technical / ROI-Driven"
+                elif "COMPLIANCE" in current_role or "RISK" in current_role or "SERVER" in current_tech:
+                    st.session_state.tags[tag_key] = "Risk / Compliance-Locked"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
