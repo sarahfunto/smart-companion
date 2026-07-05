@@ -95,10 +95,9 @@ def analyze_with_openai(user_text, context_web, current_stage):
     Latest Client Input: "{user_text}"
     Current Slot State: {json.dumps(st.session_state.slots)}
     Current Psychological Tags: {json.dumps(st.session_state.tags)}
-
     TASK:
     1. Analyze the client's input. Identify both hard technical facts AND emotional signals (frustration, anxiety about change, skepticism, fatigue, pride).
-    2. Update any relevant Slots or Psychological Tags based on these signals.
+    2. Update the Slots and Psychological Tags. CRITICAL: You must PRESERVE and carry forward all previously filled slots from the "Current Slot State" if they are not being updated by the latest input. Do NOT overwrite them with "Empty" or blank values.
     3. Formulate the next strategic recommendation for the consultant. 
     
     CRITICAL EMOTIONAL INSTRUCTION:
@@ -106,23 +105,11 @@ def analyze_with_openai(user_text, context_web, current_stage):
     Example: If the client sounds terrified of losing data, tell the consultant to use a reassuring, security-first tone, not a tech-heavy jargon tone.
 
     Format your response STRICTLY as a JSON object with these exact keys:
-    {{
-        "slots": {{ "Role": "...", "Trigger": "...", "Tech": "...", "Pain": "...", "Success": "...", "Limits": "..." }},
-        "tags": {{ "Lens": "...", "Fear": "..." }},
+    {
+        "slots": { "Role": "Keep existing or update", "Trigger": "Keep existing or update", "Tech": "Keep existing or update", "Pain": "Keep existing or update", "Success": "Keep existing or update", "Limits": "Keep existing or update" },
+        "tags": { "Lens": "...", "Fear": "..." },
         "ai_guidance": "Provide highly tactical, emotionally aware guidance for the consultant here."
-    }}
-    """
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt_analyse}
-            ],
-            temperature=0.3
-        )
+    }
         
         result = json.loads(response.choices[0].message.content)
         
