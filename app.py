@@ -188,7 +188,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    # Affiche la recommandation en temps réel stockée en mémoire si elle existe, sinon le message par défaut
+    # Check if there is a real-time recommendation in memory, otherwise display the welcome text
     guidance_text = st.session_state.get('ai_guidance', "Welcome to the simulation. Input the initial client statement to start the strategic analysis.")
     st.info(f"Smart Companion Strategy Insight: {guidance_text}")
     
@@ -205,7 +205,7 @@ with col1:
         if manual_input:
             st.session_state.transcript = manual_input
             with st.spinner("Processing framework analytical layers..."):
-                analyze_with_openai(manual_input, web_context_input, st.session_state.stage)
+                st.session_state['ai_guidance'] = analyze_with_openai(manual_input, web_context_input, st.session_state.stage)
             st.rerun()
         else:
             st.warning("Please type a client response before validating.")
