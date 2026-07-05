@@ -92,7 +92,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
     current_slots = st.session_state.slots
     current_tags = st.session_state.tags
 
-    # Construction du prompt sans formatage JSON brut à l'intérieur pour éviter le bug d'accolades
+    # Construction of the prompt without raw JSON formatting inside to prevent brace formatting bugs
     prompt_analyse = (
         f"Current Interview Stage: {stages[str(current_stage)]}\n"
         f"Manual Web Context Provided: {context_web}\n"
@@ -144,7 +144,6 @@ def analyze_with_openai(user_text, context_web, current_stage):
         return "Error analyzing input."
 
 st.title("🎙️ Smart Companion — Expert Workspace")
-
 # ==========================================
 # 🌐 SIDEBAR: MANUAL WEB CONTEXT INJECTION
 # ==========================================
