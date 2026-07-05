@@ -121,7 +121,6 @@ def analyze_with_openai(user_text, context_web, current_stage):
             ],
             temperature=0.3
         )
-        
         result = json.loads(response.choices[0].message.content)
         
         # Update and merge memory (Slots)
@@ -134,11 +133,18 @@ def analyze_with_openai(user_text, context_web, current_stage):
         new_tags = result.get("tags", {})
         for key in st.session_state.tags:
             if key in new_tags and new_tags[key] not in ["None", ""]:
-                # If the AI detects a change in posture, update immediately
                 st.session_state.tags[key] = new_tags[key]
+        
+        # Smart Sensitivity Override: Ensure the Decision Filter switches dynamically
+        current_role = str(st.session_state.slots.get('Role', '')).upper()
+        current_tech = str(st.session_state.slots.get('Tech', '')).upper()
+        
+        if "CTO" in current_role or "AWS" in current_tech or "POSTGRESQL" in current_tech:
+            st.session_state.tags['Decision Filter (Lens)'] = "Technical / ROI-Driven"
+        elif "COMPLIANCE" in current_role or "RISK" in current_role or "SERVER" in current_tech:
+            st.session_state.tags['Decision Filter (Lens)'] = "Risk / Compliance-Locked"
             
         return result.get("ai_guidance", "Analysis complete.")
-
     except Exception as e:
         st.error(f"Error calling OpenAI: {e}")
         return "Error analyzing input."
