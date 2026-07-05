@@ -182,8 +182,9 @@ st.markdown("<br>", unsafe_allow_html=True)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    # Live Strategy Guidance Box from the AI
-    st.info(f"**Smart Companion Strategy Insight:** {st.session_state.ai_guidance}")
+    # Affiche la recommandation en temps réel stockée en mémoire si elle existe, sinon le message par défaut
+    guidance_text = st.session_state.get('ai_guidance', "Welcome to the simulation. Input the initial client statement to start the strategic analysis.")
+    st.info(f"Smart Companion Strategy Insight: {guidance_text}")
     
     st.markdown(f"**Current Phase Objective:** {stages[str(st.session_state.stage)]}")
     
