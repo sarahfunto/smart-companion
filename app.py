@@ -244,23 +244,22 @@ if st.session_state.stage == 4:
     st.markdown("---")
     st.header("📋 Comprehensive Strategic Blueprint")
     
-    # On initialise une variable pour savoir si l'utilisateur a validé l'étape 4
+    # Initialize session state variable to track if step 4 was submitted
     if 'diagnostic_ready' not in st.session_state:
         st.session_state.diagnostic_ready = False
 
-    # Si l'utilisateur clique sur le bouton d'analyse à l'étape 4, on active le diagnostic
+    # Trigger diagnostic when input is validated at stage 4
     if st.session_state.transcript and manual_input == "":
-        # Cela signifie qu'on vient de valider une entrée à l'étape 4
         st.session_state.diagnostic_ready = True
 
-    # DÉCLENCHEUR DE SÉCURITÉ : Vérification du nombre de slots critiques remplis
+    # SECURITY TRIGGER: Count how many critical slots have been filled
     filled_slots_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
     if st.session_state.diagnostic_ready:
-        # On exige au moins 3 slots remplis pour générer le diagnostic de fond
+        # Require at least 3 filled slots to generate the report
         if filled_slots_count < 3:
             st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
-            st.warning("Vous devez me donner plus de données pour recevoir le diagnostic. Le profil actuel est trop pauvre pour générer une analyse stratégique pertinente.")
+            st.warning("You must provide more details to unlock the diagnostic. The current profile is too empty to generate a meaningful analysis.")
         else:
             st.balloons()
             with st.spinner("Generating deep expert diagnostic reflecting blind spots..."):
@@ -297,21 +296,4 @@ if st.session_state.stage == 4:
                 except Exception as e:
                     st.error(f"Error generating blueprint: {e}")
     else:
-        st.info("ℹ️ Le diagnostic final s'affichera ici dès que vous aurez soumis votre réponse ou votre validation ci-dessus.")
-            
-            final_diag = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt_final}]
-            ).choices[0].message.content
-
-        st.markdown(f"""
-        <div class="recommendation-box">
-            {final_diag}
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.subheader("Final Summary Matrix")
-        st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
-        st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
-        st.write(f"• **Tech Maturity:** {st.session_state.slots['Tech']}")
-        st.write(f"• **Core Operational Pain:** {st.session_state.slots['Pain']}")
+        st.info("ℹ️ The final strategic blueprint will appear here once you submit your response above.")
