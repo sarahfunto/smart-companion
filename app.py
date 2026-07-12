@@ -19,10 +19,11 @@ Your reasoning layer must constantly cross-reference three dimensions based on t
 2. TECHNICAL MATURITY: Assess their current infrastructure, their readiness to adopt AI solutions, and their technical limitations.
 3. EMOTIONAL FEAR: Uncover the unspoken stakes for the leader (e.g., fear of losing market share, anxiety over team management, stress regarding data privacy, or fear of tech obsolescence).
 
-CRITICAL INSTRUCTIONS:
+CRITICAL EXTRACTION & ENTITY RULES:
+- Distinguish strictly between "Role" and "CompanySize". 
+- "Role" is the user's personal job title or function (e.g., CEO, Owner, Chief AI Officer, Legal Counsel). Do NOT put company descriptions here.
+- "CompanySize" is the scale or type of the organization (e.g., Mid-sized company, SMB, Startup, Enterprise, 10 employees).
 - Do not sound like a standard chatbot. Act as a sharp, empathetic, and strategic peer.
-- Leverage the provided Web Context to ask deeply relevant, tailored questions that prove you understand their specific market positioning and corporate updates.
-- Adapt your tone dynamically: maintain a pragmatic, solution-oriented approach, focusing heavily on operational efficiency rather than generic AI buzzwords.
 - Keep your questions precise, single-focused, and designed to move the client seamlessly through the interview stages.
 - Even if the client gives short, confusing, or evasive answers, use your psychological framework to stay grounded, dig deeper, and guide them back on track with empathy.
 """
@@ -67,21 +68,19 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# SESSION STATE INITIALIZATION
+# SESSION STATE INITIALIZATION (Updated to 4 Stages and added CompanySize slot)
 if 'stage' not in st.session_state: st.session_state.stage = 1
-if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'Trigger': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'Success': 'Empty', 'Limits': 'Empty'}
+if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'Limits': 'Empty'}
 if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'None'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial client statement to start the strategic analysis."
 
+# Raccourci à 4 étapes selon les souhaits de Limor
 stages = {
-    "1": "Phase 1: Alignment & Trigger Detection (Role Assessment & Contextual Validation)",
-    "2": "Phase 2: Technical Maturity Diagnostics (Infrastructure Readiness & Evaluator)",
-    "3": "Phase 3: Deep Pain Architecture (Operational Pain Discovery & Root Cause)",
-    "4": "Phase 4: Executive Psychology Profiling (AI Literacy & Emotional Fear Mapping)",
-    "5": "Phase 5: Strategic Anchoring (Growth Alignment & Blocker Identification)",
-    "6": "Phase 6: Active Alignment & Gap Closing (Mirroring & Sync Confirmation)",
-    "7": "Phase 7: Value Delivery & Conversion (Diagnostic Output & Blueprint)"
+    "1": "Phase 1: Identity, Role & Company Size Contextual Validation",
+    "2": "Phase 2: Technical Maturity Diagnostics & Infrastructure Readiness",
+    "3": "Phase 3: Deep Operational Pain & Executive Psychology Profiling",
+    "4": "Phase 4: Strategic Mirroring, Validation & Custom Blueprint Delivery"
 }
 
 # AI ANALYSIS ENGINE FUNCTION
@@ -92,7 +91,6 @@ def analyze_with_openai(user_text, context_web, current_stage):
     current_slots = st.session_state.slots
     current_tags = st.session_state.tags
 
-    # Construction of the prompt without raw JSON formatting inside to prevent brace formatting bugs
     prompt_analyse = (
         f"Current Interview Stage: {stages[str(current_stage)]}\n"
         f"Manual Web Context Provided: {context_web}\n"
@@ -101,11 +99,14 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
         "TASK:\n"
         "1. Analyze the client's input. Identify technical facts AND emotional signals.\n"
-        "2. Update the Slots and Psychological Tags. CRITICAL MEMORY RULE: You MUST PRESERVE and carry forward all previously filled slots from the 'Current Slot State' if they are not explicitly replaced by the latest input. Do NOT overwrite existing data with 'Empty' or blanks.\n"
+        "2. Update the Slots and Psychological Tags. CRITICAL RULES:\n"
+        "   - Parse Company Size (e.g., 'medium sized company', '10 employees') into 'CompanySize'.\n"
+        "   - Parse the job title/function into 'Role'. Never mix them up.\n"
+        "   - You MUST PRESERVE and carry forward all previously filled slots if they are not explicitly replaced. Do NOT overwrite existing data with 'Empty'.\n"
         "3. Formulate the next strategic recommendation for the consultant.\n\n"
         "Format your response STRICTLY as a JSON object with these exact keys:\n"
         "{\n"
-        "  \"slots\": { \"Role\": \"...\", \"Trigger\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"Success\": \"...\", \"Limits\": \"...\" },\n"
+        "  \"slots\": { \"Role\": \"...\", \"CompanySize\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"Limits\": \"...\" },\n"
         "  \"tags\": { \"Lens\": \"...\", \"Fear\": \"...\" },\n"
         "  \"ai_guidance\": \"Provide tactical, emotionally aware guidance here.\"\n"
         "}"
@@ -129,13 +130,13 @@ def analyze_with_openai(user_text, context_web, current_stage):
             if key in new_slots and new_slots[key] not in ["Empty", "", "None", "Keep existing or update"]:
                 st.session_state.slots[key] = new_slots[key]
         
-        # Dynamic and sensitive update of the Psychological Tags
+        # Dynamic update of Psychological Tags
         new_tags = result.get("tags", {})
         for key in st.session_state.tags:
             if key in new_tags and new_tags[key] not in ["None", ""]:
                 st.session_state.tags[key] = new_tags[key]
         
-        # Smart Sensitivity Override: Forces the update by checking all existing tag keys
+        # Smart Sensitivity Override
         current_role = str(st.session_state.slots.get('Role', '')).upper()
         current_tech = str(st.session_state.slots.get('Tech', '')).upper()
         
@@ -152,6 +153,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         return "Error analyzing input."
 
 st.title("🎙️ Smart Companion — Expert Workspace")
+
 # ==========================================
 # 🌐 SIDEBAR: MANUAL WEB CONTEXT INJECTION
 # ==========================================
@@ -168,40 +170,31 @@ if st.sidebar.button("💾 Synchronize Context"):
     st.sidebar.success("Brain updated with the latest background insights!")
 
 # DISPLAY CURRENT STAGE & CONCRETE OPEN QUESTION
-st.markdown(f"### 💬 Interview Progress: Step {st.session_state.stage} / 7")
+st.markdown(f"### 💬 Interview Progress: Step {st.session_state.stage} / 4")
 
+# Questions adaptées au flux condensé en 4 étapes
 stage_questions = {
-    "1": "Who am I speaking with today, and what corporate trigger brought you to explore AI automation solutions right now?",
-    "2": "What does your current data and software infrastructure look like? Are your daily workflows mostly manual or already cloud-based?",
-    "3": "Where are your teams losing the most hours or money today? What is the single biggest operational bottleneck you face?",
-    "4": "If we deployed an AI framework tomorrow, what are you most worried about? Is it data privacy, team adoption, or return on investment?",
-    "5": "What are your core resource constraints regarding budget or timeline, and who else on the executive board needs to approve this project?",
-    "6": "Based on what we discussed, does this summary match your expectations, or is there any gap left to close before we move forward?",
-    "7": "Reviewing your strategic diagnostic report: What are your immediate thoughts on this custom automation roadmap?"
+    "1": "Who am I speaking with today, what is the scale of your organization, and what corporate trigger brought you here?",
+    "2": "What does your current software infrastructure look like? Are your daily workflows mostly manual or cloud-based?",
+    "3": "Where are your teams losing the most hours, and if we deployed AI tomorrow, what are your core operational fears or constraints?",
+    "4": "Reviewing your strategic situation: Here is what we know. Do you want to add, modify, or complete any data before receiving your final custom roadmap?"
 }
 
-# Big user-friendly open question
 st.subheader(f"👉 {stage_questions[str(st.session_state.stage)]}")
-
-# Small methodology subtitle underneath
 st.markdown(f"<small style='color: #888888; font-style: italic;'>Methodology Context — {stages[str(st.session_state.stage)]}</small>", unsafe_allow_html=True)
 st.markdown("<br>", unsafe_allow_html=True)
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    # Check if there is a real-time recommendation in memory, otherwise display the welcome text
     guidance_text = st.session_state.get('ai_guidance', "Welcome to the simulation. Input the initial client statement to start the strategic analysis.")
     st.info(f"Smart Companion Strategy Insight: {guidance_text}")
     
     st.markdown(f"**Current Phase Objective:** {stages[str(st.session_state.stage)]}")
-    
-    # MANUAL TEXT INPUT AREA (REPLACING THE VOCAL MODULE)
     st.markdown("---")
     
-    # ON UTILISE UNE CLÉ DYNAMIQUE LIÉE AU STAGE POUR FORCER LA RÉINITIALISATION
     input_key = f"client_input_stage_{st.session_state.stage}"
-    manual_input = st.text_area("⌨️ Client Input (Type what the prospect says):", height=100, placeholder="Example: We mostly rely on heavy Excel workbooks. It is slow and I am terrified of losing data integrity...", key=input_key)
+    manual_input = st.text_area("⌨️ Client Input (Type what the prospect says):", height=100, placeholder="Type response here...", key=input_key)
     
     if st.button("⚡ Validate and Analyze Input"):
         if manual_input:
@@ -227,7 +220,7 @@ with col1:
                 st.rerun()
                 
     with nav_col2:
-        if st.session_state.stage < 7:
+        if st.session_state.stage < 4:
             if st.button("➡️ Next Stage"):
                 st.session_state.stage += 1
                 st.session_state.transcript = ""
@@ -246,39 +239,47 @@ with col2:
     fear_class = "status-box-filled" if st.session_state.tags['Fear'] != "None" else "status-box-empty"
     st.markdown(f"<div class='{fear_class}'><b>Identified Core Fear (Fear):</b> {st.session_state.tags['Fear']}</div>", unsafe_allow_html=True)
 
-# FINAL DIAGNOSTIC GENERATED BY AI AT STAGE 7
-if st.session_state.stage == 7:
-    st.balloons()
+# FINAL DIAGNOSTIC AT STAGE 4 WITH SECURITY THRESHOLD (TRIGGER)
+if st.session_state.stage == 4:
+    st.markdown("---")
     st.header("📋 Comprehensive Strategic Blueprint")
     
-    # AI generates a tailored, deep diagnostic based on the interview history
-    with st.spinner("Generating expert diagnostic..."):
-        prompt_final = f"""
-        Act as a top-tier B2B consultant. Based on the following interview data:
-        Slots: {json.dumps(st.session_state.slots)}
-        Tags: {json.dumps(st.session_state.tags)}
-        
-        Write a professional, 3-paragraph diagnostic:
-        1. Executive Summary: What is the real, hidden bottleneck?
-        2. Technical & Operational Roadmap: A concrete, 3-step action plan.
-        3. Closing Strategy: How to win the trust of this specific prospect based on their fears.
-        Keep it sharp, analytical, and highly tailored to the data above.
-        """
-        
-        final_diag = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt_final}]
-        ).choices[0].message.content
-
-    st.markdown(f"""
-    <div class="recommendation-box">
-        {final_diag}
-    </div>
-    """, unsafe_allow_html=True)
+    # DÉCLENCHEUR DE SÉCURITÉ : Vérification du nombre de slots critiques remplis
+    filled_slots_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
-    st.subheader("Final Summary Matrix")
-    st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
-    st.write(f"• **Tech Maturity:** {st.session_state.slots['Tech']}")
-    st.write(f"• **Core Pain:** {st.session_state.slots['Pain']}")
-    st.write(f"• **Success Metric:** {st.session_state.slots['Success']}")
-    st.write(f"• **Strategic Limits:** {st.session_state.slots['Limits']}")
+    # On exige au moins 3 slots remplis pour générer le diagnostic de fond
+    if filled_slots_count < 3:
+        st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
+        st.warning("Vous devez me donner plus de données pour recevoir le diagnostic. Le profil actuel est trop pauvre pour générer une analyse stratégique pertinente.")
+    else:
+        st.balloons()
+        with st.spinner("Generating deep expert diagnostic reflecting blind spots..."):
+            prompt_final = f"""
+            Act as a top-tier B2B consultant and sales psychologist. Based on the following interview data:
+            Slots: {json.dumps(st.session_state.slots)}
+            Tags: {json.dumps(st.session_state.tags)}
+            
+            Write a professional, 3-paragraph diagnostic focused on depth and blind spots:
+            1. Executive Mirroring: Reflect their reality back to them, highlighting a critical blind spot or hidden workflow vulnerability they might have missed. 
+            2. Strategic Insights & Market Context: Compare their situation to how similar organizations of this size handle AI transitions (provide a novel perspective or industry shift).
+            3. Operational Action Plan: A concrete, budget-conscious 3-step technical roadmap that respects their psychological fears.
+            
+            Keep it sharp, highly personalized, and ensure it sounds like a human consultant providing deep value, not generic AI facts.
+            """
+            
+            final_diag = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt_final}]
+            ).choices[0].message.content
+
+        st.markdown(f"""
+        <div class="recommendation-box">
+            {final_diag}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.subheader("Final Summary Matrix")
+        st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
+        st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
+        st.write(f"• **Tech Maturity:** {st.session_state.slots['Tech']}")
+        st.write(f"• **Core Operational Pain:** {st.session_state.slots['Pain']}")
