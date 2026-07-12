@@ -248,8 +248,8 @@ if st.session_state.stage == 4:
     if 'diagnostic_ready' not in st.session_state:
         st.session_state.diagnostic_ready = False
 
-    # Trigger diagnostic when input is validated at stage 4
-    if st.session_state.transcript and manual_input == "":
+    # Trigger diagnostic if stage is 4 and we have a transcript recorded
+    if st.session_state.transcript:
         st.session_state.diagnostic_ready = True
 
     # SECURITY TRIGGER: Count how many critical slots have been filled
