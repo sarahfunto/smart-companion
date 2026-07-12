@@ -244,28 +244,60 @@ if st.session_state.stage == 4:
     st.markdown("---")
     st.header("📋 Comprehensive Strategic Blueprint")
     
+    # On initialise une variable pour savoir si l'utilisateur a validé l'étape 4
+    if 'diagnostic_ready' not in st.session_state:
+        st.session_state.diagnostic_ready = False
+
+    # Si l'utilisateur clique sur le bouton d'analyse à l'étape 4, on active le diagnostic
+    if st.session_state.transcript and manual_input == "":
+        # Cela signifie qu'on vient de valider une entrée à l'étape 4
+        st.session_state.diagnostic_ready = True
+
     # DÉCLENCHEUR DE SÉCURITÉ : Vérification du nombre de slots critiques remplis
     filled_slots_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
-    # On exige au moins 3 slots remplis pour générer le diagnostic de fond
-    if filled_slots_count < 3:
-        st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
-        st.warning("Vous devez me donner plus de données pour recevoir le diagnostic. Le profil actuel est trop pauvre pour générer une analyse stratégique pertinente.")
+    if st.session_state.diagnostic_ready:
+        # On exige au moins 3 slots remplis pour générer le diagnostic de fond
+        if filled_slots_count < 3:
+            st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
+            st.warning("Vous devez me donner plus de données pour recevoir le diagnostic. Le profil actuel est trop pauvre pour générer une analyse stratégique pertinente.")
+        else:
+            st.balloons()
+            with st.spinner("Generating deep expert diagnostic reflecting blind spots..."):
+                prompt_final = f"""
+                Act as a top-tier B2B consultant and sales psychologist. Based on the following interview data:
+                Slots: {json.dumps(st.session_state.slots)}
+                Tags: {json.dumps(st.session_state.tags)}
+                
+                Write a professional, 3-paragraph diagnostic focused on depth and blind spots:
+                1. Executive Mirroring: Reflect their reality back to them, highlighting a critical blind spot or hidden workflow vulnerability they might have missed. 
+                2. Strategic Insights & Market Context: Compare their situation to how similar organizations of this size handle AI transitions (provide a novel perspective or industry shift).
+                3. Operational Action Plan: A concrete, budget-conscious 3-step technical roadmap that respects their psychological fears.
+                
+                Keep it sharp, highly personalized, and ensure it sounds like a human consultant providing deep value, not generic AI facts.
+                """
+                
+                try:
+                    final_diag = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": prompt_final}]
+                    ).choices[0].message.content
+
+                    st.markdown(f"""
+                    <div class="recommendation-box">
+                        {final_diag}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.subheader("Final Summary Matrix")
+                    st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
+                    st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
+                    st.write(f"• **Tech Maturity:** {st.session_state.slots['Tech']}")
+                    st.write(f"• **Core Operational Pain:** {st.session_state.slots['Pain']}")
+                except Exception as e:
+                    st.error(f"Error generating blueprint: {e}")
     else:
-        st.balloons()
-        with st.spinner("Generating deep expert diagnostic reflecting blind spots..."):
-            prompt_final = f"""
-            Act as a top-tier B2B consultant and sales psychologist. Based on the following interview data:
-            Slots: {json.dumps(st.session_state.slots)}
-            Tags: {json.dumps(st.session_state.tags)}
-            
-            Write a professional, 3-paragraph diagnostic focused on depth and blind spots:
-            1. Executive Mirroring: Reflect their reality back to them, highlighting a critical blind spot or hidden workflow vulnerability they might have missed. 
-            2. Strategic Insights & Market Context: Compare their situation to how similar organizations of this size handle AI transitions (provide a novel perspective or industry shift).
-            3. Operational Action Plan: A concrete, budget-conscious 3-step technical roadmap that respects their psychological fears.
-            
-            Keep it sharp, highly personalized, and ensure it sounds like a human consultant providing deep value, not generic AI facts.
-            """
+        st.info("ℹ️ Le diagnostic final s'affichera ici dès que vous aurez soumis votre réponse ou votre validation ci-dessus.")
             
             final_diag = client.chat.completions.create(
                 model="gpt-4o",
