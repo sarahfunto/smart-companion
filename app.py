@@ -23,23 +23,18 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
    - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, and failure prevention (e.g., CFO, Legal Counsel).
    - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems (CTO, Lead Architect) and who care about clean code, scalability, and stack modernism.
 
-2. Tech Maturity: Assess the organizational complexity of their current tools.
-   - Low: Mostly manual processes, spreadsheets, no central CRM.
-   - Medium: Uses modern SaaS tools (like HubSpot, Slack) but suffers from poor integration or data silos (e.g., PostgreSQL database not connected to CRM).
-   - High: Fully automated, data-driven, real-time analytics pipelines.
+2. Tech Maturity: Assess the organizational complexity of their current tools (Low, Medium, High).
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
-- Tool Status & Active vs. Abandoned: Respect active tools (HubSpot is active; Salesforce was abandoned).
 
-- PAIN STRUCTURING (Root Cause vs. Consequence):
-  * Do NOT output a flat list of pain points. 
-  * You MUST categorize the pain strictly into two levels:
-    1. "Root Causes" (e.g., 'Legacy Microsoft Access dependency', 'Lack of integration between PostgreSQL and HubSpot').
-    2. "Business Consequences" (e.g., 'No product usage visibility for Sales', 'Unreliable forecasts for the board').
-  * CRITICAL VOCABULARY: Never use generic technical judgments like "Outdated database technology" if the prospect didn't say it. Use exact contextual phrases like "Legacy Microsoft Access dependency" (reflecting the emotional/organizational reality of a founder refusing to let it go).
+- OPERATIONAL DIAGNOSIS STRUCTURING:
+  * Pain: Strictly limit this to the active, business/operational consequences expressed (e.g., 'Unreliable sales forecasts for the board', 'Zero visibility into product adoption for renewal security'). This is the actual emotional and business pain.
+  * Root Causes: The structural or technical reasons behind the Pain (e.g., 'Lack of data integration between PostgreSQL and HubSpot', 'Product data locked inside isolated databases').
+  * Limits (Constraints): The human, organizational, or historical barriers that restrict possible solutions. 
+    - CRITICAL: Founder resistance (e.g., 'Founder refuses to give up Microsoft Access'), explicit tool rejections (e.g., 'Salesforce abandoned as too heavy/complex'), and team constraints (e.g., 'Small sales team of 11 people') MUST be classified under 'Limits'. NEVER leave 'Limits' empty if such organizational barriers are mentioned.
 
-Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, BuyingStyle, TechMaturity, Fear...
+Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
 """
 
 st.set_page_config(page_title="AI Advisor - Smart Companion", page_icon="🎙️", layout="wide")
@@ -84,7 +79,7 @@ st.markdown("""
 
 # SESSION STATE INITIALIZATION (Updated to 4 Stages and added CompanySize slot)
 if 'stage' not in st.session_state: st.session_state.stage = 1
-if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'Limits': 'Empty'}
+if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
 if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'None'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial client statement to start the strategic analysis."
@@ -322,9 +317,20 @@ if st.session_state.stage == 4:
                     st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
                     st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
                     
-                    # Section Pain structurée
-                    st.write("• **Core Operational Pain:**")
-                    st.info(f"{st.session_state.slots['Pain']}")
+                    st.markdown("---")
+                    st.subheader("📊 Operational Diagnosis")
+                    
+                    # 1. Pain (the real pain)
+            st.error(f"""**🔴 Core Business Pain:**  
+{st.session_state.slots.get('Pain', 'Empty')}""")
+            
+            # 2. Root Causes (why it is happening)
+            st.warning(f"""**⚙️ Technical Root Causes:**  
+{st.session_state.slots.get('RootCauses', 'Empty')}""")
+            
+            # 3. Limits (what blocks or restricts the solutions)
+            st.info(f"""**⚠️ Constraints & Limits:**  
+{st.session_state.slots.get('Limits', 'Empty')}""")
                 except Exception as e:
                     st.error(f"Error generating blueprint: {e}")
     else:
