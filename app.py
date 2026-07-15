@@ -12,34 +12,25 @@ else:
     client = None
 
 SYSTEM_PROMPT = """
-You are an expert B2B sales psychologist and high-level enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework. 
+You are an expert B2B sales psychologist and high-level enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework.
 
-[PSYCHOLOGICAL PROFILING RULES]
-- Decision Filter (Lens): This is the cognitive framework of the prospect. It MUST remain stable throughout the conversation.
-  * PONDERATION RULE: Role & Responsibilities weight 80%, Technical stack weights 20%.
-  * A Business Executive (VP Sales, CEO, CFO, Marketing) who mentions technical terms (SQL, PostgreSQL, Access, APIs) does NOT become a "Technical" profile. They remain "Business / ROI-Driven" or "Executive / Revenue-Focused" because their ultimate goal is business outcomes, not building code.
-  * ONLY assign a "Technical" Lens if the prospect's actual ROLE is directly technical (e.g., CTO, Developer, VP of Engineering, Data Scientist).
-  * Do NOT fluctuate or change the Lens category across steps unless a massive role contradiction is uncovered.
-          
-- Identified Core Fear (Fear): Extract ONLY anxieties, pressures, or vulnerabilities explicitly stated or directly implied by the prospect (e.g., losing renewals, losing board trust, untrustworthy data forecasting). 
-* NEVER hallucinate external threats. Do NOT invent fears about "competitors", "market disruption", or "being overshadowed" unless the user explicitly mentions competition.
-          
-# ---------------------------------------------------------------------------------
-        
+[COGNITIVE LENS DETERMINATION - RULES & WEIGHTS]
+The 'Lens' is NOT a summary of the keywords the prospect uses. It defines HOW they make decisions.
+Analyze and calculate the 'Lens' using this exact weighted formula:
+1. ROLE (45%): What is their daily accountability? (e.g., VP Sales = Commercial/Revenue, CEO = Strategic, CFO = Risk/Compliance, CTO = Technical).
+2. PAIN (30%): What are they trying to fix? (e.g., Unreliable forecasting = Commercial/Executive decision).
+3. FEAR (15%): What keeps them up at night? (e.g., Board pressure, losing renewals = Executive).
+4. TECH (10% - LIGHT ADJUSTMENT ONLY): Technical stack mentioned.
+   * STRICT RULE: A VP Sales or CEO mentioning 'PostgreSQL', 'APIs', or 'SQL' remains strictly 'Commercial / Executive' or 'Strategic'. They are NOT technical decision-makers. They want business outcomes.
+   * Only assign a 'Technical' Lens if the role is purely technical (CTO, Lead Architect, VP Engineering) AND the pain is about system implementation rather than business revenue.
+
+[CRITICAL EXTRACTION & PIPELINE COHERENCE]
+- 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees'). NEVER confuse this with their customers' enterprise scale.
+- CRM & Tool Status: Pay extreme attention to tool status (Active vs. Abandoned).
+  * If a tool is explicitly stated as abandoned (e.g., 'We abandoned Salesforce'), do NOT list it as a pain point or bottleneck. It is gone.
+  * Respect the active tools: If they say 'HubSpot works' or is active, do NOT recommend changing the CRM. Address the integration/pipeline issues instead.
+
 Output format should be JSON with keys: Role, CompanySize, Tech, Pain, Lens, Fear...
-
-Your reasoning layer must constantly cross-reference three dimensions based on the conversation and the live web context provided:
-1. OPERATIONAL PAIN: Identify the exact bottlenecks, inefficient workflows, or financial leaks in their daily operations.
-2. TECHNICAL MATURITY: Assess their current infrastructure, their readiness to adopt AI solutions, and their technical limitations.
-3. EMOTIONAL FEAR: Uncover the unspoken stakes for the leader (e.g., fear of losing market share, anxiety over team management, stress regarding data privacy, or fear of tech obsolescence).
-
-CRITICAL EXTRACTION & ENTITY RULES:
-- Distinguish strictly between "Role" and "CompanySize". 
-- "Role" is the user's personal job title or function (e.g., CEO, Owner, Chief AI Officer, Legal Counsel). Do NOT put company descriptions here.
-- "CompanySize" is the scale or type of the organization (e.g., Mid-sized company, SMB, Startup, Enterprise, 10 employees).
-- Do not sound like a standard chatbot. Act as a sharp, empathetic, and strategic peer.
-- Keep your questions precise, single-focused, and designed to move the client seamlessly through the interview stages.
-- Even if the client gives short, confusing, or evasive answers, use your psychological framework to stay grounded, dig deeper, and guide them back on track with empathy.
 """
 
 st.set_page_config(page_title="AI Advisor - Smart Companion", page_icon="🎙️", layout="wide")
@@ -258,15 +249,12 @@ if st.session_state.stage == 4:
     st.markdown("---")
     st.header("📋 Comprehensive Strategic Blueprint")
     
-    # Initialize session state variable to track if step 4 was submitted
     if 'diagnostic_ready' not in st.session_state:
         st.session_state.diagnostic_ready = False
 
-    # Trigger diagnostic if stage is 4 and we have a transcript recorded
     if st.session_state.transcript:
         st.session_state.diagnostic_ready = True
 
-    # SECURITY TRIGGER: Count how many critical slots have been filled
     filled_slots_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
     if st.session_state.diagnostic_ready:
@@ -275,30 +263,32 @@ if st.session_state.stage == 4:
             st.warning("You must provide more details to unlock the diagnostic.")
         else:
             st.balloons()
-            with st.spinner("Generating deep expert diagnostic reflecting blind spots..."):
+            with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
                 
-                # STRICT SYSTEM INSTRUCTIONS TO PREVENT HALLUCINATIONS AND SIZE MISMATCH
                 prompt_final = f"""
-                Act as an elite, hyper-logical B2B Sales Consultant and Psychologist. 
-                Analyze this precise prospect profile:
+                Act as an elite B2B Sales Consultant. Analyze this profile:
                 - Role: {st.session_state.slots['Role']}
                 - Exact Company Size: {st.session_state.slots['CompanySize']}
                 - Technical Stack: {st.session_state.slots['Tech']}
                 - Core Pain: {st.session_state.slots['Pain']}
-                - Psychological Lens: {st.session_state.tags.get('Lens', 'Business-Driven')}
+                - Psychological Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
                 - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
                 
-                Generate a highly tailored 3-paragraph diagnostic based STRICTLY on the above parameters. Avoid these critical mistakes:
+                You must write a highly tailored, 3-paragraph diagnostic. Follow these constraints strictly:
                 
-                1. COMPANY SIZE COHERENCE (CRITICAL): You must align your analysis with the EXACT company scale ({st.session_state.slots['CompanySize']}). 
-                   - If company size is small (e.g., 11 employees, under 50 people), do NOT refer to them as a "mid-sized enterprise" or "large enterprise". Treat them as a small, compact, or agile operation. Adapt the scale of your recommendations to a small team.
+                1. NO TECH-BABBLE FOR EXECUTIVE ROLES: If the Lens is 'Commercial / Executive' or the Role is 'VP of Sales', your language must be entirely business, revenue, and process-focused. 
+                   * Do NOT propose building complex databases or writing SQL.
+                   * Do NOT recommend changing CRM platforms if their current CRM (e.g., HubSpot) is already working or lightweight.
+                   * Focus instead on data synchronization, building visibility bridges (e.g., pushing product usage data from PostgreSQL to HubSpot), and automating renewal alert workflows.
                 
-                2. STRICT FEAR ADHERENCE: Focus purely on their internal, expressed fears: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}. 
-                   - Do NOT invent external market threats, competitor pressure, or "being overshadowed" unless explicitly stated in their profile. Keep the anxiety centered on internal operations, forecasting trust, and board/investor relationships.
+                2. STRICT COHERENCE WITH STATE: 
+                   * Do NOT refer to abandoned tools (like Salesforce) as current bottlenecks.
+                   * Match the scale: If company size is {st.session_state.slots['CompanySize']}, ensure recommendations are agile, cost-effective, and require zero heavy corporate overhead.
                 
-                3. REALISTIC ROADMAP: Provide a budget-conscious, highly operational 3-step action plan that a company of {st.session_state.slots['CompanySize']} can realistically implement without massive overhead.
-                
-                Keep the tone consultative, direct, and elite. No generic AI fluff.
+                3. BUSINESS ACTION PLAN: 
+                   * Step 1: Connect existing product data pipelines to their active CRM ({st.session_state.slots['Tech']}) to give the sales team immediate visibility.
+                   * Step 2: Establish early-warning indicators (Account Health Scores) to proactively spot renewal risks.
+                   * Step 3: Implement structured sales forecasting reviews to restore board and executive trust.
                 """
                 
                 try:
