@@ -269,7 +269,7 @@ if st.session_state.stage == 4:
         if filled_slots_count < 3:
             st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
             st.warning("You must provide more details to unlock the diagnostic.")
-        else:
+    else:
         st.balloons()
         with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
             prompt_final = f"""
