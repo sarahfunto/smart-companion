@@ -300,38 +300,37 @@ if st.session_state.stage == 4:
                 """
                 
                 try:
-                    final_diag = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[{"role": "user", "content": prompt_final}]
-                    ).choices[0].message.content
+            final_diag = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt_final}]
+            ).choices[0].message.content
 
-                    st.markdown(f"""
-                    <div class="recommendation-box">
-                        {final_diag}
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    st.subheader("Final Summary Matrix")
-                    st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
-                    st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
-                    st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
-                    st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
-                    
-                    st.markdown("---")
-                    st.subheader("📊 Operational Diagnosis")
-                    
-                    # 1. Pain (the real pain)
+            st.markdown(f"""
+            <div class="recommendation-box">
+                {final_diag}
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.subheader("Final Summary Matrix")
+            st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
+            st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
+            st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
+            st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
+
+            st.markdown("---")
+            st.subheader("📊 Operational Diagnosis")
+
+            # 1. Pain (the real pain)
             st.error(f"""**🔴 Core Business Pain:**  
 {st.session_state.slots.get('Pain', 'Empty')}""")
-            
+
             # 2. Root Causes (why it is happening)
             st.warning(f"""**⚙️ Technical Root Causes:**  
 {st.session_state.slots.get('RootCauses', 'Empty')}""")
-            
+
             # 3. Limits (what blocks or restricts the solutions)
             st.info(f"""**⚠️ Constraints & Limits:**  
 {st.session_state.slots.get('Limits', 'Empty')}""")
-                except Exception as e:
-                    st.error(f"Error generating blueprint: {e}")
-    else:
-        st.info("ℹ️ The final strategic blueprint will appear here once you submit your response above.")
+
+        except Exception as e:
+            st.error(f"Error generating blueprint: {e}")
