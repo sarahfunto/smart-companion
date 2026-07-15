@@ -270,67 +270,66 @@ if st.session_state.stage == 4:
             st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
             st.warning("You must provide more details to unlock the diagnostic.")
         else:
-            st.balloons()
-            with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
-                
-                prompt_final = f"""
-                Act as an elite B2B Sales Consultant. Analyze this profile:
-                - Role: {st.session_state.slots['Role']}
-                - Exact Company Size: {st.session_state.slots['CompanySize']}
-                - Technical Stack: {st.session_state.slots['Tech']}
-                - Core Pain: {st.session_state.slots['Pain']}
-                - Psychological Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
-                - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
-                
-                You must write a highly tailored, 3-paragraph diagnostic. Follow these constraints strictly:
-                
-                1. NO TECH-BABBLE FOR EXECUTIVE ROLES: If the Lens is 'Commercial / Executive' or the Role is 'VP of Sales', your language must be entirely business, revenue, and process-focused. 
-                   * Do NOT propose building complex databases or writing SQL.
-                   * Do NOT recommend changing CRM platforms if their current CRM (e.g., HubSpot) is already working or lightweight.
-                   * Focus instead on data synchronization, building visibility bridges (e.g., pushing product usage data from PostgreSQL to HubSpot), and automating renewal alert workflows.
-                
-                2. STRICT COHERENCE WITH STATE: 
-                   * Do NOT refer to abandoned tools (like Salesforce) as current bottlenecks.
-                   * Match the scale: If company size is {st.session_state.slots['CompanySize']}, ensure recommendations are agile, cost-effective, and require zero heavy corporate overhead.
-                
-                3. BUSINESS ACTION PLAN: 
-                   * Step 1: Connect existing product data pipelines to their active CRM ({st.session_state.slots['Tech']}) to give the sales team immediate visibility.
-                   * Step 2: Establish early-warning indicators (Account Health Scores) to proactively spot renewal risks.
-                   * Step 3: Implement structured sales forecasting reviews to restore board and executive trust.
-                """
-                
-                try:
-            final_diag = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt_final}]
-            ).choices[0].message.content
+        st.balloons()
+        with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
+            prompt_final = f"""
+            Act as an elite B2B Sales Consultant. Analyze this profile:
+            - Role: {st.session_state.slots['Role']}
+            - Exact company Size: {st.session_state.slots['CompanySize']}
+            - Technical Stack: {st.session_state.slots['Tech']}
+            - Core Pain: {st.session_state.slots['Pain']}
+            - Psychological Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
+            - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
 
-            st.markdown(f"""
-            <div class="recommendation-box">
-                {final_diag}
-            </div>
-            """, unsafe_allow_html=True)
+            You must write a highly tailored, 3-paragraph diagnostic. Follow these constraints strictly:
 
-            st.subheader("Final Summary Matrix")
-            st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
-            st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
-            st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
-            st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
+            1. NO TECH-BABBLE FOR EXECUTIVE ROLES: If the Lens is 'Commercial / Executive' or the Role is 'VP of Sales', your language must be entirely business, revenue, and process-focused.
+               * Do NOT propose building complex databases or writing SQL.
+               * Do NOT recommend changing CRM platforms if their current CRM (e.g., HubSpot) is already working or lightweight.
+               * Focus instead on data synchronization, building visibility bridges (e.g., pushing product usage data from PostgreSQL to HubSpot), and automating renewal alert workflows.
 
-            st.markdown("---")
-            st.subheader("📊 Operational Diagnosis")
+            2. STRICT COHERENCE WITH STATE:
+               * Do NOT refer to abandoned tools (like Salesforce) as current bottlenecks.
+               * Match the scale: If company size is {st.session_state.slots['CompanySize']}, ensure recommendations are agile, cost-effective, and require zero heavy corporate overhead.
 
-            # 1. Pain (the real pain)
-            st.error(f"""**🔴 Core Business Pain:**  
+            3. BUSINESS ACTION PLAN:
+               * Step 1: Connect existing product data pipelines to their active CRM ({st.session_state.slots['Tech']}) to give the sales team immediate visibility.
+               * Step 2: Establish early-warning indicators (Account Health Scores) to proactively spot renewal risks.
+               * Step 3: Implement structured sales forecasting reviews to restore board and executive trust.
+            """
+
+            try:
+                final_diag = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt_final}]
+                ).choices[0].message.content
+
+                st.markdown(f"""
+                <div class="recommendation-box">
+                    {final_diag}
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.subheader("Final Summary Matrix")
+                st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
+                st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
+                st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
+                st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
+
+                st.markdown("---")
+                st.subheader("📊 Operational Diagnosis")
+
+                # 1. Pain (the real pain)
+                st.error(f"""**🔴 Core Business Pain:**  
 {st.session_state.slots.get('Pain', 'Empty')}""")
 
-            # 2. Root Causes (why it is happening)
-            st.warning(f"""**⚙️ Technical Root Causes:**  
+                # 2. Root Causes (why it is happening)
+                st.warning(f"""**⚙️ Technical Root Causes:**  
 {st.session_state.slots.get('RootCauses', 'Empty')}""")
 
-            # 3. Limits (what blocks or restricts the solutions)
-            st.info(f"""**⚠️ Constraints & Limits:**  
+                # 3. Limits (what blocks or restricts the solutions)
+                st.info(f"""**⚠️ Constraints & Limits:**  
 {st.session_state.slots.get('Limits', 'Empty')}""")
 
-        except Exception as e:
-            st.error(f"Error generating blueprint: {e}")
+            except Exception as e:
+                st.error(f"Error generating blueprint: {e}")
