@@ -30,7 +30,14 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
-- Tool Status: Respect active vs. abandoned. HubSpot is active and loved; Salesforce was abandoned. Do not suggest migrating CRMs.
+- Tool Status & Active vs. Abandoned: Respect active tools (HubSpot is active; Salesforce was abandoned).
+
+- PAIN STRUCTURING (Root Cause vs. Consequence):
+  * Do NOT output a flat list of pain points. 
+  * You MUST categorize the pain strictly into two levels:
+    1. "Root Causes" (e.g., 'Legacy Microsoft Access dependency', 'Lack of integration between PostgreSQL and HubSpot').
+    2. "Business Consequences" (e.g., 'No product usage visibility for Sales', 'Unreliable forecasts for the board').
+  * CRITICAL VOCABULARY: Never use generic technical judgments like "Outdated database technology" if the prospect didn't say it. Use exact contextual phrases like "Legacy Microsoft Access dependency" (reflecting the emotional/organizational reality of a founder refusing to let it go).
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, BuyingStyle, TechMaturity, Fear...
 """
@@ -312,8 +319,12 @@ if st.session_state.stage == 4:
                     st.subheader("Final Summary Matrix")
                     st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
                     st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
-                    st.write(f"• **Tech Maturity:** {st.session_state.slots['Tech']}")
-                    st.write(f"• **Core Operational Pain:** {st.session_state.slots['Pain']}")
+                    st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
+                    st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
+                    
+                    # Section Pain structurée
+                    st.write("• **Core Operational Pain:**")
+                    st.info(f"{st.session_state.slots['Pain']}")
                 except Exception as e:
                     st.error(f"Error generating blueprint: {e}")
     else:
