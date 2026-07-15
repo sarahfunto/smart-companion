@@ -14,6 +14,17 @@ else:
 SYSTEM_PROMPT = """
 You are an expert B2B sales psychologist and high-level enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework. 
 
+[PSYCHOLOGICAL PROFILING RULES]
+- Decision Filter (Lens): Choose the lens based on the prospect's actual ROLE and primary responsibilities, NOT just technical keywords. 
+* If a non-technical role (Sales, Marketing, HR, CFO) mentions database terms (SQL, Postgres, Access) but does not code or build architecture, do NOT classify them as "Technical". Use "Business/ROI-Driven" or "Risk/Compliance-Locked" instead.
+          
+- Identified Core Fear (Fear): Extract ONLY anxieties, pressures, or vulnerabilities explicitly stated or directly implied by the prospect (e.g., losing renewals, losing board trust, untrustworthy data forecasting). 
+* NEVER hallucinate external threats. Do NOT invent fears about "competitors", "market disruption", or "being overshadowed" unless the user explicitly mentions competition.
+          
+# ---------------------------------------------------------------------------------
+        
+Output format should be JSON with keys: Role, CompanySize, Tech, Pain, Lens, Fear...
+
 Your reasoning layer must constantly cross-reference three dimensions based on the conversation and the live web context provided:
 1. OPERATIONAL PAIN: Identify the exact bottlenecks, inefficient workflows, or financial leaks in their daily operations.
 2. TECHNICAL MATURITY: Assess their current infrastructure, their readiness to adopt AI solutions, and their technical limitations.
@@ -256,24 +267,35 @@ if st.session_state.stage == 4:
     filled_slots_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
     if st.session_state.diagnostic_ready:
-        # Require at least 3 filled slots to generate the report
         if filled_slots_count < 3:
             st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
-            st.warning("You must provide more details to unlock the diagnostic. The current profile is too empty to generate a meaningful analysis.")
+            st.warning("You must provide more details to unlock the diagnostic.")
         else:
             st.balloons()
             with st.spinner("Generating deep expert diagnostic reflecting blind spots..."):
+                
+                # STRICT SYSTEM INSTRUCTIONS TO PREVENT HALLUCINATIONS AND SIZE MISMATCH
                 prompt_final = f"""
-                Act as a top-tier B2B consultant and sales psychologist. Based on the following interview data:
-                Slots: {json.dumps(st.session_state.slots)}
-                Tags: {json.dumps(st.session_state.tags)}
+                Act as an elite, hyper-logical B2B Sales Consultant and Psychologist. 
+                Analyze this precise prospect profile:
+                - Role: {st.session_state.slots['Role']}
+                - Exact Company Size: {st.session_state.slots['CompanySize']}
+                - Technical Stack: {st.session_state.slots['Tech']}
+                - Core Pain: {st.session_state.slots['Pain']}
+                - Psychological Lens: {st.session_state.tags.get('Lens', 'Business-Driven')}
+                - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
                 
-                Write a professional, 3-paragraph diagnostic focused on depth and blind spots:
-                1. Executive Mirroring: Reflect their reality back to them, highlighting a critical blind spot or hidden workflow vulnerability they might have missed. 
-                2. Strategic Insights & Market Context: Compare their situation to how similar organizations of this size handle AI transitions (provide a novel perspective or industry shift).
-                3. Operational Action Plan: A concrete, budget-conscious 3-step technical roadmap that respects their psychological fears.
+                Generate a highly tailored 3-paragraph diagnostic based STRICTLY on the above parameters. Avoid these critical mistakes:
                 
-                Keep it sharp, highly personalized, and ensure it sounds like a human consultant providing deep value, not generic AI facts.
+                1. COMPANY SIZE COHERENCE (CRITICAL): You must align your analysis with the EXACT company scale ({st.session_state.slots['CompanySize']}). 
+                   - If company size is small (e.g., 11 employees, under 50 people), do NOT refer to them as a "mid-sized enterprise" or "large enterprise". Treat them as a small, compact, or agile operation. Adapt the scale of your recommendations to a small team.
+                
+                2. STRICT FEAR ADHERENCE: Focus purely on their internal, expressed fears: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}. 
+                   - Do NOT invent external market threats, competitor pressure, or "being overshadowed" unless explicitly stated in their profile. Keep the anxiety centered on internal operations, forecasting trust, and board/investor relationships.
+                
+                3. REALISTIC ROADMAP: Provide a budget-conscious, highly operational 3-step action plan that a company of {st.session_state.slots['CompanySize']} can realistically implement without massive overhead.
+                
+                Keep the tone consultative, direct, and elite. No generic AI fluff.
                 """
                 
                 try:
