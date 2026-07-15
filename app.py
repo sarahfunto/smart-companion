@@ -14,23 +14,25 @@ else:
 SYSTEM_PROMPT = """
 You are an expert B2B sales psychologist and high-level enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework.
 
-[COGNITIVE LENS DETERMINATION - RULES & WEIGHTS]
-The 'Lens' is NOT a summary of the keywords the prospect uses. It defines HOW they make decisions.
-Analyze and calculate the 'Lens' using this exact weighted formula:
-1. ROLE (45%): What is their daily accountability? (e.g., VP Sales = Commercial/Revenue, CEO = Strategic, CFO = Risk/Compliance, CTO = Technical).
-2. PAIN (30%): What are they trying to fix? (e.g., Unreliable forecasting = Commercial/Executive decision).
-3. FEAR (15%): What keeps them up at night? (e.g., Board pressure, losing renewals = Executive).
-4. TECH (10% - LIGHT ADJUSTMENT ONLY): Technical stack mentioned.
-   * STRICT RULE: A VP Sales or CEO mentioning 'PostgreSQL', 'APIs', or 'SQL' remains strictly 'Commercial / Executive' or 'Strategic'. They are NOT technical decision-makers. They want business outcomes.
-   * Only assign a 'Technical' Lens if the role is purely technical (CTO, Lead Architect, VP Engineering) AND the pain is about system implementation rather than business revenue.
+[PSYCHOLOGICAL PROFILING - MULTIDIMENSIONAL MODEL]
+Instead of a single flat tag, you must analyze the prospect's profile across two distinct operational axes:
+
+1. Buying Style (Decision Lens): This answers: "What argument will convince this person to sign?"
+   - Commercial / Revenue-Driven: Convicted by renewal rates, forecasting confidence, pipeline speed, and sales team efficiency (e.g., VP of Sales, Chief Revenue Officer). Even if they mention technical databases, if their goal is revenue, they belong here.
+   - Strategic / Growth-Driven: Convicted by market share, business model scalability, and long-term vision (e.g., CEO, Founders).
+   - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, and failure prevention (e.g., CFO, Legal Counsel).
+   - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems (CTO, Lead Architect) and who care about clean code, scalability, and stack modernism.
+
+2. Tech Maturity: Assess the organizational complexity of their current tools.
+   - Low: Mostly manual processes, spreadsheets, no central CRM.
+   - Medium: Uses modern SaaS tools (like HubSpot, Slack) but suffers from poor integration or data silos (e.g., PostgreSQL database not connected to CRM).
+   - High: Fully automated, data-driven, real-time analytics pipelines.
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
-- 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees'). NEVER confuse this with their customers' enterprise scale.
-- CRM & Tool Status: Pay extreme attention to tool status (Active vs. Abandoned).
-  * If a tool is explicitly stated as abandoned (e.g., 'We abandoned Salesforce'), do NOT list it as a pain point or bottleneck. It is gone.
-  * Respect the active tools: If they say 'HubSpot works' or is active, do NOT recommend changing the CRM. Address the integration/pipeline issues instead.
+- 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
+- Tool Status: Respect active vs. abandoned. HubSpot is active and loved; Salesforce was abandoned. Do not suggest migrating CRMs.
 
-Output format should be JSON with keys: Role, CompanySize, Tech, Pain, Lens, Fear...
+Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, BuyingStyle, TechMaturity, Fear...
 """
 
 st.set_page_config(page_title="AI Advisor - Smart Companion", page_icon="🎙️", layout="wide")
@@ -141,16 +143,20 @@ def analyze_with_openai(user_text, context_web, current_stage):
             if key in new_tags and new_tags[key] not in ["None", ""]:
                 st.session_state.tags[key] = new_tags[key]
         
-        # Smart Sensitivity Override
-        current_role = str(st.session_state.slots.get('Role', '')).upper()
-        current_tech = str(st.session_state.slots.get('Tech', '')).upper()
-        
+        # Smart Sensitivity Override (Corrected for Decision Lens stability)
+        current_role = str(st.session_state.slots.get("Role", "")).upper()
+        current_tech = str(st.session_state.slots.get("Tech", "")).upper()
+
+        non_tech_roles = ["SALES", "VP OF SALES", "VP SALES", "MARKETING", "CFO", "CEO", "FOUNDER", "DIRECTOR"]
+
         for tag_key in st.session_state.tags:
-            if "DECISION" in tag_key.upper() or "LENS" in tag_key.upper():
-                if "CTO" in current_role or "AWS" in current_tech or "POSTGRESQL" in current_tech:
-                    st.session_state.tags[tag_key] = "Technical / ROI-Driven"
-                elif "COMPLIANCE" in current_role or "RISK" in current_role or "SERVER" in current_tech:
-                    st.session_state.tags[tag_key] = "Risk / Compliance-Locked"
+            if "DECISION" in tag_key.upper() or "LENS" in tag_key.upper() or "BUYINGSTYLE" in tag_key.upper():
+                # If they have an executive/sales role, never force them into Technical lens
+                if any(role in current_role for role in non_tech_roles):
+                    st.session_state.tags[tag_key] = "Commercial / Revenue-Driven"
+                # Only force Technical if the actual role is a tech leader (like CTO)
+                elif "CTO" in current_role or "ARCHITECT" in current_role or "DEVELOPER" in current_role:
+                    st.session_state.tags[tag_key] = "Technical / Architecture-Driven"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
