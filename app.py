@@ -357,23 +357,23 @@ if st.session_state.stage == 4:
 
                 4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
                    * Paragraph 1 (The Core Paradox): "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have." Then write this exact sentence: "Disconnected systems increase operational uncertainty, reduce forecast reliability, and limit visibility into customer behavior, making renewal planning significantly less predictable." 
-                   * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, the solution must adapt to your environment rather than force your organization to adapt to new technology." Advise against total migrations or heavy tool replacements (especially considering their specific constraints/team size of {st.session_state.slots['CompanySize']}). Propose a lightweight integration layer or middleware layer instead. DO NOT reference any specific third-party integration brands (like Zapier, Make, etc.) to keep the consulting strictly independent.
-                   * End this section with the exact closing sentence: "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
+                   * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
+                   * End this section with the exact closing sentence (without any quotation marks around it): "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
                 5. SECTION 4: EXECUTIVE RECOMMENDATION (MANDATORY FORMAT)
-                   Include a highlighted, concise callout box with this exact layout:
+                   Include a highlighted, concise callout box with this exact layout (ensure the header 'SECTION 4: EXECUTIVE RECOMMENDATION' is not repeated):
                    > **SECTION 4: EXECUTIVE RECOMMENDATION**
                    >
                    > Start with data integration rather than software replacement.
                    > A phased modernization strategy will deliver immediate commercial visibility while respecting organizational constraints and minimizing operational disruption.
 
                 6. SECTION 5: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
-                   Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact":
-                   - **Improved renewal visibility** across key accounts
-                   - **Higher forecasting accuracy** for executive reporting
-                   - **Faster identification** of churn risks
-                   - **Better alignment** between Product and Sales
-                   - **Increased confidence** in strategic planning
+                   Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact". Use these exact verb-first structures:
+                   - **Improve renewal visibility** across key accounts
+                   - **Increase forecasting accuracy** for executive reporting
+                   - **Accelerate churn detection** to mitigate risks early
+                   - **Strengthen Product-Sales alignment** through shared insights
+                   - **Reinforce executive confidence** in strategic planning
 
                 7. SECTION 6: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
                    Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities" with these exact objectives (ensuring zero repetitive phrasing from prior sections and using consistent active verbs):
@@ -392,16 +392,30 @@ if st.session_state.stage == 4:
                     st.markdown(f"""
                     <div class="recommendation-box">
                         <div class="priority-badge">⚠️ EXECUTIVE RISK LEVEL: HIGH</div>
+                        <div style="font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; color: #FFD2D2;">
+                            <b>Reason:</b><br>
+                            • Low forecast reliability<br>
+                            • Poor customer usage visibility<br>
+                            • Renewal risk not detected early
+                        </div>
                         {final_diag}
                     </div>
                     """, unsafe_allow_html=True)
 
                     st.subheader("Final Summary Matrix")
-                    st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
-                    st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
-                    st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
-                    st.write(f"• **Decision Lens:** {st.session_state.tags.get('Lens', 'Commercial / Revenue-Driven')}")
-                    st.write(f"• **Business Risk Level:** 🔴 **HIGH**")
+                    col_m1, col_m2 = st.columns(2)
+                    with col_m1:
+                        st.markdown(f"""
+                        * **Prospect Role:** {st.session_state.slots['Role']}
+                        * **Company Size:** {st.session_state.slots['CompanySize']}
+                        * **Decision Lens:** {st.session_state.tags.get('Lens', 'Commercial / Revenue-Driven')}
+                        """)
+                    with col_m2:
+                        st.markdown(f"""
+                        * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Hybrid Stack')}
+                        * **Business Risk:** 🔴 **HIGH**
+                        * **Transformation Strategy:** Lightweight integration
+                        """)
 
                     st.markdown("---")
                     st.subheader("📊 Operational Diagnosis")
