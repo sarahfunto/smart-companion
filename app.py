@@ -285,7 +285,7 @@ if st.session_state.stage == 4:
             st.balloons()
             with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
                 prompt_final = f"""
-                Act as an elite, high-level B2B Sales and Management Consultant. Analyze this profile:
+                Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). Analyze this profile:
                 - Role: {st.session_state.slots['Role']}
                 - Exact company Size: {st.session_state.slots['CompanySize']}
                 - Technical Stack: {st.session_state.slots['Tech']}
@@ -309,7 +309,7 @@ if st.session_state.stage == 4:
 
                 2. SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
                    Render a clean, high-impact overview using the following structured fields. Rely strictly on the exact context and details gathered during the interview:
-                   * **Business Objective**: Protect recurring revenue
+                   * **Strategic Business Objective**: Protect recurring revenue
                    * **Decision Lens**: {st.session_state.tags.get('Lens', 'Commercial / Revenue-Driven')}
                    * **Core Fear**: {st.session_state.tags.get('Fear', 'Being surprised by a major renewal loss')}
                    * **Operational Pain**: {st.session_state.slots['Pain']}
@@ -341,18 +341,26 @@ if st.session_state.stage == 4:
                    ↓
                    
                    **STRATEGIC RESPONSE**
-                   Connect PostgreSQL product usage data with HubSpot while preserving Microsoft Access during a phased modernization.
+                   Connect PostgreSQL product usage data with HubSpot while maintaining compatibility with Microsoft Access through a phased modernization strategy.
 
                 4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
                    * Paragraph 1 (The Core Paradox): "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have." Explain clearly, without dramatic hyperbole, how disconnecting system data creates unnecessary uncertainty around forecasts and renewal cycles. Use terms like "increasing operational uncertainty and renewal risk" or "weakening revenue predictability."
-                   * Paragraph 2 (Tactical Adaptation to Constraints): Actively address the limitations listed in 'Limits' ({st.session_state.slots['Limits']}). Explicitly advise against total migrations or heavy tool replacements (especially considering their specific constraints/team size of {st.session_state.slots['CompanySize']}). Propose a lightweight integration layer or middleware layer instead. DO NOT reference any specific third-party integration brands (like Zapier, Make, etc.) to keep the consulting strictly independent.
+                   * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, the solution must adapt to your environment rather than force your organization to adapt to new technology." Advise against total migrations or heavy tool replacements (especially considering their specific constraints/team size of {st.session_state.slots['CompanySize']}). Propose a lightweight integration layer or middleware layer instead. DO NOT reference any specific third-party integration brands (like Zapier, Make, etc.) to keep the consulting strictly independent.
                    * End this section with the exact closing sentence: "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
-                5. SECTION 4: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
+                5. SECTION 4: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
+                   Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact":
+                   - **Improved renewal visibility** across key accounts
+                   - **Higher forecasting accuracy** for executive reporting
+                   - **Faster identification** of churn risks
+                   - **Better alignment** between Product and Sales
+                   - **Increased confidence** in strategic planning
+
+                6. SECTION 5: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
                    Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities" with these exact objectives:
-                   * 1. **Establish the Data Bridge**: Connect PostgreSQL product usage data with HubSpot while preserving Microsoft Access during a phased modernization, avoiding heavy platform migrations.
+                   * 1. **Establish the Data Bridge**: Connect PostgreSQL product usage data with HubSpot while maintaining compatibility with Microsoft Access through a phased modernization strategy, avoiding heavy platform migrations.
                    * 2. **Implement Account Health Scores**: Implement Account Health Scores based on product usage signals to identify renewal risks early.
-                   * 3. **Standardize Forecasting Reviews**: Detail how to align these technical indicators with forecasting reviews to restore executive and board confidence.
+                   * 3. **Standardize Forecasting Reviews**: Introduce recurring forecasting reviews based on unified operational data to restore executive and board confidence.
                 """
 
                 try:
