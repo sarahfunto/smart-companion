@@ -90,6 +90,18 @@ st.markdown("""
         letter-spacing: 1px;
         margin-bottom: 15px;
     }
+    
+    .priority-badge-discovery {
+        display: inline-block;
+        background-color: #D48C00;
+        color: white;
+        padding: 6px 14px;
+        font-size: 0.85em;
+        font-weight: bold;
+        border-radius: 4px;
+        letter-spacing: 1px;
+        margin-bottom: 15px;
+    }
 
     .dna-container {
         background-color: #1A1F26;
@@ -290,22 +302,26 @@ if st.session_state.stage == 4:
     filled_slots_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
     if st.session_state.diagnostic_ready:
-        if filled_slots_count < 3:
+        if filled_slots_count < 1:  # Absolute baseline validation
             st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
             st.warning("You must provide more details to unlock the diagnostic.")
         else:
             st.balloons()
-            with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
+            with st.spinner("Analyzing operational state and selecting strategic blueprint mode..."):
                 
-                # Dynamic adjustment of the displayed slot value for UI/UX rendering
-                mapped_pain = st.session_state.slots.get('Pain', '')
-                if mapped_pain == "Empty" or "sales" in mapped_pain.lower() or "renewal" in mapped_pain.lower():
-                    mapped_pain = "Unreliable executive reporting and operational forecasting"
-                    st.session_state.slots['Pain'] = mapped_pain
+                # DETERMINING BLUEPRINT MODE DYNAMICALLY
+                is_pain_empty = st.session_state.slots.get('Pain', 'Empty') in ["Empty", "", "None"]
+                is_root_empty = st.session_state.slots.get('RootCauses', 'Empty') in ["Empty", "", "None"]
+                is_fear_empty = st.session_state.tags.get('Fear', 'None') in ["None", "", "Empty"]
+                
+                if is_pain_empty and is_root_empty and is_fear_empty:
+                    blueprint_mode = "Discovery"
+                else:
+                    blueprint_mode = "Recommendation"
 
                 prompt_final = f"""
                 Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). 
-                Analyze this profile STRICTLY using the provided parameters. Do NOT assume, hallucinate, or carry over any external software systems, architectures, or business goals unless they are explicitly written below:
+                Analyze this profile STRICTLY using the provided parameters. Do NOT assume or carry over any external software systems, architectures, or business goals unless explicitly written below:
                 
                 - Role: {st.session_state.slots['Role']}
                 - Exact Company Size: {st.session_state.slots['CompanySize']}
@@ -317,71 +333,107 @@ if st.session_state.stage == 4:
                 - Extracted Fear: {st.session_state.tags.get('Fear', 'None')}
                 - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Standard')}
 
-                CRITICAL STABILITY RULES (PREVENT CONTAMINATION):
-                1. STRICT TOOL BLOCK: If the Tech slot does not contain "HubSpot", "PostgreSQL", or "Microsoft Access", you are FORBIDDEN from naming them or hinting at them. Use generic terms instead like "existing business systems", "internal databases", "legacy tools", or "third-party platforms" as described by the prospect.
-                2. STRICT TERMINOLOGY BLOCK: If the Pain or Fear slots do NOT explicitly mention words like "sales", "renewal", "product adoption", "churn", or "retention", do NOT use them. Adapt the business context entirely to the prospect's actual input (e.g., if they are in public service, healthcare, finance, or secure systems, focus purely on their described operational targets like "process reliability", "compliance verification", or "secure organizational reporting").
-                3. NO INVENTED VENDORS: If the prospect stated they cannot name vendors due to info-sec rules, your entire diagnostic must refer to their stack anonymously as "protected infrastructure" or "internal business architectures".
+                ACTIVE MODE DETERMINED BY PLATFORM ENGINE: **{blueprint_mode}**
 
-                You must build a highly tailored, clinical, and high-impact Strategic Blueprint following this exact layout. Do NOT include meta-labels like "Paragraph 1", "Paragraph 2", "The Core Paradox", or structural instructions in the output text. Write only the raw executive narrative block:
+                You must format your response strictly according to the active mode rules. 
+                Do NOT include meta-labels (like "Paragraph 1", "Paragraph 2", "The Core Paradox") or structural directions in the final output text.
 
-                1. CRITICAL TONE ADJUSTMENT:
-                   - NO marketing hype or dramatic consulting clichés.
-                   - Use calm, business-first risk-assessment statements: "increasing operational uncertainty", "weakening process predictability", "increasing operational risk", "limited process visibility".
+                ===================================================
+                IF MODE IS "Discovery":
+                - Tone: High-level consultative inquiry, objective, non-prescriptive, showing supreme professional maturity.
+                - SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
+                  * **Strategic Business Objective**: To be determined (Requires further validation)
+                  * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
+                  * **Core Fear**: Not yet confirmed (Requires discovery validation)
+                  * **Operational Pain**: Not yet confirmed (Information currently restricted)
+                  * **Root Cause**: Requires additional discovery
+                  * **Constraints**: {st.session_state.slots['Limits']}
+                  * **Recommended Strategy**: Postpone technical design. Initiate a structured discovery workshop to bypass information-security boundaries safely.
+                  * **Expected Business Outcomes**: [Identify 2 key outcomes focused on clarity, validation, and aligning stakeholders safely.]
 
-                2. SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
-                   Render an overview strictly mapped to the provided slots:
-                   * **Strategic Business Objective**: Improve strategic decision-making through reliable organizational reporting. (Or: Enhance decision quality through more reliable operational forecasting).
-                   * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
-                   * **Core Fear**: {st.session_state.tags.get('Fear', 'None')}
-                   * **Operational Pain**: {st.session_state.slots['Pain']}
-                   * **Root Cause**: {st.session_state.slots['RootCauses']}
-                   * **Constraints**: {st.session_state.slots['Limits']}
-                   * **Recommended Strategy**: Modernize and secure existing assets through a lightweight integration layer rather than costly, disruptive platform replacement.
-                   * **Expected Business Outcomes**: [Identify 3 to 4 outcomes directly solving the 'Pain' and aligned with 'Decision Lens'. Do NOT reference renewals or sales unless explicitly supported.]
+                - SECTION 2: STRATEGIC CAUSALITY CHAIN
+                  Present this visual map showing the current investigative status:
+                  **BUSINESS FEAR**
+                  Not yet confirmed (Pending discovery)
+                  ↓
+                  **ROOT CAUSE**
+                  Requires additional validation
+                  ↓
+                  **OPERATIONAL PAIN**
+                  Not yet confirmed
+                  ↓
+                  **STRATEGIC RESPONSE**
+                  Define secure discovery boundaries to evaluate system pain points without violating information-security guidelines.
 
-                3. SECTION 2: STRATEGIC CAUSALITY CHAIN (MANDATORY VISUAL FLOW)
-                   Present the sequential mapping of the current operational friction using this precise flow (use markdown styling, bold headers, and exact arrow layout):
-                   
-                   **BUSINESS FEAR**
-                   {st.session_state.tags.get('Fear', 'None')}
-                   
-                   ↓
-                   
-                   **ROOT CAUSE**
-                   {st.session_state.slots['RootCauses']}
-                   
-                   ↓
-                   
-                   **OPERATIONAL PAIN**
-                   {st.session_state.slots['Pain']}
-                   
-                   ↓
-                   
-                   **STRATEGIC RESPONSE**
-                   [Write a 1-sentence strategic response strictly utilizing the 'Tech' slot data and 'Limits'. If tools are anonymous, use terms like "securely connecting internal systems while respecting information-security constraints"]
+                - SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE
+                  Write three raw continuous paragraphs:
+                  Paragraph 1: "Based on the information currently available, no critical operational pain has been explicitly confirmed. The main obstacle appears to be limited visibility caused by information-security constraints."
+                  Paragraph 2: "Before recommending transformation initiatives, additional discovery is required to understand operational priorities and validate existing assumptions without exposing sensitive assets."
+                  Paragraph 3: "Our immediate objective is to co-design a secure discovery path that respects your data protection policies while clarifying high-priority bottlenecks."
 
-                4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE (MANDATORY FLOW - Output only the raw paragraphs, NO meta-titles, headers, or bracket labels):
-                   - Paragraph 1: Start directly with: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility across business operations, making strategic planning significantly less predictable."
-                   - Paragraph 2: Continue immediately with: "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
-                   - Paragraph 3: Close this section directly with: "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
+                - SECTION 4: EXECUTIVE RECOMMENDATION
+                  Include this exact block:
+                  > **SECTION 4: EXECUTIVE RECOMMENDATION**
+                  >
+                  > Postpone any technology architecture recommendations.
+                  > Prioritize a structured discovery workshop to mapped operational needs and establish a secure, compliant baseline.
 
-                5. SECTION 4: EXECUTIVE RECOMMENDATION (MANDATORY FORMAT - Ensure this exact phrasing)
-                   Include a highlighted, concise callout box with this exact layout:
-                   > **SECTION 4: EXECUTIVE RECOMMENDATION**
-                   >
-                   > Start with data integration rather than software replacement.
-                   > A phased modernization strategy will deliver immediate operational visibility while respecting organizational constraints and minimizing disruption.
+                - SECTION 5: EXPECTED BUSINESS IMPACT
+                  Title: "### 📈 Expected Business Impact"
+                  Generate a bulleted list of 2 or 3 items focusing on risk mitigation, alignment, and secure project qualification.
 
-                6. SECTION 5: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
-                   Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact". Use active, verb-first structures (e.g., "Improve...", "Increase...", "Accelerate...", "Strengthen...", "Reinforce...") strictly aligned with their stated Pain:
-                   - **[Action Verb] [Dynamic impact matching Pain - e.g., Improve reliability of organizational forecasting]**
-                   - **[Action Verb] [Dynamic impact matching Root Causes]**
-                   - **[Action Verb] [Dynamic impact matching Decision Lens]**
+                - SECTION 6: IMMEDIATE PRIORITIES
+                  Title: "### 🎯 Immediate Priorities"
+                  1. Schedule a secure, non-technical discovery session to outline workflow challenges.
+                  2. Review information-security boundaries to determine what level of metadata can be safely audited.
+                  3. Align key internal decision-makers on operational bottlenecks.
 
-                7. SECTION 6: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
-                   Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities". Ensure zero repetitive phrasing from prior sections.
-                   Use active, consistent verbs to dictate 3 dynamic, slot-driven immediate priorities. Use terminology like "lightweight integration layer" or "secure integration layer".
-                   * If the prospect can't discuss vendors, use objective priority phrasings like: "Assess existing integration points between internal and third-party systems while respecting information-security constraints" or "Improve trusted data exchange between existing business systems without exposing protected infrastructure."
+                ===================================================
+                IF MODE IS "Recommendation":
+                - Tone: Analytical risk assessment, clear, urgent but professional.
+                - SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
+                  * **Strategic Business Objective**: Enhance decision quality through more reliable operational forecasting.
+                  * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
+                  * **Core Fear**: {st.session_state.tags.get('Fear', 'None')}
+                  * **Operational Pain**: {st.session_state.slots['Pain']}
+                  * **Root Cause**: {st.session_state.slots['RootCauses']}
+                  * **Constraints**: {st.session_state.slots['Limits']}
+                  * **Recommended Strategy**: Modernize and secure existing assets through a lightweight integration layer rather than costly, disruptive platform replacement.
+                  * **Expected Business Outcomes**: [3 to 4 outcomes directly solving the 'Pain' and aligned with 'Decision Lens'.]
+
+                - SECTION 2: STRATEGIC CAUSALITY CHAIN
+                  **BUSINESS FEAR**
+                  {st.session_state.tags.get('Fear', 'None')}
+                  ↓
+                  **ROOT CAUSE**
+                  {st.session_state.slots['RootCauses']}
+                  ↓
+                  **OPERATIONAL PAIN**
+                  {st.session_state.slots['Pain']}
+                  ↓
+                  **STRATEGIC RESPONSE**
+                  [Write a 1-sentence response based on existing data, using terms like "lightweight integration layer" to respect constraints]
+
+                - SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE
+                  Write three raw continuous paragraphs:
+                  Paragraph 1: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility across business operations, making strategic planning significantly less predictable."
+                  Paragraph 2: "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
+                  Paragraph 3: "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
+
+                - SECTION 4: EXECUTIVE RECOMMENDATION
+                  Include this exact block:
+                  > **SECTION 4: EXECUTIVE RECOMMENDATION**
+                  >
+                  > Start with data integration rather than software replacement.
+                  > A phased modernization strategy will deliver immediate operational visibility while respecting organizational constraints and minimizing disruption.
+
+                - SECTION 5: EXPECTED BUSINESS IMPACT
+                  Title: "### 📈 Expected Business Impact"
+                  Generate a clean bulleted list using active, verb-first structures (Improve, Increase, etc.) directly solving the Pain.
+
+                - SECTION 6: IMMEDIATE PRIORITIES
+                  Title: "### 🎯 Immediate Priorities"
+                  3 clean, action-oriented items leveraging "lightweight integration layer" or "secure integration layer".
                 """
 
                 try:
@@ -390,15 +442,35 @@ if st.session_state.stage == 4:
                         messages=[{"role": "user", "content": prompt_final}]
                     ).choices[0].message.content
 
+                    # Setup UI parameters based on active mode
+                    if blueprint_mode == "Discovery":
+                        risk_level = "MEDIUM"
+                        risk_badge_class = "priority-badge-discovery"
+                        risk_reason = """
+                        • Limited operational information available<br>
+                        • Security constraints restrict formal diagnosis<br>
+                        • Additional discovery required to confirm system pain points
+                        """
+                        tech_profile_label = "Hybrid Stack – Mixed internal and third-party technologies with varying levels of integration."
+                        strat_label = "Structured Discovery Plan"
+                    else:
+                        risk_level = "HIGH"
+                        risk_badge_class = "priority-badge"
+                        risk_reason = """
+                        • Low report and forecast reliability based on fragmented data<br>
+                        • Limited data visibility across active organizational layers<br>
+                        • Operational constraints preventing total system overhauls
+                        """
+                        tech_profile_label = "Hybrid Stack – Mixed internal and third-party technologies with varying levels of integration."
+                        strat_label = "Lightweight secure integration"
+
                     # Display Recommendation box
                     st.markdown(f"""
                     <div class="recommendation-box">
-                        <div class="priority-badge">⚠️ EXECUTIVE RISK LEVEL: HIGH</div>
+                        <div class="{risk_badge_class}">⚠️ EXECUTIVE RISK LEVEL: {risk_level}</div>
                         <div style="font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; color: #FFD2D2;">
                             <b>Reason:</b><br>
-                            • Low report and forecast reliability based on fragmented data<br>
-                            • Limited data visibility across active organizational layers<br>
-                            • Operational constraints preventing total system overhauls
+                            {risk_reason}
                         </div>
                         {final_diag}
                     </div>
@@ -414,9 +486,9 @@ if st.session_state.stage == 4:
                         """)
                     with col_m2:
                         st.markdown(f"""
-                        * **Technology Profile:** Hybrid Stack – Mixed internal and third-party technologies with varying levels of integration.
-                        * **Business Risk:** 🔴 **HIGH**
-                        * **Transformation Strategy:** Lightweight secure integration
+                        * **Technology Profile:** {tech_profile_label}
+                        * **Business Risk:** 🟡 **{risk_level}**
+                        * **Transformation Strategy:** {strat_label}
                         """)
 
                     st.markdown("---")
