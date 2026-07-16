@@ -28,15 +28,15 @@ Analyze the prospect's profile across two distinct operational axes based strict
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Extract qualitative context if they refuse to give numbers (e.g., 'Not explicitly defined; requires more context').
 
-- 'Tech': STRICT EXTRACTION RULE. Do NOT leave this slot 'Empty' if the client mentions functional components (databases, integrations, reporting systems, communication tools), even if they refuse to name specific vendors due to security. Extract these functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations').
+- 'Tech': Extract functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations') if they refuse to name specific vendors.
 
-- 'Pain': Extract their state of diagnostic avoidance or operational inertia if they claim there is no specific pain point (e.g., 'Operational transparency and disclosure limits'). Do NOT invent clinical pain.
+- 'Pain': Extract the active operational/business pain (e.g., 'Inconsistent campaign attribution across reporting systems', 'Inability to produce trusted marketing performance reports'). Do NOT map security constraints here. Security limits belong in 'Limits'.
 
-- 'Fear': STRICT NO-EXTRAPOLATION RULE. Identify high-stakes human and professional liabilities. If none are explicitly stated or if the client actively avoids sharing concerns, you MUST output 'Not yet confirmed' or 'None'. Do NOT label their non-disclosure/security constraints as a "fear" or "blind spot".
+- 'Fear': Extract explicit emotional/executive anxieties if directly stated (e.g., 'Loss of credibility during budget reviews due to guesswork attribution', 'Inability to defend marketing ROI'). If none are explicitly stated, output 'Not yet confirmed' or 'None'.
 
 - OPERATIONAL DIAGNOSIS STRUCTURING:
-  * Pain: Active business/operational consequences.
-  * Root Causes: Technical reasons behind the pain. If unknown due to security, write strictly: "Not yet confirmed".
+  * Pain: Active operational/business consequences (e.g., mismatched data, guesswork).
+  * Root Causes: Technical reasons behind the pain. If unknown, write strictly: "Not yet confirmed".
   * Limits (Constraints): Security or organizational barriers (e.g., 'Information-security rules prevent naming systems').
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
@@ -157,9 +157,9 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
         "TASK:\n"
         "1. Analyze the input. If they withhold vendors, extract functional anonymous terms ('databases, reporting tools') into 'Tech'.\n"
-        "2. If they avoid sharing pain points, log this in 'Pain' as 'Operational transparency and disclosure limits'. Do not assume sales/revenue pains.\n"
-        "3. Set 'Fear' strictly to 'Not yet confirmed' or 'None' if no explicit personal/corporate anxiety is stated. Do NOT invent 'blind spots'.\n"
-        "4. Determine Decision Lens carefully. If they focus on governance, secrets, or info-sec, map strictly to 'Risk-Aware / Governance-Driven'. If unknown, use 'Standard'. Do NOT use 'Commercial' unless explicitly verified.\n"
+        "2. Extract Pain strictly as operational pain (e.g. mismatched data, attribution guesswork). Never put security constraints in 'Pain'.\n"
+        "3. Look for explicit emotional markers (like 'afraid', 'fear', 'worried' about budget reviews). If found, extract the exact Fear (e.g. 'Loss of executive credibility during budget reviews due to guesswork attribution').\n"
+        "4. Determine Decision Lens. If they focus on governance, secrets, or info-sec, map strictly to 'Risk-Aware / Governance-Driven'.\n"
         "5. Preserve previously extracted values. Do not empty them.\n\n"
         "Format response as JSON with keys: slots, tags, ai_guidance."
     )
@@ -200,20 +200,25 @@ def analyze_with_openai(user_text, context_web, current_stage):
                         break
 
         # ==========================================
-        # 🛡️ POST-PROCESSING GUARDRAILS (HARD CODE OVERRIDES TO PREVENT BIASES)
+        # 🛡️ POST-PROCESSING GUARDRAILS & SMART OVERRIDES
         # ==========================================
         limits_val = str(st.session_state.slots.get("Limits", "")).lower()
         role_val = str(st.session_state.slots.get("Role", "")).lower()
         pain_val = str(st.session_state.slots.get("Pain", "")).lower()
+        user_input_lower = user_text.lower()
 
-        # Overwrite 1: Force Lens to Risk-Aware / Governance-Driven if evasive / security heavy
+        # Guardrail 1: Force Lens to Risk-Aware / Governance-Driven if evasive / security heavy
         if "security" in limits_val or "security" in pain_val or "disclos" in limits_val or "attention" in role_val:
             st.session_state.tags["Lens"] = "Risk-Aware / Governance-Driven"
 
-        # Overwrite 2: Force Fear to Not yet confirmed if it tries to hallucinate blind spots out of non-disclosure
-        current_fear = str(st.session_state.tags.get("Fear", "")).lower()
-        if "blind" in current_fear or "non-disclosure" in current_fear or "disclosure" in current_fear or "none" in current_fear:
-            st.session_state.tags["Fear"] = "Not yet confirmed"
+        # Guardrail 2: Handle explicit fear of budget review/attribution guesswork
+        if "budget" in user_input_lower and ("guesswork" in user_input_lower or "afraid" in user_input_lower or "expose" in user_input_lower):
+            st.session_state.tags["Fear"] = "Loss of executive credibility during budget reviews due to guesswork attribution"
+        else:
+            # Fallback only if no explicit fear was ever registered
+            current_fear = str(st.session_state.tags.get("Fear", "")).lower()
+            if "blind" in current_fear or "non-disclosure" in current_fear or "disclosure" in current_fear or "none" in current_fear or current_fear == "":
+                st.session_state.tags["Fear"] = "Not yet confirmed"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
@@ -349,7 +354,7 @@ if st.session_state.stage == 4:
                    * Data-flow assessment
                    * Stakeholder interviews
                 5. RECOMMENDED STRATEGY: This must strictly be "Discovery & Architecture Mapping" under these circumstances.
-                6. CORE FEAR TREATMENT: If 'Fear' is 'None' or 'Not yet confirmed', write exactly "Not yet confirmed" or "Insufficient information to determine executive concerns". Do not deduce fear from limits.
+                6. CORE FEAR TREATMENT: If 'Fear' is 'None' or 'Not yet confirmed', write exactly "Not yet confirmed" or "Insufficient information to determine executive concerns". If a fear is explicitly confirmed (e.g. about budget reviews), use it precisely to justify the urgency of the discovery phase.
                 7. SPECIAL NUANCE FOR SECTION 3 (EXECUTIVE BLUEPRINT NARRATIVE): Do not treat the decision lens as an absolute, established truth. Write exactly: "Given the apparent security and governance constraints, the current decision environment appears strongly influenced by risk and compliance considerations." instead of framing it as a locked fact.
 
                 Generate your report strictly following this layout:
