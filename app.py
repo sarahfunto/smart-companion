@@ -15,30 +15,30 @@ SYSTEM_PROMPT = """
 You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework.
 
 [PSYCHOLOGICAL PROFILING - MULTIDIMENSIONAL MODEL]
-Instead of a single flat tag, you must analyze the prospect's profile across two distinct operational axes:
+Analyze the prospect's profile across two distinct operational axes based strictly on verified evidence. Do NOT assume or extrapolate:
 
 1. Buying Style (Decision Lens): This answers: "What argument will convince this person to sign?"
+   - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, governance, process compliance, and failure prevention. (Crucial: Select this if the prospect emphasizes confidentiality, security rules, and governance).
    - Commercial / Revenue-Driven: Convicted by renewal rates, forecasting confidence, pipeline speed, and sales team efficiency.
    - Strategic / Growth-Driven: Convicted by market share, business model scalability, and long-term vision.
-   - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, and failure prevention.
    - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems.
+   - Standard: Default value if the client is highly evasive or data is insufficient to safely determine a lens.
 
-2. Tech Maturity: Assess the organizational complexity of their current tools. Do NOT output generic terms like 'Medium' or 'Low'. Instead, build a descriptive hybrid state representation (e.g., "Hybrid Stack - Mixed internal and third-party managed tools with varying ages").
+2. Tech Maturity: Assess the organizational complexity of their current tools (e.g., "Hybrid Stack - Mixed internal and third-party managed tools with varying ages").
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
-- 'companysize': Must strictly reflect the prospect's employer scale. If they refuse to give numbers, extract the qualitative context (e.g., 'Undefined size; multi-unit structure').
+- 'companysize': Extract qualitative context if they refuse to give numbers (e.g., 'Undefined size; multi-unit structure').
 
-- 'Tech': STRICT EXTRACTION RULE. Do NOT leave this slot 'Empty' if the client mentions functional components (e.g., databases, integrations, reporting systems, communication tools), even if they refuse to name specific vendors or brands due to security. Extract these functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations').
+- 'Tech': STRICT EXTRACTION RULE. Do NOT leave this slot 'Empty' if the client mentions functional components (e.g., databases, integrations, reporting systems, communication tools), even if they refuse to name specific vendors due to security. Extract these functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations').
 
-- 'Pain': STRICT EXTRACTION RULE. If the client claims there is no specific pain point or refuses to discuss risks, do NOT leave this slot 'Empty'. Extract their state of diagnostic avoidance or operational inertia (e.g., 'Systemic reporting silo risks under investigation / Diagnostic avoidance').
+- 'Pain': Extract their state of diagnostic avoidance or operational inertia if they claim there is no specific pain point (e.g., 'Operational transparency and disclosure limits').
 
-- 'Fear': Identify high-stakes human and professional liabilities. If none are stated, deduce the underlying vulnerability of their current posture (e.g., 'Risk of operational blind spots due to non-disclosure').
+- 'Fear': STRICT NO-HALLUCINATION RULE. Identify high-stakes human and professional liabilities. If none are explicitly stated or if the client actively avoids sharing concerns, you MUST output 'Not yet confirmed' or 'None'. Do NOT deduce or label their non-disclosure/security constraints as a "fear".
 
 - OPERATIONAL DIAGNOSIS STRUCTURING:
-  * Pain: Strictly limit this to the active, business/operational consequences expressed or diagnosed.
-  * Root Causes: The structural or technical reasons behind the Pain. 
-    - CRITICAL: If the user refuses to share technical details, the Root Cause MUST be categorized as "Not yet confirmed (due to strict information security limits)".
-  * Limits (Constraints): The human, organizational, communication, or security barriers (e.g., 'Refusal to name vendors due to info-sec protocols').
+  * Pain: Active business/operational consequences.
+  * Root Causes: Technical reasons behind the pain. If unknown due to security, categorize strictly as "Not yet confirmed".
+  * Limits (Constraints): Human, organizational, or security barriers (e.g., 'Information-security rules prevent naming systems').
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
 """
@@ -123,12 +123,24 @@ if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial client statement to start the strategic analysis."
 
-stages = {
-    "1": "Phase 1: Identity, Role & Company Size Contextual Validation",
-    "2": "Phase 2: Technical Maturity Diagnostics & Infrastructure Readiness",
-    "3": "Phase 3: Deep Operational Pain & Executive Psychology Profiling",
-    "4": "Phase 4: Strategic Mirroring, Validation & Custom Blueprint Delivery"
-}
+# SIDEBAR: MANUAL WEB CONTEXT & RESET
+st.sidebar.markdown("## ⚙️ Simulation Control")
+if st.sidebar.button("🔄 Réinitialiser la simulation", use_container_width=True):
+    st.session_state.clear()
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("## 🔍 Live Context Injection")
+st.sidebar.markdown("*Paste background information about the target company or test notes below before running the interview.*")
+
+web_context_input = st.sidebar.text_area(
+    "📝 Corporate Profile / Web Context", 
+    height=200,
+    placeholder="Example: Microsoft Corp. Experiencing reporting bottlenecks..."
+)
+
+if st.sidebar.button("💾 Synchronize Context"):
+    st.sidebar.success("Brain updated!")
 
 # AI ANALYSIS ENGINE FUNCTION
 def analyze_with_openai(user_text, context_web, current_stage):
@@ -139,22 +151,18 @@ def analyze_with_openai(user_text, context_web, current_stage):
     current_tags = st.session_state.tags
 
     prompt_analyse = (
-        f"Current Interview Stage: {stages[str(current_stage)]}\n"
+        f"Current Interview Stage: {current_stage}\n"
         f"Manual Web Context Provided: {context_web}\n"
         f"Latest Client Input: {user_text}\n"
         f"Current Slot State (Already Filled): {json.dumps(current_slots)}\n"
         f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
         "TASK:\n"
-        "1. Analyze the client's input. If they express general terms (like 'databases', 'integrations') but withhold names, extract those generic terms into 'Tech'. Do NOT leave it empty.\n"
-        "2. If they avoid defining a pain point, formulate their challenge under 'Pain' as an diagnostic block or operational transparency risk (e.g., 'Information silos and restricted visibility due to structural non-disclosure').\n"
-        "3. Preserve previously extracted values. If a slot was previously filled with an informative value (not 'Empty'), do NOT replace it with 'Empty' or 'None' just because the latest input is brief (like 'yes').\n"
-        "4. Formulate the next strategic recommendation for the consultant.\n\n"
-        "Format your response STRICTLY as a JSON object with these exact keys:\n"
-        "{\n"
-        "  \"slots\": { \"Role\": \"...\", \"CompanySize\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"RootCauses\": \"...\", \"Limits\": \"...\" },\n"
-        "  \"tags\": { \"BuyingStyle\": \"...\", \"Fear\": \"...\", \"TechMaturity\": \"...\" },\n"
-        "  \"ai_guidance\": \"Provide tactical, emotionally aware guidance here.\"\n"
-        "}"
+        "1. Analyze the input. Extract generic architecture terms if vendors are withheld.\n"
+        "2. If the client refuses to share pain points or claims everything is fine, log this in 'Pain' as an diagnostic limit or transparency gap.\n"
+        "3. Strictly set 'Fear' to 'Not yet confirmed' or 'None' if no explicit personal/corporate panic or risk is mentioned. Do NOT guess a fear.\n"
+        "4. Determine Decision Lens carefully. If they focus on governance, secrets, or info-sec, map strictly to 'Risk / Compliance-Locked'. If unknown, use 'Standard'.\n"
+        "5. Keep existing valid data. Do not blank it out.\n\n"
+        "Format response as JSON with keys: slots, tags, ai_guidance."
     )
 
     try:
@@ -165,22 +173,20 @@ def analyze_with_openai(user_text, context_web, current_stage):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt_analyse}
             ],
-            temperature=0.3
+            temperature=0.2
         )
         result = json.loads(response.choices[0].message.content)
         
-        # Update Slots strictly: NEVER overwrite a filled slot with "Empty", "None", or blank
+        # Safe State Update
         new_slots = result.get("slots", {})
         for key in st.session_state.slots:
             if key in new_slots:
                 incoming_val = str(new_slots[key]).strip()
-                # Only update if the incoming value has real data AND we aren't overwriting good data with generic empty terms
                 if incoming_val not in ["Empty", "", "None", "Keep existing", "null", "undefined"]:
-                    # Prevent overwriting a strong existing slot with a weaker one on brief steps (like yes)
                     if st.session_state.slots[key] == "Empty" or len(incoming_val) > len(str(st.session_state.slots[key])):
                         st.session_state.slots[key] = incoming_val
         
-        # Robust Tag mapping
+        # Safe Tag Update
         new_tags = result.get("tags", {})
         for target_key, possible_keys in {
             "Lens": ["BuyingStyle", "Buying Style", "Lens", "decision_lens"],
@@ -190,37 +196,22 @@ def analyze_with_openai(user_text, context_web, current_stage):
             for pk in possible_keys:
                 if pk in new_tags:
                     incoming_tag = str(new_tags[pk]).strip()
-                    if incoming_tag not in ["None", "", "Standard", "null", "undefined"]:
+                    if incoming_tag not in ["", "Standard", "null", "undefined"]:
                         st.session_state.tags[target_key] = incoming_tag
                         break
-        
-        # Override decision lens for evasive executive roles to ensure safety
-        current_role = str(st.session_state.slots.get("Role", "")).upper()
-        if "ATTENTION" in current_role or "EXECUTIVE" in current_role or "MANAGER" in current_role:
-            if st.session_state.tags["Lens"] == "Standard":
-                st.session_state.tags["Lens"] = "Risk / Compliance-Locked"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
         st.error(f"Error calling OpenAI: {e}")
         return "Error analyzing input."
 
-st.title("🎙️ Smart Companion — Expert Workspace")
+stages = {
+    "1": "Phase 1: Identity, Role & Company Size Contextual Validation",
+    "2": "Phase 2: Technical Maturity Diagnostics & Infrastructure Readiness",
+    "3": "Phase 3: Deep Operational Pain & Executive Psychology Profiling",
+    "4": "Phase 4: Strategic Mirroring, Validation & Custom Blueprint Delivery"
+}
 
-# SIDEBAR: MANUAL WEB CONTEXT INJECTION
-st.sidebar.markdown("## 🔍 Live Context Injection")
-st.sidebar.markdown("*Paste background information about the target company or test notes below before running the interview.*")
-
-web_context_input = st.sidebar.text_area(
-    "📝 Corporate Profile / Web Context", 
-    height=200,
-    placeholder="Example: Microsoft Corp. Experiencing significant reporting bottlenecks in mid-market auditing fields..."
-)
-
-if st.sidebar.button("💾 Synchronize Context"):
-    st.sidebar.success("Brain updated with the latest background insights!")
-
-# INTERVIEW STATE & QUESTIONS
 st.markdown(f"### 💬 Interview Progress: Step {st.session_state.stage} / 4")
 
 stage_questions = {
@@ -237,7 +228,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    guidance_text = st.session_state.get('ai_guidance', "Welcome to the simulation. Input the initial client statement to start the strategic analysis.")
+    guidance_text = st.session_state.get('ai_guidance', "Welcome to the simulation.")
     st.info(f"Smart Companion Strategy Insight: {guidance_text}")
     
     st.markdown(f"**Current Phase Objective:** {stages[str(st.session_state.stage)]}")
@@ -260,7 +251,7 @@ with col1:
         
     st.markdown("---")
     
-    # NAVIGATION SYSTEM
+    # NAVIGATION
     nav_col1, nav_col2 = st.columns(2)
     with nav_col1:
         if st.session_state.stage > 1:
@@ -289,7 +280,7 @@ with col2:
     tech_class = "status-box-filled" if st.session_state.tags.get('TechMaturity', 'Standard') != "Standard" else "status-box-empty"
     st.markdown(f"<div class='{tech_class}'><b>Tech Maturity:</b> {st.session_state.tags.get('TechMaturity', 'Standard')}</div>", unsafe_allow_html=True)
 
-    fear_class = "status-box-filled" if st.session_state.tags['Fear'] != "None" else "status-box-empty"
+    fear_class = "status-box-filled" if st.session_state.tags['Fear'] not in ["None", "Not yet confirmed"] else "status-box-empty"
     st.markdown(f"<div class='{fear_class}'><b>Identified Core Fear (Fear):</b> {st.session_state.tags['Fear']}</div>", unsafe_allow_html=True)
 
 # FINAL DIAGNOSTIC
@@ -313,22 +304,16 @@ if st.session_state.stage == 4:
             st.balloons()
             with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
                 
-                # Dynamic adjustment of the displayed slot value for UI/UX rendering
-                mapped_pain = st.session_state.slots.get('Pain', '')
-                if mapped_pain == "Empty" or "sales" in mapped_pain.lower() or "renewal" in mapped_pain.lower():
-                    mapped_pain = "Unreliable executive reporting and operational forecasting"
-                    st.session_state.slots['Pain'] = mapped_pain
-
-                # Determine dynamic confidence and risk parameters
+                # Check for confirmed inputs to customize outputs
                 root_cause_val = st.session_state.slots.get('RootCauses', 'Not yet confirmed')
-                is_unconfirmed = "not yet confirmed" in root_cause_val.lower() or "discovery" in root_cause_val.lower() or "insufficient" in root_cause_val.lower()
+                is_unconfirmed = "not yet confirmed" in root_cause_val.lower() or "discovery" in root_cause_val.lower()
                 
                 risk_level = "MEDIUM" if is_unconfirmed else "HIGH"
                 badge_class = "priority-badge-medium" if is_unconfirmed else "priority-badge-high"
                 
                 prompt_final = f"""
                 Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). 
-                Analyze this profile STRICTLY using the provided parameters. Do NOT assume, hallucinate, or carry over any external software systems, architectures, or business goals unless they are explicitly written below:
+                Analyze this profile STRICTLY using the provided parameters:
                 
                 - Role: {st.session_state.slots['Role']}
                 - Exact Company Size: {st.session_state.slots['CompanySize']}
@@ -341,69 +326,17 @@ if st.session_state.stage == 4:
                 - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Standard')}
 
                 CRITICAL STABILITY RULES (PREVENT CONTAMINATION):
-                1. STRICT TOOL BLOCK: If the Tech slot does not contain "HubSpot", "PostgreSQL", or "Microsoft Access", you are FORBIDDEN from naming them or hinting at them. Use generic terms instead like "existing business systems", "internal databases", "legacy tools", or "third-party platforms" as described by the prospect.
-                2. STRICT TERMINOLOGY BLOCK: If the Pain or Fear slots do NOT explicitly mention words like "sales", "renewal", "product adoption", "churn", or "retention", do NOT use them. Adapt the business context entirely to the prospect's actual input (e.g., if they are in public service, healthcare, finance, or secure systems, focus purely on their described operational targets like "process reliability", "compliance verification", or "secure organizational reporting").
-                3. NO INVENTED VENDORS: If the prospect stated they cannot name vendors due to info-sec rules, your entire diagnostic must refer to their stack anonymously as "protected infrastructure" or "internal business architectures".
+                1. STRICT TOOL BLOCK: Do NOT name or assume systems like HubSpot or PostgreSQL unless explicitly written in 'Tech'. Use generic anonymous terms instead (e.g. "existing systems").
+                2. STRICT TERMINOLOGY BLOCK: If 'Pain' or 'Fear' do NOT explicitly mention "sales", "renewal", "churn", or "retention", do NOT use these words. Align the narrative with their focus on governance, security, and process compliance.
+                3. NO INVENTED FEARS: If 'Fear' is 'None' or 'Not yet confirmed', treat it as an absence of verified operational panic.
 
-                You must build a highly tailored, clinical, and high-impact Strategic Blueprint following this exact layout:
-
-                1. CRITICAL TONE ADJUSTMENT:
-                   - NO marketing hype or dramatic consulting clichés.
-                   - Use calm, business-first risk-assessment statements: "increasing operational uncertainty", "weakening process predictability", "increasing operational risk", "limited process visibility".
-
-                2. SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
-                   Render an overview strictly mapped to the provided slots:
-                   * **Strategic Business Objective**: Improve strategic decision-making through reliable organizational reporting. (Or: Enhance decision quality through more reliable operational forecasting).
-                   * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
-                   * **Core Fear**: {st.session_state.tags.get('Fear', 'None')}
-                   * **Operational Pain**: {st.session_state.slots['Pain']}
-                   * **Root Cause**: {root_cause_val}
-                   * **Constraints**: {st.session_state.slots['Limits']}
-                   * **Recommended Strategy**: {"Conduct a structured discovery phase to map infrastructure dependencies." if is_unconfirmed else "Modernize and secure existing assets through a lightweight integration layer rather than costly, disruptive platform replacement."}
-                   * **Expected Business Outcomes**: [Identify 3 to 4 outcomes directly solving the 'Pain' and aligned with 'Decision Lens'. Do NOT reference renewals or sales unless explicitly supported.]
-
-                3. SECTION 2: STRATEGIC CAUSALITY CHAIN (MANDATORY VISUAL FLOW)
-                   Present the sequential mapping of the current operational friction using this precise flow (use markdown styling, bold headers, and exact arrow layout):
-                   
-                   **BUSINESS FEAR**
-                   {st.session_state.tags.get('Fear', 'None')}
-                   
-                   ↓
-                   
-                   **ROOT CAUSE**
-                   {root_cause_val}
-                   
-                   ↓
-                   
-                   **OPERATIONAL PAIN**
-                   {st.session_state.slots['Pain']}
-                   
-                   ↓
-                   
-                   **STRATEGIC RESPONSE**
-                   {"Initiate a dedicated technical discovery track to define current operational friction points safely." if is_unconfirmed else "[Write a 1-sentence strategic response strictly utilizing the 'Tech' slot data and 'Limits'. If tools are anonymous, use terms like 'securely connecting internal systems while respecting information-security constraints']"}
-
-                4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
-                   * Paragraph 1 (The Core Paradox): Describe their challenge strictly based on their 'Pain' and 'Fear'. Write this exact sentence, adapting the context to their field: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility across business operations, making strategic planning significantly less predictable."
-                   * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
-                   * End this section with this exact sentence (no quote marks): "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
-
-                5. SECTION 4: EXECUTIVE RECOMMENDATION (MANDATORY FORMAT)
-                   Include a highlighted, concise callout box with this exact layout:
-                   > **SECTION 4: EXECUTIVE RECOMMENDATION**
-                   >
-                   > {"Start with a structured discovery phase to validate the operational assumptions before defining the integration roadmap." if is_unconfirmed else "Start with data integration rather than software replacement."}
-                   > {"A phased analysis strategy will deliver clarity on data sources while respecting constraints and minimizing disruption." if is_unconfirmed else "A phased modernization strategy will deliver immediate operational and organizational visibility while respecting constraints and minimizing disruption."}
-
-                6. SECTION 5: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
-                   Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact". Use active, verb-first structures (e.g., "Improve...", "Increase...", "Accelerate...", "Strengthen...", "Reinforce...") strictly aligned with their stated Pain:
-                   - **[Action Verb] [Dynamic impact matching Pain - e.g., Improve reliability of organizational forecasting]**
-                   - **[Action Verb] [Dynamic impact matching Root Causes or Discovery verification]**
-                   - **[Action Verb] [Dynamic impact matching Decision Lens]**
-
-                7. SECTION 6: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
-                   Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities". Ensure zero repetitive phrasing from prior sections.
-                   Use active, consistent verbs to dictate 3 dynamic, slot-driven immediate priorities.
+                Generate your report strictly incorporating these details and layout:
+                - Section 1: Strategic DNA Matrix (strictly display the extracted values).
+                - Section 2: Strategic Causality Chain.
+                - Section 3: Executive Blueprint Narrative.
+                - Section 4: Executive Recommendation callout box.
+                - Section 5: Expected Business Impact.
+                - Section 6: Immediate Priorities.
                 """
 
                 try:
@@ -412,28 +345,25 @@ if st.session_state.stage == 4:
                         messages=[{"role": "user", "content": prompt_final}]
                     ).choices[0].message.content
 
-                    # Display Recommendation Header and Metadata in CSS Styled Box
                     st.markdown(f"""
                     <div class="recommendation-box">
                         <div class="{badge_class}">⚠️ EXECUTIVE RISK LEVEL: {risk_level}</div>
                         <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
-                            <b>Reason:</b><br>
-                            • Low report and forecast reliability based on fragmented data<br>
-                            • Limited data visibility across active organizational layers<br>
-                            • Operational constraints preventing total system overhauls
+                            <b>Current Posture Assessment:</b><br>
+                            • Structural opacity and diagnostic limit (strict security protocol)<br>
+                            • Functional components are operational but unmapped<br>
+                            • No immediate crisis reported; process validation required
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # Render Markdown output strictly OUTSIDE of HTML structures
                     st.markdown(final_diag)
 
-                    # Dynamic Confidence Level Notification
                     if is_unconfirmed:
                         st.markdown(f"""
                         <div class="confidence-box">
                             <b>📋 Diagnostic Confidence: MEDIUM</b><br>
-                            Additional operational discovery is required to confirm the underlying technical root causes before defining a rigid implementation roadmap.
+                            Operational constraints prevent total system evaluation. A non-disruptive discovery roadmap is mandatory before outlining structural recommendations.
                         </div>
                         """, unsafe_allow_html=True)
 
@@ -451,18 +381,6 @@ if st.session_state.stage == 4:
                         * **Business Risk:** {"🟡 **MEDIUM**" if is_unconfirmed else "🔴 **HIGH**"}
                         * **Transformation Strategy:** {"Structured operational discovery & mapping" if is_unconfirmed else "Lightweight secure integration"}
                         """)
-
-                    st.markdown("---")
-                    st.subheader("📊 Operational Diagnosis")
-
-                    st.error(f"""**🔴 Core Business Pain:**  
-{st.session_state.slots.get('Pain', 'Empty')}""")
-
-                    st.warning(f"""**⚙️ Technical Root Causes:**  
-{root_cause_val}""")
-
-                    st.info(f"""**⚠️ Constraints & Limits:**  
-{st.session_state.slots.get('Limits', 'Empty')}""")
 
                 except Exception as e:
                     st.error(f"Error generating blueprint: {e}")
