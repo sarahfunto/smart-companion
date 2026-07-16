@@ -12,7 +12,7 @@ else:
     client = None
 
 SYSTEM_PROMPT = """
-You are an expert B2B sales psychologist and high-level enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework.
+You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework.
 
 [PSYCHOLOGICAL PROFILING - MULTIDIMENSIONAL MODEL]
 Instead of a single flat tag, you must analyze the prospect's profile across two distinct operational axes:
@@ -31,9 +31,9 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
 
-- 'Fear': Identify high-stakes business risks and emotional vulnerabilities. Reject abstract buzzwords like "falling behind modern expectations" or "general inefficiency." Capture highly specific, gut-wrenching professional liabilities such as:
+- 'Fear': Identify high-stakes business risks and emotional vulnerabilities. Reject abstract buzzwords like "falling behind modern expectations" or "general inefficiency." Capture highly specific, professional liabilities such as:
   * "Unexpected loss of major renewals due to invisible usage signals"
-  * "Board losing confidence in revenue forecasts"
+  * "Board losing confidence in revenue forecasts due to manual reporting"
   * "C-Suite resistance to data-driven commercial strategies"
   * "Wasted sales team capacity spent fighting legacy architecture"
 
@@ -80,6 +80,14 @@ st.markdown("""
         color: #EEF4F8;
         margin-top: 15px;
         line-height: 1.6;
+    }
+
+    .causality-chain {
+        background-color: #1A1F26;
+        border-left: 4px solid #2E6BFF;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -272,7 +280,7 @@ if st.session_state.stage == 4:
             st.balloons()
             with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
                 prompt_final = f"""
-                Act as an elite B2B Sales Consultant. Analyze this profile:
+                Act as an elite, high-level B2B Sales and Management Consultant. Analyze this profile:
                 - Role: {st.session_state.slots['Role']}
                 - Exact company Size: {st.session_state.slots['CompanySize']}
                 - Technical Stack: {st.session_state.slots['Tech']}
@@ -283,23 +291,29 @@ if st.session_state.stage == 4:
                 - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
                 - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Medium')}
 
-                You must write a highly tailored, incisive 3-paragraph diagnostic. Follow these instructions strictly to avoid generic "LLM boilerplate":
+                Write an incisive diagnostic consisting of two parts: a logical chain and a bespoke recommendations overview. 
+                Follow these instructions strictly to maintain a calm, highly objective, senior enterprise consultant tone:
 
-                1. UNCOMPROMISING FIRST PARAGRAPH (The "Gut-Punch" Diagnosis):
-                   * Start DIRECTLY with the harsh operational and psychological reality. No greetings, no polite preambles, and absolutely NO generic SaaS filler words like "optimizing your sales", "staying competitive", or "meeting modern expectations".
-                   * Address their core paradox: e.g., "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have."
-                   * Explicitly connect their lack of visibility to their greatest stated fear ({st.session_state.tags.get('Fear', '')}). Explain that because key metrics are disconnected, catastrophic business events (like losing a major renewal with no warning) remain invisible until it is too late.
+                1. CRITICAL TONE ADJUSTMENT (NO marketing hype or dramatic buzzwords):
+                   - DO NOT use over-dramatic phrases like "flirting with disaster", "cold, hard truth", "operational blindness", "becoming irrelevant", or "unforgiving market".
+                   - DO use objective, professional risk-assessment alternatives:
+                     * Replace "The cold, hard truth is..." with "The current situation creates unnecessary uncertainty around renewals and revenue planning."
+                     * Replace "flirting with disaster" with "increasing business risk."
+                     * Replace "becoming irrelevant" with "reducing your competitive advantage."
+                     * Replace "operational blindness" with "limited operational visibility."
+                   - The tone must be clinical, precise, risk-oriented, and matter-of-fact.
 
-                2. EMBRACING CONSTRAINTS IN THE STRATEGY:
-                   * The second paragraph must adapt to their real-world friction. 
-                   * Actively reference the limitations specified in "Limits" ({st.session_state.slots['Limits']}).
-                   * Example: "Because migrating away from legacy tools like Microsoft Access is politically friction-heavy or resource-constrained, you should reject heavy migrations. Instead, prioritize a lightweight synchronization bridge..."
-                   * Ground the recommendations to match their scale ({st.session_state.slots['CompanySize']}) so it fits their actual human and logistical capacity.
+                2. MANDATORY "STRATEGIC CAUSALITY CHAIN" (Section 1):
+                   Start with a dedicated section that visually maps the logical sequence of their operational bottleneck. You must explicitly build and show the progression using this structure:
+                   * **The Core Fear**: [Extract Fear]
+                   * **$\rightarrow$ Triggered by (Root Cause)**: [Extract Root Cause]
+                   * **$\rightarrow$ Resulting in (Active Pain)**: [Extract Pain]
+                   * **$\rightarrow$ Solved by (Recommendation)**: [Short summary of the structural fix]
 
-                3. REVENUE-DRIVEN BUSINESS ACTION PLAN:
-                   * Step 1: Connect existing product data pipelines to their active CRM ({st.session_state.slots['Tech']}) to give the sales team immediate visibility.
-                   * Step 2: Establish early-warning indicators (Account Health Scores) to proactively spot renewal risks.
-                   * Step 3: Implement structured sales forecasting reviews to restore board and executive trust.
+                3. UNCOMPROMISING PARAGRAPH ANALYSIS (Section 2):
+                   * Paragraph 1 (The Operational Reality): Address their core paradox directly (e.g., "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have.") Connect their limited visibility to the unnecessary revenue uncertainty without using dramatic hyperbole.
+                   * Paragraph 2 (Strategic Synchronization with Constraints): Adapt directly to their explicit human/political limitations ({st.session_state.slots['Limits']}). Explain how they can solve this without heavy, politically friction-heavy database overhauls (e.g., if they struggle to replace legacy software, recommend a lightweight integration layer rather than full migration to match their scale of {st.session_state.slots['CompanySize']}).
+                   * Paragraph 3 (Surgical Action Plan): Detail a 3-step action plan focusing on low-friction, high-impact moves (e.g., connecting product signals directly to {st.session_state.slots['Tech']}, setting early-warning indicators, and standardizing forecast reviews).
                 """
 
                 try:
