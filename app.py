@@ -297,48 +297,46 @@ if st.session_state.stage == 4:
             st.balloons()
             with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
                 prompt_final = f"""
-                Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). Analyze this profile:
+                Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). 
+                Analyze this profile STRICTLY using the provided parameters. Do NOT assume, hallucinate, or carry over any external software systems, architectures, or business goals unless they are explicitly written below:
+                
                 - Role: {st.session_state.slots['Role']}
-                - Exact company Size: {st.session_state.slots['CompanySize']}
-                - Technical Stack: {st.session_state.slots['Tech']}
-                - Core Pain: {st.session_state.slots['Pain']}
+                - Exact Company Size: {st.session_state.slots['CompanySize']}
+                - Technical Stack (Tech): {st.session_state.slots['Tech']}
+                - Core Pain (Pain): {st.session_state.slots['Pain']}
                 - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
-                - Extracted Constraints & Political Limits: {st.session_state.slots['Limits']}
-                - Decision Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
-                - Extracted Fear: {st.session_state.tags.get('Fear', 'Being surprised by a major renewal loss')}
-                - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Hybrid Stack')}
+                - Extracted Constraints & Political Limits (Limits): {st.session_state.slots['Limits']}
+                - Decision Lens: {st.session_state.tags.get('Lens', 'Standard')}
+                - Extracted Fear: {st.session_state.tags.get('Fear', 'None')}
+                - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Standard')}
 
-                You must build a highly tailored, clinical, and high-impact Strategic Blueprint. Follow these instructions strictly to maintain a calm, highly objective, senior enterprise consultant tone:
+                CRITICAL STABILITY RULES (PREVENT CONTAMINATION):
+                1. STRICT TOOL BLOCK: If the Tech slot does not contain "HubSpot", "PostgreSQL", or "Microsoft Access", you are FORBIDDEN from naming them or hinting at them. Use generic terms instead like "existing business systems", "internal databases", "legacy tools", or "third-party platforms" as described by the prospect.
+                2. STRICT TERMINOLOGY BLOCK: If the Pain or Fear slots do NOT explicitly mention words like "renewal", "product adoption", "churn", or "retention", do NOT use them. Adapt the business context entirely to the prospect's actual input (e.g., if they are in public service, healthcare, or secure systems, focus purely on their described operational targets like "process reliability", "compliance verification", or "secure reporting").
+                3. NO INVENTED VENDORS: If the prospect stated they cannot name vendors due to info-sec rules, your entire diagnostic must refer to their stack anonymously as "protected infrastructure" or "internal business architectures".
+
+                You must build a highly tailored, clinical, and high-impact Strategic Blueprint following this exact layout:
 
                 1. CRITICAL TONE ADJUSTMENT:
-                   - NO marketing hype, overly dramatic words, or SaaS sales pitches. 
-                   - Do NOT use phrases like "flirting with disaster", "cold, hard truth", "operational blindness", "becoming irrelevant", "unforgiving market", or "reducing your competitive advantage".
-                   - Use calm, business-first risk-assessment statements:
-                     * "increasing operational uncertainty and renewal risk"
-                     * "weakening revenue predictability"
-                     * "increasing business risk"
-                     * "limited operational visibility"
+                   - NO marketing hype or dramatic consulting clichés.
+                   - Use calm, business-first risk-assessment statements: "increasing operational uncertainty", "weakening process predictability", "increasing operational risk", "limited process visibility".
 
                 2. SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
-                   Render a clean, high-impact overview using the following structured fields. Rely strictly on the exact context and details gathered during the interview:
-                   * **Strategic Business Objective**: Protect recurring revenue
-                   * **Decision Lens**: {st.session_state.tags.get('Lens', 'Commercial / Revenue-Driven')}
-                   * **Core Fear**: {st.session_state.tags.get('Fear', 'Being surprised by a major renewal loss')}
+                   Render an overview strictly mapped to the provided slots:
+                   * **Strategic Business Objective**: [Formulate objective strictly based on what is needed to solve their 'Pain' without assuming it is commercial sales/renewal if they didn't say so]
+                   * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
+                   * **Core Fear**: {st.session_state.tags.get('Fear', 'None')}
                    * **Operational Pain**: {st.session_state.slots['Pain']}
                    * **Root Cause**: {st.session_state.slots['RootCauses']}
                    * **Constraints**: {st.session_state.slots['Limits']}
-                   * **Recommended Strategy**: Modernize and bridge existing assets through lightweight synchronization rather than costly, disruptive tool replacement.
-                   * **Expected Business Outcomes**:
-                     - Reliable revenue forecasting
-                     - Early renewal risk detection
-                     - Higher renewal confidence
-                     - Improved customer retention
+                   * **Recommended Strategy**: Modernize and secure existing assets through lightweight synchronization and structured middleware rather than costly, disruptive platform replacement.
+                   * **Expected Business Outcomes**: [Identify 3 to 4 outcomes directly solving the 'Pain' and aligned with 'Decision Lens'. Do NOT reference renewals or sales unless explicitly supported.]
 
                 3. SECTION 2: STRATEGIC CAUSALITY CHAIN (MANDATORY VISUAL FLOW)
                    Present the sequential mapping of the current operational friction using this precise flow (use markdown styling, bold headers, and exact arrow layout):
                    
                    **BUSINESS FEAR**
-                   {st.session_state.tags.get('Fear', 'Being surprised by a major renewal loss')}
+                   {st.session_state.tags.get('Fear', 'None')}
                    
                    ↓
                    
@@ -353,33 +351,30 @@ if st.session_state.stage == 4:
                    ↓
                    
                    **STRATEGIC RESPONSE**
-                   Connect PostgreSQL product usage data with HubSpot while maintaining compatibility with Microsoft Access through a phased modernization strategy.
+                   [Write a 1-sentence strategic response strictly utilizing the 'Tech' slot data and 'Limits'. If tools are anonymous, use terms like "securely connecting internal systems while respecting information-security constraints"]
 
                 4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
-                   * Paragraph 1 (The Core Paradox): "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have." Then write this exact sentence: "Disconnected systems increase operational uncertainty, reduce forecast reliability, and limit visibility into customer behavior, making renewal planning significantly less predictable." 
+                   * Paragraph 1 (The Core Paradox): Describe their challenge strictly based on their 'Pain' and 'Fear'. Write this exact sentence, adapting the context to their field: "Disconnected systems increase operational uncertainty, reduce forecast reliability, and limit visibility into customer behavior, making renewal planning significantly less predictable." (If they do not have a customer-facing business, adapt this sentence to reflect: "Disconnected systems increase operational uncertainty, reduce reporting reliability, and limit visibility into workflow performance, making planning significantly less predictable.")
                    * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
-                   * End this section with the exact closing sentence (without any quotation marks around it): "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
+                   * End this section with this exact sentence (no quote marks): "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
                 5. SECTION 4: EXECUTIVE RECOMMENDATION (MANDATORY FORMAT)
-                   Include a highlighted, concise callout box with this exact layout (ensure the header 'SECTION 4: EXECUTIVE RECOMMENDATION' is not repeated):
+                   Include a highlighted, concise callout box with this exact layout:
                    > **SECTION 4: EXECUTIVE RECOMMENDATION**
                    >
                    > Start with data integration rather than software replacement.
                    > A phased modernization strategy will deliver immediate commercial visibility while respecting organizational constraints and minimizing operational disruption.
 
                 6. SECTION 5: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
-                   Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact". Use these exact verb-first structures:
-                   - **Improve renewal visibility** across key accounts
-                   - **Increase forecasting accuracy** for executive reporting
-                   - **Accelerate churn detection** to mitigate risks early
-                   - **Strengthen Product-Sales alignment** through shared insights
-                   - **Reinforce executive confidence** in strategic planning
+                   Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact". Use active, verb-first structures (e.g., "Improve...", "Increase...", "Accelerate...", "Strengthen...", "Reinforce...") strictly aligned with their stated Pain:
+                   - **[Action Verb] [Dynamic impact matching Pain]**
+                   - **[Action Verb] [Dynamic impact matching Root Causes]**
+                   - **[Action Verb] [Dynamic impact matching Decision Lens]**
 
                 7. SECTION 6: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
-                   Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities" with these exact objectives (ensuring zero repetitive phrasing from prior sections and using consistent active verbs):
-                   * 1. **Establish the Data Bridge**: Build a lightweight integration layer connecting PostgreSQL, HubSpot and existing business systems while maintaining compatibility with Microsoft Access.
-                   * 2. **Deploy Account Health Scores**: Introduce Account Health Scores based on product usage signals to identify renewal risks early.
-                   * 3. **Standardize Forecasting Reviews**: Introduce recurring forecasting reviews based on unified operational data to restore executive and board confidence.
+                   Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities". Ensure zero repetitive phrasing from prior sections.
+                   Use active, consistent verbs to dictate 3 dynamic, slot-driven immediate priorities.
+                   * If the prospect can't discuss vendors, use objective priority phrasings like: "Assess existing integration points between internal and third-party systems while respecting information-security constraints" or "Improve trusted data exchange between existing business systems without exposing protected infrastructure."
                 """
 
                 try:
@@ -394,9 +389,9 @@ if st.session_state.stage == 4:
                         <div class="priority-badge">⚠️ EXECUTIVE RISK LEVEL: HIGH</div>
                         <div style="font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; color: #FFD2D2;">
                             <b>Reason:</b><br>
-                            • Low forecast reliability<br>
-                            • Poor customer usage visibility<br>
-                            • Renewal risk not detected early
+                            • Low forecast/report reliability based on fragmented data<br>
+                            • Limited data visibility across active organizational layers<br>
+                            • Operational constraints preventing total system overhauls
                         </div>
                         {final_diag}
                     </div>
@@ -408,13 +403,13 @@ if st.session_state.stage == 4:
                         st.markdown(f"""
                         * **Prospect Role:** {st.session_state.slots['Role']}
                         * **Company Size:** {st.session_state.slots['CompanySize']}
-                        * **Decision Lens:** {st.session_state.tags.get('Lens', 'Commercial / Revenue-Driven')}
+                        * **Decision Lens:** {st.session_state.tags.get('Lens', 'Standard')}
                         """)
                     with col_m2:
                         st.markdown(f"""
-                        * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Hybrid Stack')}
+                        * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
                         * **Business Risk:** 🔴 **HIGH**
-                        * **Transformation Strategy:** Lightweight integration
+                        * **Transformation Strategy:** Lightweight secure integration
                         """)
 
                     st.markdown("---")
