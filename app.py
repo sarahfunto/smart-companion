@@ -19,9 +19,9 @@ Analyze the prospect's profile across two distinct operational axes based strict
 
 1. Buying Style (Decision Lens):
    - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, governance, process compliance, and failure prevention. (Select this if the prospect emphasizes confidentiality, security rules, and governance constraints).
-   - Strategic / Growth-Driven: Convicted by market share, business model scalability, and long-term vision.
+   - Strategic / Growth-Driven: Convicted by organizational efficiency, long-term vision, or business-driven targets.
    - Standard: Default value if the client is highly evasive or data is insufficient to safely determine a lens. Do NOT default to Commercial.
-   - Commercial / Revenue-Driven: ONLY if they explicitly talk about revenue, pipelines, sales, or renewals.
+   - Commercial / Revenue-Driven: ONLY if they explicitly talk about revenue, pipelines, sales, or renewals. Do NOT use if they talk about governance, privacy, or security.
 
 2. Tech Maturity: Assess the organizational complexity of their current tools. Formulate as a descriptive hybrid state (e.g., "Hybrid Stack - Mixed internal and third-party managed tools with varying ages").
 
@@ -118,7 +118,7 @@ st.markdown("""
 # SESSION STATE INITIALIZATION
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
-if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'None', 'TechMaturity': 'Standard'}
+if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial client statement to start the strategic analysis."
 
@@ -159,7 +159,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "1. Analyze the input. If they withhold vendors, extract functional anonymous terms ('databases, reporting tools') into 'Tech'.\n"
         "2. If they avoid sharing pain points, log this in 'Pain' as 'Operational transparency and disclosure limits'. Do not assume sales/revenue pains.\n"
         "3. Set 'Fear' strictly to 'Not yet confirmed' or 'None' if no explicit personal/corporate anxiety is stated. Do NOT invent 'blind spots'.\n"
-        "4. Determine Decision Lens carefully. If they focus on governance, secrets, or info-sec, map strictly to 'Risk / Compliance-Locked'. If unknown, use 'Standard' or 'Strategic'.\n"
+        "4. Determine Decision Lens carefully. If they focus on governance, secrets, or info-sec, map strictly to 'Risk / Compliance-Locked'. If unknown, use 'Standard'. Do NOT use 'Commercial' unless explicitly verified.\n"
         "5. Preserve previously extracted values. Do not empty them.\n\n"
         "Format response as JSON with keys: slots, tags, ai_guidance."
     )
@@ -198,6 +198,23 @@ def analyze_with_openai(user_text, context_web, current_stage):
                     if incoming_tag not in ["", "null", "undefined"]:
                         st.session_state.tags[target_key] = incoming_tag
                         break
+
+        # ==========================================
+        # 🛡️ POST-PROCESSING GUARDRAILS (HARD CODE OVERRIDES TO PREVENT BIASES)
+        # ==========================================
+        limits_val = str(st.session_state.slots.get("Limits", "")).lower()
+        role_val = str(st.session_state.slots.get("Role", "")).lower()
+        pain_val = str(st.session_state.slots.get("Pain", "")).lower()
+
+        # Overwrite 1: Force Lens to Risk/Compliance or Standard if evasive / security heavy
+        if "security" in limits_val or "security" in pain_val or "disclos" in limits_val or "attention" in role_val:
+            if st.session_state.tags["Lens"] in ["Commercial / Revenue-Driven", "Standard"]:
+                st.session_state.tags["Lens"] = "Risk / Compliance-Locked"
+
+        # Overwrite 2: Force Fear to Not yet confirmed if it tries to hallucinate blind spots out of non-disclosure
+        current_fear = str(st.session_state.tags.get("Fear", "")).lower()
+        if "blind" in current_fear or "non-disclosure" in current_fear or "disclosure" in current_fear or "none" in current_fear:
+            st.session_state.tags["Fear"] = "Not yet confirmed"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
@@ -325,7 +342,7 @@ if st.session_state.stage == 4:
 
                 CRITICAL STRUCTURAL RULES (PRUDENCE & INTELLECTUAL HONESTY):
                 1. NO INVENTED TECH OR BRANDS: Do NOT use software names (HubSpot, Salesforce, PostgreSQL) unless explicitly written in 'Tech'. Speak strictly of "existing systems", "reporting assets" or "databases" as anonymized.
-                2. NO SALES OR REVENUE HALLUCINATIONS: If 'Pain' or 'Fear' do NOT explicitly mention "sales", "revenue", "churn", or "customers", you are STRICTLY FORBIDDEN from writing these words or referencing commercial growth.
+                2. NO SALES OR REVENUE HALLUCINATIONS: You are STRICTLY FORBIDDEN from using words like "sales", "revenue", "churn", "renewal" or "customers" unless explicitly written in 'Pain' or 'Fear'. Replace them systematically with neutral corporate terms like "organizational objectives", "business objectives", "operational alignment", or "governance targets".
                 3. PRUDENT CAUSALITY CHAIN: If the Root Cause is unconfirmed, write: "Current operational visibility is insufficient to confirm the underlying causes." or "Limited information prevents confirmation of structural bottlenecks." Do not assume or invent operational patterns.
                 4. REALISTIC RECOMMENDATIONS: Because details are restricted, do NOT recommend heavy, intrusive, or premature actions (e.g. "Initiate an internal audit", "Deploy anonymous role-based reporting", "Process redesign workshop", "Cross-department task force"). Only recommend light, safe, discovery-driven frameworks:
                    * Discovery workshop
@@ -336,9 +353,9 @@ if st.session_state.stage == 4:
                 6. CORE FEAR TREATMENT: If 'Fear' is 'None' or 'Not yet confirmed', write exactly "Not yet confirmed" or "Insufficient information to determine executive concerns". Do not deduce fear from limits.
 
                 Generate your report strictly following this layout:
-                - Section 1: Strategic DNA Matrix (strictly display the extracted values).
+                - Section 1: Strategic DNA Matrix (strictly display the extracted values. For strategic objectives, write: "Improve decision quality through validated business objectives").
                 - Section 2: Strategic Causality Chain (use simple vertical arrow blocks showing Fear -> Root Cause -> Operational Pain -> Recommended Strategy).
-                - Section 3: Executive Blueprint Narrative (calm, risk-aware, zero hype).
+                - Section 3: Executive Blueprint Narrative (calm, risk-aware, zero hype, strictly neutral).
                 - Section 4: Executive Recommendation callout box (emphasizing starting with a structured discovery phase before defining any roadmap).
                 - Section 5: Expected Business Impact (highly aligned with mapping and verification).
                 - Section 6: Immediate Priorities (must strictly be: Map current systems, Validate integration points, Identify reporting dependencies, Confirm executive objectives).
