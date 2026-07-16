@@ -24,7 +24,7 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
    - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems (CTO, Lead Architect) and who care about clean code, scalability, and stack modernism.
 
 2. Tech Maturity: Assess the organizational complexity of their current tools. Do NOT output generic terms like 'Medium' or 'Low'. Instead, build a descriptive hybrid state representation:
-   - Formulate as: "Hybrid Stack - Modern SaaS ([Modern Tools]) with Legacy Database ([Legacy Tools]) dependency" or "Modern Agile - SaaS Native with data pipeline gaps".
+   - Formulate as: "Hybrid Stack – Mixed internal and third-party technologies with varying levels of integration."
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
@@ -322,7 +322,7 @@ if st.session_state.stage == 4:
                 2. STRICT TERMINOLOGY BLOCK: If the Pain or Fear slots do NOT explicitly mention words like "sales", "renewal", "product adoption", "churn", or "retention", do NOT use them. Adapt the business context entirely to the prospect's actual input (e.g., if they are in public service, healthcare, finance, or secure systems, focus purely on their described operational targets like "process reliability", "compliance verification", or "secure organizational reporting").
                 3. NO INVENTED VENDORS: If the prospect stated they cannot name vendors due to info-sec rules, your entire diagnostic must refer to their stack anonymously as "protected infrastructure" or "internal business architectures".
 
-                You must build a highly tailored, clinical, and high-impact Strategic Blueprint following this exact layout:
+                You must build a highly tailored, clinical, and high-impact Strategic Blueprint following this exact layout. Do NOT include meta-labels like "Paragraph 1", "Paragraph 2", "The Core Paradox", or structural instructions in the output text. Write only the raw executive narrative block:
 
                 1. CRITICAL TONE ADJUSTMENT:
                    - NO marketing hype or dramatic consulting clichés.
@@ -360,17 +360,17 @@ if st.session_state.stage == 4:
                    **STRATEGIC RESPONSE**
                    [Write a 1-sentence strategic response strictly utilizing the 'Tech' slot data and 'Limits'. If tools are anonymous, use terms like "securely connecting internal systems while respecting information-security constraints"]
 
-                4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
-                   * Paragraph 1 (The Core Paradox): Describe their challenge strictly based on their 'Pain' and 'Fear'. Write this exact sentence, adapting the context to their field: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility across business operations, making strategic planning significantly less predictable."
-                   * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
-                   * End this section with this exact sentence (no quote marks): "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
+                4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE (MANDATORY FLOW - Output only the raw paragraphs, NO meta-titles, headers, or bracket labels):
+                   - Paragraph 1: Start directly with: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility across business operations, making strategic planning significantly less predictable."
+                   - Paragraph 2: Continue immediately with: "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
+                   - Paragraph 3: Close this section directly with: "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
-                5. SECTION 4: EXECUTIVE RECOMMENDATION (MANDATORY FORMAT)
+                5. SECTION 4: EXECUTIVE RECOMMENDATION (MANDATORY FORMAT - Ensure this exact phrasing)
                    Include a highlighted, concise callout box with this exact layout:
                    > **SECTION 4: EXECUTIVE RECOMMENDATION**
                    >
                    > Start with data integration rather than software replacement.
-                   > A phased modernization strategy will deliver immediate operational and organizational visibility while respecting constraints and minimizing disruption.
+                   > A phased modernization strategy will deliver immediate operational visibility while respecting organizational constraints and minimizing disruption.
 
                 6. SECTION 5: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
                    Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact". Use active, verb-first structures (e.g., "Improve...", "Increase...", "Accelerate...", "Strengthen...", "Reinforce...") strictly aligned with their stated Pain:
@@ -414,7 +414,7 @@ if st.session_state.stage == 4:
                         """)
                     with col_m2:
                         st.markdown(f"""
-                        * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
+                        * **Technology Profile:** Hybrid Stack – Mixed internal and third-party technologies with varying levels of integration.
                         * **Business Risk:** 🔴 **HIGH**
                         * **Transformation Strategy:** Lightweight secure integration
                         """)
