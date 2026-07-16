@@ -348,7 +348,12 @@ if st.session_state.stage == 4:
                    * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, the solution must adapt to your environment rather than force your organization to adapt to new technology." Advise against total migrations or heavy tool replacements (especially considering their specific constraints/team size of {st.session_state.slots['CompanySize']}). Propose a lightweight integration layer or middleware layer instead. DO NOT reference any specific third-party integration brands (like Zapier, Make, etc.) to keep the consulting strictly independent.
                    * End this section with the exact closing sentence: "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
-                5. SECTION 4: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
+                5. SECTION 4: EXECUTIVE RECOMMENDATION (MANDATORY ENCADRÉ FORMAT)
+                   Include a highlighted, concise callout box with this exact heading and message:
+                   > **Executive Recommendation**
+                   > Start with data integration rather than software replacement. A phased modernization strategy will deliver immediate commercial visibility while respecting organizational constraints and minimizing operational disruption.
+
+                6. SECTION 5: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
                    Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact":
                    - **Improved renewal visibility** across key accounts
                    - **Higher forecasting accuracy** for executive reporting
@@ -356,10 +361,10 @@ if st.session_state.stage == 4:
                    - **Better alignment** between Product and Sales
                    - **Increased confidence** in strategic planning
 
-                6. SECTION 5: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
-                   Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities" with these exact objectives:
-                   * 1. **Establish the Data Bridge**: Connect PostgreSQL product usage data with HubSpot while maintaining compatibility with Microsoft Access through a phased modernization strategy, avoiding heavy platform migrations.
-                   * 2. **Implement Account Health Scores**: Implement Account Health Scores based on product usage signals to identify renewal risks early.
+                7. SECTION 6: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
+                   Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities" with these exact objectives (ensuring zero repetitive phrasing from prior sections and using consistent active verbs):
+                   * 1. **Establish the Data Bridge**: Build a lightweight integration layer connecting PostgreSQL, HubSpot and existing business systems while maintaining compatibility with Microsoft Access.
+                   * 2. **Deploy Account Health Scores**: Introduce Account Health Scores based on product usage signals to identify renewal risks early.
                    * 3. **Standardize Forecasting Reviews**: Introduce recurring forecasting reviews based on unified operational data to restore executive and board confidence.
                 """
 
