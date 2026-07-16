@@ -77,6 +77,7 @@ st.markdown("""
         border: 2px solid #134074;
         color: #EEF4F8;
         margin-top: 15px;
+        margin-bottom: 20px;
         line-height: 1.6;
     }
 
@@ -112,22 +113,6 @@ st.markdown("""
         color: #EDF2F4;
         margin-top: 15px;
         margin-bottom: 15px;
-    }
-
-    .dna-container {
-        background-color: #1A1F26;
-        border: 1px solid #2E6BFF;
-        padding: 20px;
-        margin-bottom: 25px;
-        border-radius: 10px;
-    }
-
-    .causality-chain {
-        background-color: #1E2329;
-        border-left: 5px solid #E63946;
-        padding: 15px;
-        margin-bottom: 25px;
-        border-radius: 4px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -171,7 +156,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "Format your response STRICTLY as a JSON object with these exact keys:\n"
         "{\n"
         "  \"slots\": { \"Role\": \"...\", \"CompanySize\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"RootCauses\": \"...\", \"Limits\": \"...\" },\n"
-        "  \"tags\": { \"Lens\": \"...\", \"Fear\": \"...\", \"TechMaturity\": \"...\" },\n"
+        "  \"tags\": { \"BuyingStyle\": \"...\", \"Fear\": \"...\", \"TechMaturity\": \"...\" },\n"
         "  \"ai_guidance\": \"Provide tactical, emotionally aware guidance here.\"\n"
         "}"
     )
@@ -188,25 +173,33 @@ def analyze_with_openai(user_text, context_web, current_stage):
         )
         result = json.loads(response.choices[0].message.content)
         
+        # Update Slots safely
         new_slots = result.get("slots", {})
         for key in st.session_state.slots:
             if key in new_slots and new_slots[key] not in ["Empty", "", "None", "Keep existing or update"]:
                 st.session_state.slots[key] = new_slots[key]
         
+        # Robust Tag mapping to align with state definitions
         new_tags = result.get("tags", {})
-        for key in st.session_state.tags:
-            if key in new_tags and new_tags[key] not in ["None", ""]:
-                st.session_state.tags[key] = new_tags[key]
+        for target_key, possible_keys in {
+            "Lens": ["BuyingStyle", "Buying Style", "Lens", "decision_lens"],
+            "Fear": ["Fear", "fear"],
+            "TechMaturity": ["TechMaturity", "Tech Maturity", "tech_maturity"]
+        }.items():
+            for pk in possible_keys:
+                if pk in new_tags and new_tags[pk] not in ["None", "", "Standard"]:
+                    st.session_state.tags[target_key] = new_tags[pk]
+                    break
         
+        # Strategic fallback logic for Decision Lens based on Role keywords
         current_role = str(st.session_state.slots.get("Role", "")).upper()
-        non_tech_roles = ["SALES", "VP OF SALES", "VP SALES", "MARKETING", "CFO", "CEO", "FOUNDER", "DIRECTOR"]
+        non_tech_roles = ["SALES", "VP", "MARKETING", "CFO", "CEO", "FOUNDER", "DIRECTOR", "EXECUTIVE", "PRESIDENT", "MANAGER"]
 
-        for tag_key in st.session_state.tags:
-            if "DECISION" in tag_key.upper() or "LENS" in tag_key.upper() or "BUYINGSTYLE" in tag_key.upper():
-                if any(role in current_role for role in non_tech_roles):
-                    st.session_state.tags[tag_key] = "Commercial / Revenue-Driven"
-                elif "CTO" in current_role or "ARCHITECT" in current_role or "DEVELOPER" in current_role:
-                    st.session_state.tags[tag_key] = "Technical / Architecture-Driven"
+        if st.session_state.tags["Lens"] == "Standard":
+            if any(role in current_role for role in non_tech_roles):
+                st.session_state.tags["Lens"] = "Commercial / Revenue-Driven"
+            elif any(tech_role in current_role for tech_role in ["CTO", "ARCHITECT", "DEVELOPER", "ENGINEER"]):
+                st.session_state.tags["Lens"] = "Technical / Architecture-Driven"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
@@ -420,19 +413,21 @@ if st.session_state.stage == 4:
                         messages=[{"role": "user", "content": prompt_final}]
                     ).choices[0].message.content
 
-                    # Display Recommendation box
+                    # Display Recommendation Header and Metadata in CSS Styled Box
                     st.markdown(f"""
                     <div class="recommendation-box">
                         <div class="{badge_class}">⚠️ EXECUTIVE RISK LEVEL: {risk_level}</div>
-                        <div style="font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; color: #FFD2D2;">
+                        <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
                             <b>Reason:</b><br>
                             • Low report and forecast reliability based on fragmented data<br>
                             • Limited data visibility across active organizational layers<br>
                             • Operational constraints preventing total system overhauls
                         </div>
-                        {final_diag}
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                    # Render Markdown output strictly OUTSIDE of HTML structures
+                    st.markdown(final_diag)
 
                     # Dynamic Confidence Level Notification
                     if is_unconfirmed:
