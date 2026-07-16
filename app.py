@@ -23,18 +23,15 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
    - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, and failure prevention (e.g., CFO, Legal Counsel).
    - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems (CTO, Lead Architect) and who care about clean code, scalability, and stack modernism.
 
-2. Tech Maturity: Assess the organizational complexity of their current tools. Do NOT output a single word like 'Medium' or 'Low'. Instead, categorize using descriptive hybrid states:
-   - "Hybrid (Modern tools with legacy bottlenecks)" - if they combine modern platforms (HubSpot, Slack) with archaic processes (Microsoft Access, Excel-heavy workflows).
-   - "Legacy Heavy (Fragile on-premise / siloed systems)" - if they rely heavily on unsupported software.
-   - "Modern Agile (SaaS Native with data pipeline gaps)" - if they have modern tools but lack automated synchronization.
+2. Tech Maturity: Assess the organizational complexity of their current tools. Do NOT output generic terms like 'Medium' or 'Low'. Instead, build a descriptive hybrid state representation:
+   - Formulate as: "Hybrid Stack - Modern SaaS ([Modern Tools]) with Legacy Database ([Legacy Tools]) dependency" or "Modern Agile - SaaS Native with data pipeline gaps".
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
 
 - 'Fear': Identify high-stakes business risks and emotional vulnerabilities. Reject abstract buzzwords like "falling behind modern expectations" or "general inefficiency." Capture highly specific, professional liabilities such as:
   * "Unexpected loss of major renewals due to invisible usage signals"
-  * "Board losing confidence in revenue forecasts due to manual reporting"
-  * "C-Suite resistance to data-driven commercial strategies"
+  * "Losing executive confidence because forecasts cannot be trusted"
   * "Wasted sales team capacity spent fighting legacy architecture"
 
 - OPERATIONAL DIAGNOSIS STRUCTURING:
@@ -73,7 +70,7 @@ st.markdown("""
     }
     
     .recommendation-box {
-        padding: 20px;
+        padding: 25px;
         border-radius: 15px;
         background-color: #0B2545;
         border: 2px solid #134074;
@@ -82,11 +79,19 @@ st.markdown("""
         line-height: 1.6;
     }
 
-    .causality-chain {
+    .dna-container {
         background-color: #1A1F26;
-        border-left: 4px solid #2E6BFF;
+        border: 1px solid #2E6BFF;
+        padding: 20px;
+        margin-bottom: 25px;
+        border-radius: 10px;
+    }
+
+    .causality-chain {
+        background-color: #1E2329;
+        border-left: 5px solid #E63946;
         padding: 15px;
-        margin-bottom: 20px;
+        margin-bottom: 25px;
         border-radius: 4px;
     }
     </style>
@@ -288,32 +293,61 @@ if st.session_state.stage == 4:
                 - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
                 - Extracted Constraints & Political Limits: {st.session_state.slots['Limits']}
                 - Decision Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
-                - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
-                - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Medium')}
+                - Extracted Fear: {st.session_state.tags.get('Fear', 'Unexpected renewal loss')}
+                - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Hybrid Stack')}
 
-                Write an incisive diagnostic consisting of two parts: a logical chain and a bespoke recommendations overview. 
-                Follow these instructions strictly to maintain a calm, highly objective, senior enterprise consultant tone:
+                You must build a highly tailored, clinical, and high-impact Strategic Blueprint. Follow these instructions strictly to maintain a calm, highly objective, senior enterprise consultant tone:
 
-                1. CRITICAL TONE ADJUSTMENT (NO marketing hype or dramatic buzzwords):
-                   - DO NOT use over-dramatic phrases like "flirting with disaster", "cold, hard truth", "operational blindness", "becoming irrelevant", or "unforgiving market".
-                   - DO use objective, professional risk-assessment alternatives:
-                     * Replace "The cold, hard truth is..." with "The current situation creates unnecessary uncertainty around renewals and revenue planning."
-                     * Replace "flirting with disaster" with "increasing business risk."
-                     * Replace "becoming irrelevant" with "reducing your competitive advantage."
-                     * Replace "operational blindness" with "limited operational visibility."
-                   - The tone must be clinical, precise, risk-oriented, and matter-of-fact.
+                1. CRITICAL TONE ADJUSTMENT:
+                   - NO marketing hype, overly dramatic words, or SaaS sales pitches. 
+                   - Do NOT use phrases like "flirting with disaster", "cold, hard truth", "operational blindness", "becoming irrelevant", or "unforgiving market".
+                   - Use calm, business-first risk-assessment statements:
+                     * "creates unnecessary uncertainty around renewals and revenue planning"
+                     * "increasing business risk"
+                     * "reducing your competitive advantage"
+                     * "limited operational visibility"
 
-                2. MANDATORY "STRATEGIC CAUSALITY CHAIN" (Section 1):
-                   Start with a dedicated section that visually maps the logical sequence of their operational bottleneck. You must explicitly build and show the progression using this structure:
-                   * **The Core Fear**: [Extract Fear]
-                   * **$\rightarrow$ Triggered by (Root Cause)**: [Extract Root Cause]
-                   * **$\rightarrow$ Resulting in (Active Pain)**: [Extract Pain]
-                   * **$\rightarrow$ Solved by (Recommendation)**: [Short summary of the structural fix]
+                2. SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
+                   Render a clean, high-impact overview using the following structured fields. Rely strictly on the exact context and details gathered during the interview:
+                   * **Business Objective**: [Determine the primary executive goal, e.g., Protect recurring revenue]
+                   * **Decision Lens**: {st.session_state.tags.get('Lens', 'Commercial / Revenue-Driven')}
+                   * **Core Fear**: {st.session_state.tags.get('Fear', '')}
+                   * **Operational Pain**: {st.session_state.slots['Pain']}
+                   * **Root Cause**: {st.session_state.slots['RootCauses']}
+                   * **Constraints**: {st.session_state.slots['Limits']}
+                   * **Recommended Strategy**: Modernize and bridge existing assets through lightweight synchronization rather than costly, disruptive tool replacement.
+                   * **Expected Business Outcomes**: [Identify 2-3 key business outcomes like: Reliable board forecasting, Early customer renewal risk detection, Stabilized retention rate]
 
-                3. UNCOMPROMISING PARAGRAPH ANALYSIS (Section 2):
-                   * Paragraph 1 (The Operational Reality): Address their core paradox directly (e.g., "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have.") Connect their limited visibility to the unnecessary revenue uncertainty without using dramatic hyperbole.
-                   * Paragraph 2 (Strategic Synchronization with Constraints): Adapt directly to their explicit human/political limitations ({st.session_state.slots['Limits']}). Explain how they can solve this without heavy, politically friction-heavy database overhauls (e.g., if they struggle to replace legacy software, recommend a lightweight integration layer rather than full migration to match their scale of {st.session_state.slots['CompanySize']}).
-                   * Paragraph 3 (Surgical Action Plan): Detail a 3-step action plan focusing on low-friction, high-impact moves (e.g., connecting product signals directly to {st.session_state.slots['Tech']}, setting early-warning indicators, and standardizing forecast reviews).
+                3. SECTION 2: STRATEGIC CAUSALITY CHAIN (MANDATORY VISUAL FLOW)
+                   Present the sequential mapping of the current operational friction using this precise flow (use markdown styling and arrows):
+                   
+                   **BUSINESS FEAR**
+                   {st.session_state.tags.get('Fear', '')}
+                   
+                   ↓
+                   
+                   **ROOT CAUSE**
+                   {st.session_state.slots['RootCauses']}
+                   
+                   ↓
+                   
+                   **OPERATIONAL PAIN**
+                   {st.session_state.slots['Pain']}
+                   
+                   ↓
+                   
+                   **STRATEGIC RESPONSE**
+                   [Describe the exact architectural fix, focusing on bridging workflows without introducing unneeded platform changes]
+
+                4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
+                   * Paragraph 1 (The Core Paradox): "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have." Explain clearly, without dramatic hyperbole, how disconnecting system data creates unnecessary uncertainty around forecasts and renewal cycles.
+                   * Paragraph 2 (Tactical Adaptation to Constraints): Actively address the limitations listed in 'Limits' ({st.session_state.slots['Limits']}). Explicitly advise against total migrations or heavy tool replacements (especially considering their specific constraints/team size). Propose a lightweight integration layer or middleware layer instead. DO NOT reference any specific third-party integration brands (like Zapier, Make, etc.) to keep the consulting strictly independent.
+
+                5. SECTION 4: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
+                   Instead of prose paragraphs, output a highly-structured numbered list under the title "### 🎯 Immediate Priorities".
+                   * 1. **Establish the Data Bridge**: Detail how to expose product data signals to the commercial team using a lightweight, non-intrusive integration layer.
+                   * 2. **Implement Account Risk Health Scores**: Explain how to map these signals to early warning indicators within {st.session_state.slots['Tech']} before renewals are threatened.
+                   * 3. **Standardize Forecasting Reviews**: Detail how to align these technical indicators with forecasting reviews to restore executive and board confidence.
                 """
 
                 try:
