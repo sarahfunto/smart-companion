@@ -44,7 +44,6 @@ st.markdown("""
     .main { background-color: #0E1117; color: white; }
     .stButton>button { width: 100%; border-radius: 50px; height: 3em; background-color: #2E6BFF; color: white; }
     
-    /* Default empty status box */
     .status-box-empty { 
         padding: 12px; 
         border-radius: 10px; 
@@ -54,7 +53,6 @@ st.markdown("""
         color: #6C757D;
     }
     
-    /* Successfully validated box (Success Green) */
     .status-box-filled { 
         padding: 12px; 
         border-radius: 10px; 
@@ -65,7 +63,6 @@ st.markdown("""
         font-weight: bold;
     }
     
-    /* AI Recommendation container */
     .recommendation-box {
         padding: 20px;
         border-radius: 15px;
@@ -77,14 +74,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# SESSION STATE INITIALIZATION (Updated to 4 Stages and added CompanySize slot)
+# SESSION STATE INITIALIZATION
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
 if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'None'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial client statement to start the strategic analysis."
 
-# Raccourci à 4 étapes selon les souhaits de Limor
 stages = {
     "1": "Phase 1: Identity, Role & Company Size Contextual Validation",
     "2": "Phase 2: Technical Maturity Diagnostics & Infrastructure Readiness",
@@ -115,7 +111,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "3. Formulate the next strategic recommendation for the consultant.\n\n"
         "Format your response STRICTLY as a JSON object with these exact keys:\n"
         "{\n"
-        "  \"slots\": { \"Role\": \"...\", \"CompanySize\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"Limits\": \"...\" },\n"
+        "  \"slots\": { \"Role\": \"...\", \"CompanySize\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"RootCauses\": \"...\", \"Limits\": \"...\" },\n"
         "  \"tags\": { \"Lens\": \"...\", \"Fear\": \"...\" },\n"
         "  \"ai_guidance\": \"Provide tactical, emotionally aware guidance here.\"\n"
         "}"
@@ -133,30 +129,23 @@ def analyze_with_openai(user_text, context_web, current_stage):
         )
         result = json.loads(response.choices[0].message.content)
         
-        # Update and merge memory (Slots)
         new_slots = result.get("slots", {})
         for key in st.session_state.slots:
             if key in new_slots and new_slots[key] not in ["Empty", "", "None", "Keep existing or update"]:
                 st.session_state.slots[key] = new_slots[key]
         
-        # Dynamic update of Psychological Tags
         new_tags = result.get("tags", {})
         for key in st.session_state.tags:
             if key in new_tags and new_tags[key] not in ["None", ""]:
                 st.session_state.tags[key] = new_tags[key]
         
-        # Smart Sensitivity Override (Corrected for Decision Lens stability)
         current_role = str(st.session_state.slots.get("Role", "")).upper()
-        current_tech = str(st.session_state.slots.get("Tech", "")).upper()
-
         non_tech_roles = ["SALES", "VP OF SALES", "VP SALES", "MARKETING", "CFO", "CEO", "FOUNDER", "DIRECTOR"]
 
         for tag_key in st.session_state.tags:
             if "DECISION" in tag_key.upper() or "LENS" in tag_key.upper() or "BUYINGSTYLE" in tag_key.upper():
-                # If they have an executive/sales role, never force them into Technical lens
                 if any(role in current_role for role in non_tech_roles):
                     st.session_state.tags[tag_key] = "Commercial / Revenue-Driven"
-                # Only force Technical if the actual role is a tech leader (like CTO)
                 elif "CTO" in current_role or "ARCHITECT" in current_role or "DEVELOPER" in current_role:
                     st.session_state.tags[tag_key] = "Technical / Architecture-Driven"
             
@@ -167,11 +156,9 @@ def analyze_with_openai(user_text, context_web, current_stage):
 
 st.title("🎙️ Smart Companion — Expert Workspace")
 
-# ==========================================
-# 🌐 SIDEBAR: MANUAL WEB CONTEXT INJECTION
-# ==========================================
+# SIDEBAR: MANUAL WEB CONTEXT INJECTION
 st.sidebar.markdown("## 🔍 Live Context Injection")
-st.sidebar.markdown("*Paste background information about the target company or Limor's test notes below before running the interview.*")
+st.sidebar.markdown("*Paste background information about the target company or test notes below before running the interview.*")
 
 web_context_input = st.sidebar.text_area(
     "📝 Corporate Profile / Web Context", 
@@ -182,10 +169,9 @@ web_context_input = st.sidebar.text_area(
 if st.sidebar.button("💾 Synchronize Context"):
     st.sidebar.success("Brain updated with the latest background insights!")
 
-# DISPLAY CURRENT STAGE & CONCRETE OPEN QUESTION
+# INTERVIEW STATE & QUESTIONS
 st.markdown(f"### 💬 Interview Progress: Step {st.session_state.stage} / 4")
 
-# Questions adaptées au flux condensé en 4 étapes
 stage_questions = {
     "1": "Who am I speaking with today, what is the scale of your organization, and what corporate trigger brought you here?",
     "2": "What does your current software infrastructure look like? Are your daily workflows mostly manual or cloud-based?",
@@ -223,7 +209,7 @@ with col1:
         
     st.markdown("---")
     
-    # WORKFLOW NAVIGATION
+    # NAVIGATION SYSTEM
     nav_col1, nav_col2 = st.columns(2)
     with nav_col1:
         if st.session_state.stage > 1:
@@ -252,7 +238,7 @@ with col2:
     fear_class = "status-box-filled" if st.session_state.tags['Fear'] != "None" else "status-box-empty"
     st.markdown(f"<div class='{fear_class}'><b>Identified Core Fear (Fear):</b> {st.session_state.tags['Fear']}</div>", unsafe_allow_html=True)
 
-# FINAL DIAGNOSTIC AT STAGE 4 WITH SECURITY THRESHOLD (TRIGGER)
+# FINAL DIAGNOSTIC
 if st.session_state.stage == 4:
     st.markdown("---")
     st.header("📋 Comprehensive Strategic Blueprint")
@@ -269,69 +255,64 @@ if st.session_state.stage == 4:
         if filled_slots_count < 3:
             st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
             st.warning("You must provide more details to unlock the diagnostic.")
-    else:
-        st.balloons()
-        with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
-            prompt_final = f"""
-            Act as an elite B2B Sales Consultant. Analyze this profile:
-            - Role: {st.session_state.slots['Role']}
-            - Exact company Size: {st.session_state.slots['CompanySize']}
-            - Technical Stack: {st.session_state.slots['Tech']}
-            - Core Pain: {st.session_state.slots['Pain']}
-            - Psychological Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
-            - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
+        else:
+            st.balloons()
+            with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
+                prompt_final = f"""
+                Act as an elite B2B Sales Consultant. Analyze this profile:
+                - Role: {st.session_state.slots['Role']}
+                - Exact company Size: {st.session_state.slots['CompanySize']}
+                - Technical Stack: {st.session_state.slots['Tech']}
+                - Core Pain: {st.session_state.slots['Pain']}
+                - Psychological Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
+                - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
 
-            You must write a highly tailored, 3-paragraph diagnostic. Follow these constraints strictly:
+                You must write a highly tailored, 3-paragraph diagnostic. Follow these constraints strictly:
 
-            1. NO TECH-BABBLE FOR EXECUTIVE ROLES: If the Lens is 'Commercial / Executive' or the Role is 'VP of Sales', your language must be entirely business, revenue, and process-focused.
-               * Do NOT propose building complex databases or writing SQL.
-               * Do NOT recommend changing CRM platforms if their current CRM (e.g., HubSpot) is already working or lightweight.
-               * Focus instead on data synchronization, building visibility bridges (e.g., pushing product usage data from PostgreSQL to HubSpot), and automating renewal alert workflows.
+                1. NO TECH-BABBLE FOR EXECUTIVE ROLES: If the Lens is 'Commercial / Executive' or the Role is 'VP of Sales', your language must be entirely business, revenue, and process-focused.
+                   * Do NOT propose building complex databases or writing SQL.
+                   * Do NOT recommend changing CRM platforms if their current CRM (e.g., HubSpot) is already working or lightweight.
+                   * Focus instead on data synchronization, building visibility bridges (e.g., pushing product usage data from PostgreSQL to HubSpot), and automating renewal alert workflows.
 
-            2. STRICT COHERENCE WITH STATE:
-               * Do NOT refer to abandoned tools (like Salesforce) as current bottlenecks.
-               * Match the scale: If company size is {st.session_state.slots['CompanySize']}, ensure recommendations are agile, cost-effective, and require zero heavy corporate overhead.
+                2. STRICT COHERENCE WITH STATE:
+                   * Do NOT refer to abandoned tools (like Salesforce) as current bottlenecks.
+                   * Match the scale: If company size is {st.session_state.slots['CompanySize']}, ensure recommendations are agile, cost-effective, and require zero heavy corporate overhead.
 
-            3. BUSINESS ACTION PLAN:
-               * Step 1: Connect existing product data pipelines to their active CRM ({st.session_state.slots['Tech']}) to give the sales team immediate visibility.
-               * Step 2: Establish early-warning indicators (Account Health Scores) to proactively spot renewal risks.
-               * Step 3: Implement structured sales forecasting reviews to restore board and executive trust.
-            """
+                3. BUSINESS ACTION PLAN:
+                   * Step 1: Connect existing product data pipelines to their active CRM ({st.session_state.slots['Tech']}) to give the sales team immediate visibility.
+                   * Step 2: Establish early-warning indicators (Account Health Scores) to proactively spot renewal risks.
+                   * Step 3: Implement structured sales forecasting reviews to restore board and executive trust.
+                """
 
-            try:
-                final_diag = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "user", "content": prompt_final}]
-                ).choices[0].message.content
-                st.write("### DEBUG - DIAGNOSTIC BRUT :") 
-                st.write(final_diag)
+                try:
+                    final_diag = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": prompt_final}]
+                    ).choices[0].message.content
 
-                st.markdown(f"""
-                <div class="recommendation-box">
-                    {final_diag}
-                </div>
-                """, unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class="recommendation-box">
+                        {final_diag}
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                st.subheader("Final Summary Matrix")
-                st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
-                st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
-                st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
-                st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
+                    st.subheader("Final Summary Matrix")
+                    st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
+                    st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
+                    st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
+                    st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
 
-                st.markdown("---")
-                st.subheader("📊 Operational Diagnosis")
+                    st.markdown("---")
+                    st.subheader("📊 Operational Diagnosis")
 
-                # 1. Pain (the real pain)
-                st.error(f"""**🔴 Core Business Pain:**  
+                    st.error(f"""**🔴 Core Business Pain:**  
 {st.session_state.slots.get('Pain', 'Empty')}""")
 
-                # 2. Root Causes (why it is happening)
-                st.warning(f"""**⚙️ Technical Root Causes:**  
+                    st.warning(f"""**⚙️ Technical Root Causes:**  
 {st.session_state.slots.get('RootCauses', 'Empty')}""")
 
-                # 3. Limits (what blocks or restricts the solutions)
-                st.info(f"""**⚠️ Constraints & Limits:**  
+                    st.info(f"""**⚠️ Constraints & Limits:**  
 {st.session_state.slots.get('Limits', 'Empty')}""")
 
-            except Exception as e:
-                st.error(f"Error generating blueprint: {e}")
+                except Exception as e:
+                    st.error(f"Error generating blueprint: {e}")
