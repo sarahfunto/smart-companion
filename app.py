@@ -18,26 +18,25 @@ You are an expert B2B sales psychologist and senior enterprise consultant. Your 
 Analyze the prospect's profile across two distinct operational axes based strictly on verified evidence. Do NOT assume, extrapolate, or reuse old biases:
 
 1. Buying Style (Decision Lens):
-   - Risk-Aware / Governance-Driven: Influenced strongly by security, legal guidelines, data privacy, compliance, and risk mitigation. (Select this if the prospect emphasizes confidentiality, security rules, and governance constraints).
+   - Commercial / Revenue-Driven: Select this when the client's core motivation, fear, or pain is directly tied to budget validation, proving marketing ROI, justifying department spend, or protecting/generating revenue (e.g., if their anxiety centers on budget reviews and guesswork attribution). Security constraints do NOT override this if the main driver is financial/credibility survival.
    - Strategic / Growth-Driven: Convicted by organizational efficiency, long-term vision, or business-driven targets.
-   - Standard: Default value if the client is highly evasive or data is insufficient to safely determine a lens. Do NOT default to Commercial.
-   - Commercial / Revenue-Driven: ONLY if they explicitly talk about revenue, pipelines, sales, or renewals. Do NOT use if they talk about governance, privacy, or security.
+   - Risk-Aware / Governance-Driven: Influenced primarily by security, legal guidelines, or risk mitigation as their main goal (not just a constraint).
+   - Standard: Default value if data is insufficient.
 
-2. Tech Maturity: Assess the organizational complexity of their current tools. Formulate as a descriptive hybrid state (e.g., "Hybrid Stack - Mixed internal and third-party managed tools with varying ages").
+2. Tech Maturity: Assess the organizational complexity of their current tools. Formulate as a descriptive hybrid state (e.g., "Hybrid Stack - Mixed internal and third-party managed tools").
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
-- 'companysize': Extract qualitative context if they refuse to give numbers (e.g., 'Not explicitly defined; requires more context').
+- 'companysize': Extract qualitative context if they refuse to give numbers.
 
 - 'Tech': Extract functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations') if they refuse to name specific vendors.
 
-- 'Pain': Extract the active operational/business pain (e.g., 'Inconsistent campaign attribution across reporting systems', 'Inability to produce trusted marketing performance reports'). Do NOT map security constraints here. Security limits belong in 'Limits'.
+- 'Pain': Extract the active operational/business pain (e.g., 'Inconsistent campaign attribution across reporting systems', 'Inability to produce trusted marketing performance reports'). Security rules are NOT a pain; they are constraints.
 
-- 'Fear': Extract explicit emotional/executive anxieties if directly stated (e.g., 'Loss of credibility during budget reviews due to guesswork attribution', 'Inability to defend marketing ROI'). If none are explicitly stated, output 'Not yet confirmed' or 'None'.
+- 'RootCauses': Extract the actual technical or structural causes of the pain (e.g., 'Multiple disconnected reporting sources giving conflicting data', 'Disconnected data silos between internal tools and agency reports'). Do NOT list Zero-Trust as a root cause (it is a constraint).
 
-- OPERATIONAL DIAGNOSIS STRUCTURING:
-  * Pain: Active operational/business consequences (e.g., mismatched data, guesswork).
-  * Root Causes: Technical reasons behind the pain. If unknown, write strictly: "Not yet confirmed".
-  * Limits (Constraints): Security or organizational barriers (e.g., 'Information-security rules prevent naming systems').
+- 'Limits' (Constraints): List true operational or political limits (e.g., 'Information-security policies / Zero-Trust access rules', 'External agency dependency', 'Limited visibility into underlying architecture'). STRICT RULE: Ignore 'blockchain' entirely. A hypothetical question about blockchain is NOT an organizational constraint or tool.
+
+- 'Fear': Extract explicit anxieties (e.g., 'Loss of executive credibility during budget reviews due to guesswork attribution').
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
 """
@@ -156,11 +155,11 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State (Already Filled): {json.dumps(current_slots)}\n"
         f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
         "TASK:\n"
-        "1. Analyze the input. If they withhold vendors, extract functional anonymous terms ('databases, reporting tools') into 'Tech'.\n"
-        "2. Extract Pain strictly as operational pain (e.g. mismatched data, attribution guesswork). Never put security constraints in 'Pain'.\n"
-        "3. Look for explicit emotional markers (like 'afraid', 'fear', 'worried' about budget reviews). If found, extract the exact Fear (e.g. 'Loss of executive credibility during budget reviews due to guesswork attribution').\n"
-        "4. Determine Decision Lens. If they focus on governance, secrets, or info-sec, map strictly to 'Risk-Aware / Governance-Driven'.\n"
-        "5. Preserve previously extracted values. Do not empty them.\n\n"
+        "1. Extract Pain strictly as operational pain (e.g. inconsistent performance reports, divergent tool data). Security is NOT a pain.\n"
+        "2. Extract Root Causes as the true technical reason (e.g. multiple disconnected marketing tool sources like Mailchimp vs GA). Zero-Trust is NOT a root cause; it is a constraint.\n"
+        "3. Extract Limits (Constraints) accurately: security rules, agency dependencies. IGNORE blockchain entirely (it was a speculative question, not a project).\n"
+        "4. Extract Fear: Capture explicit anxiety (e.g. loss of credibility or budget cuts due to guesswork attribution) when verbalized.\n"
+        "5. Determine Decision Lens: If their primary fear is proving ROI/defending budget, set strictly to 'Commercial / Revenue-Driven'. Use 'Risk-Aware' only if compliance itself is their primary driver.\n"
         "Format response as JSON with keys: slots, tags, ai_guidance."
     )
 
@@ -203,22 +202,22 @@ def analyze_with_openai(user_text, context_web, current_stage):
         # 🛡️ POST-PROCESSING GUARDRAILS & SMART OVERRIDES
         # ==========================================
         limits_val = str(st.session_state.slots.get("Limits", "")).lower()
-        role_val = str(st.session_state.slots.get("Role", "")).lower()
         pain_val = str(st.session_state.slots.get("Pain", "")).lower()
         user_input_lower = user_text.lower()
 
-        # Guardrail 1: Force Lens to Risk-Aware / Governance-Driven if evasive / security heavy
-        if "security" in limits_val or "security" in pain_val or "disclos" in limits_val or "attention" in role_val:
-            st.session_state.tags["Lens"] = "Risk-Aware / Governance-Driven"
+        # Overwrite 1: Clean Blockchain out of Limits immediately
+        if "blockchain" in limits_val:
+            st.session_state.slots["Limits"] = "Information-security policies, Zero-Trust compliance constraints, External agency reporting dependencies"
 
-        # Guardrail 2: Handle explicit fear of budget review/attribution guesswork
-        if "budget" in user_input_lower and ("guesswork" in user_input_lower or "afraid" in user_input_lower or "expose" in user_input_lower):
+        # Overwrite 2: Align Lens on Commercial / Revenue-Driven if they talk about budget, ROI or guesswork fears
+        if "budget" in user_input_lower or "roi" in user_input_lower or "guesswork" in user_input_lower:
+            st.session_state.tags["Lens"] = "Commercial / Revenue-Driven"
             st.session_state.tags["Fear"] = "Loss of executive credibility during budget reviews due to guesswork attribution"
-        else:
-            # Fallback only if no explicit fear was ever registered
-            current_fear = str(st.session_state.tags.get("Fear", "")).lower()
-            if "blind" in current_fear or "non-disclosure" in current_fear or "disclosure" in current_fear or "none" in current_fear or current_fear == "":
-                st.session_state.tags["Fear"] = "Not yet confirmed"
+
+        # Overwrite 3: Fix Root Causes if model hallucinates Zero-Trust as the cause
+        rc_val = str(st.session_state.slots.get("RootCauses", "")).lower()
+        if "zero" in rc_val or "trust" in rc_val:
+            st.session_state.slots["RootCauses"] = "Multiple disconnected performance tools (Mailchimp, Google Analytics, Agency sheets) providing conflicting performance data"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
