@@ -312,7 +312,7 @@ if st.session_state.stage == 4:
 
                 CRITICAL STABILITY RULES (PREVENT CONTAMINATION):
                 1. STRICT TOOL BLOCK: If the Tech slot does not contain "HubSpot", "PostgreSQL", or "Microsoft Access", you are FORBIDDEN from naming them or hinting at them. Use generic terms instead like "existing business systems", "internal databases", "legacy tools", or "third-party platforms" as described by the prospect.
-                2. STRICT TERMINOLOGY BLOCK: If the Pain or Fear slots do NOT explicitly mention words like "renewal", "product adoption", "churn", or "retention", do NOT use them. Adapt the business context entirely to the prospect's actual input (e.g., if they are in public service, healthcare, or secure systems, focus purely on their described operational targets like "process reliability", "compliance verification", or "secure reporting").
+                2. STRICT TERMINOLOGY BLOCK: If the Pain or Fear slots do NOT explicitly mention words like "sales", "renewal", "product adoption", "churn", or "retention", do NOT use them. Adapt the business context entirely to the prospect's actual input (e.g., if they are in public service, healthcare, finance, or secure systems, focus purely on their described operational targets like "process reliability", "compliance verification", or "secure organizational reporting").
                 3. NO INVENTED VENDORS: If the prospect stated they cannot name vendors due to info-sec rules, your entire diagnostic must refer to their stack anonymously as "protected infrastructure" or "internal business architectures".
 
                 You must build a highly tailored, clinical, and high-impact Strategic Blueprint following this exact layout:
@@ -323,10 +323,10 @@ if st.session_state.stage == 4:
 
                 2. SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
                    Render an overview strictly mapped to the provided slots:
-                   * **Strategic Business Objective**: [Formulate objective strictly based on what is needed to solve their 'Pain' without assuming it is commercial sales/renewal if they didn't say so]
+                   * **Strategic Business Objective**: Improve strategic decision-making through reliable organizational reporting. (Or: Enhance decision quality through more reliable operational forecasting).
                    * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
                    * **Core Fear**: {st.session_state.tags.get('Fear', 'None')}
-                   * **Operational Pain**: {st.session_state.slots['Pain']}
+                   * **Operational Pain**: Unreliable executive reporting and forecasting / Low confidence in operational reporting. (Strictly map this to: {st.session_state.slots['Pain']})
                    * **Root Cause**: {st.session_state.slots['RootCauses']}
                    * **Constraints**: {st.session_state.slots['Limits']}
                    * **Recommended Strategy**: Modernize and secure existing assets through lightweight synchronization and structured middleware rather than costly, disruptive platform replacement.
@@ -354,7 +354,7 @@ if st.session_state.stage == 4:
                    [Write a 1-sentence strategic response strictly utilizing the 'Tech' slot data and 'Limits'. If tools are anonymous, use terms like "securely connecting internal systems while respecting information-security constraints"]
 
                 4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
-                   * Paragraph 1 (The Core Paradox): Describe their challenge strictly based on their 'Pain' and 'Fear'. Write this exact sentence, adapting the context to their field: "Disconnected systems increase operational uncertainty, reduce forecast reliability, and limit visibility into customer behavior, making renewal planning significantly less predictable." (If they do not have a customer-facing business, adapt this sentence to reflect: "Disconnected systems increase operational uncertainty, reduce reporting reliability, and limit visibility into workflow performance, making planning significantly less predictable.")
+                   * Paragraph 1 (The Core Paradox): Describe their challenge strictly based on their 'Pain' and 'Fear'. Write this exact sentence, adapting the context to their field: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility into organizational behaviors, making strategic planning significantly less predictable."
                    * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
                    * End this section with this exact sentence (no quote marks): "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
@@ -363,11 +363,11 @@ if st.session_state.stage == 4:
                    > **SECTION 4: EXECUTIVE RECOMMENDATION**
                    >
                    > Start with data integration rather than software replacement.
-                   > A phased modernization strategy will deliver immediate commercial visibility while respecting organizational constraints and minimizing operational disruption.
+                   > A phased modernization strategy will deliver immediate operational and organizational visibility while respecting constraints and minimizing disruption.
 
                 6. SECTION 5: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
                    Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact". Use active, verb-first structures (e.g., "Improve...", "Increase...", "Accelerate...", "Strengthen...", "Reinforce...") strictly aligned with their stated Pain:
-                   - **[Action Verb] [Dynamic impact matching Pain]**
+                   - **[Action Verb] [Dynamic impact matching Pain - e.g., Improve reliability of organizational forecasting]**
                    - **[Action Verb] [Dynamic impact matching Root Causes]**
                    - **[Action Verb] [Dynamic impact matching Decision Lens]**
 
@@ -389,7 +389,7 @@ if st.session_state.stage == 4:
                         <div class="priority-badge">⚠️ EXECUTIVE RISK LEVEL: HIGH</div>
                         <div style="font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; color: #FFD2D2;">
                             <b>Reason:</b><br>
-                            • Low forecast/report reliability based on fragmented data<br>
+                            • Low report and forecast reliability based on fragmented data<br>
                             • Limited data visibility across active organizational layers<br>
                             • Operational constraints preventing total system overhauls
                         </div>
