@@ -303,6 +303,8 @@ if st.session_state.stage == 4:
                     model="gpt-4o",
                     messages=[{"role": "user", "content": prompt_final}]
                 ).choices[0].message.content
+                st.write("### DEBUG - DIAGNOSTIC BRUT :") 
+                st.write(final_diag)
 
                 st.markdown(f"""
                 <div class="recommendation-box">
