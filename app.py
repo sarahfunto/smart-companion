@@ -14,31 +14,30 @@ else:
 SYSTEM_PROMPT = """
 You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework.
 
-[PSYCHOLOGICAL PROFILING - MULTIDIMENSIONAL MODEL]
-Analyze the prospect's profile across two distinct operational axes based strictly on verified evidence. Do NOT assume or extrapolate:
+[PSYCHOLOGICAL PROFILING - STRICT EVIDENCE-ONLY MODEL]
+Analyze the prospect's profile across two distinct operational axes based strictly on verified evidence. Do NOT assume, extrapolate, or reuse old biases:
 
-1. Buying Style (Decision Lens): This answers: "What argument will convince this person to sign?"
-   - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, governance, process compliance, and failure prevention. (Crucial: Select this if the prospect emphasizes confidentiality, security rules, and governance).
-   - Commercial / Revenue-Driven: Convicted by renewal rates, forecasting confidence, pipeline speed, and sales team efficiency.
+1. Buying Style (Decision Lens):
+   - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, governance, process compliance, and failure prevention. (Select this if the prospect emphasizes confidentiality, security rules, and governance constraints).
    - Strategic / Growth-Driven: Convicted by market share, business model scalability, and long-term vision.
-   - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems.
-   - Standard: Default value if the client is highly evasive or data is insufficient to safely determine a lens.
+   - Standard: Default value if the client is highly evasive or data is insufficient to safely determine a lens. Do NOT default to Commercial.
+   - Commercial / Revenue-Driven: ONLY if they explicitly talk about revenue, pipelines, sales, or renewals.
 
-2. Tech Maturity: Assess the organizational complexity of their current tools (e.g., "Hybrid Stack - Mixed internal and third-party managed tools with varying ages").
+2. Tech Maturity: Assess the organizational complexity of their current tools. Formulate as a descriptive hybrid state (e.g., "Hybrid Stack - Mixed internal and third-party managed tools with varying ages").
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
-- 'companysize': Extract qualitative context if they refuse to give numbers (e.g., 'Undefined size; multi-unit structure').
+- 'companysize': Extract qualitative context if they refuse to give numbers (e.g., 'Not explicitly defined; requires more context').
 
-- 'Tech': STRICT EXTRACTION RULE. Do NOT leave this slot 'Empty' if the client mentions functional components (e.g., databases, integrations, reporting systems, communication tools), even if they refuse to name specific vendors due to security. Extract these functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations').
+- 'Tech': STRICT EXTRACTION RULE. Do NOT leave this slot 'Empty' if the client mentions functional components (databases, integrations, reporting systems, communication tools), even if they refuse to name specific vendors due to security. Extract these functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations').
 
-- 'Pain': Extract their state of diagnostic avoidance or operational inertia if they claim there is no specific pain point (e.g., 'Operational transparency and disclosure limits').
+- 'Pain': Extract their state of diagnostic avoidance or operational inertia if they claim there is no specific pain point (e.g., 'Operational transparency and disclosure limits'). Do NOT invent clinical pain.
 
-- 'Fear': STRICT NO-HALLUCINATION RULE. Identify high-stakes human and professional liabilities. If none are explicitly stated or if the client actively avoids sharing concerns, you MUST output 'Not yet confirmed' or 'None'. Do NOT deduce or label their non-disclosure/security constraints as a "fear".
+- 'Fear': STRICT NO-EXTRAPOLATION RULE. Identify high-stakes human and professional liabilities. If none are explicitly stated or if the client actively avoids sharing concerns, you MUST output 'Not yet confirmed' or 'None'. Do NOT label their non-disclosure/security constraints as a "fear" or "blind spot".
 
 - OPERATIONAL DIAGNOSIS STRUCTURING:
   * Pain: Active business/operational consequences.
-  * Root Causes: Technical reasons behind the pain. If unknown due to security, categorize strictly as "Not yet confirmed".
-  * Limits (Constraints): Human, organizational, or security barriers (e.g., 'Information-security rules prevent naming systems').
+  * Root Causes: Technical reasons behind the pain. If unknown due to security, write strictly: "Not yet confirmed".
+  * Limits (Constraints): Security or organizational barriers (e.g., 'Information-security rules prevent naming systems').
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
 """
@@ -157,11 +156,11 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State (Already Filled): {json.dumps(current_slots)}\n"
         f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
         "TASK:\n"
-        "1. Analyze the input. Extract generic architecture terms if vendors are withheld.\n"
-        "2. If the client refuses to share pain points or claims everything is fine, log this in 'Pain' as an diagnostic limit or transparency gap.\n"
-        "3. Strictly set 'Fear' to 'Not yet confirmed' or 'None' if no explicit personal/corporate panic or risk is mentioned. Do NOT guess a fear.\n"
-        "4. Determine Decision Lens carefully. If they focus on governance, secrets, or info-sec, map strictly to 'Risk / Compliance-Locked'. If unknown, use 'Standard'.\n"
-        "5. Keep existing valid data. Do not blank it out.\n\n"
+        "1. Analyze the input. If they withhold vendors, extract functional anonymous terms ('databases, reporting tools') into 'Tech'.\n"
+        "2. If they avoid sharing pain points, log this in 'Pain' as 'Operational transparency and disclosure limits'. Do not assume sales/revenue pains.\n"
+        "3. Set 'Fear' strictly to 'Not yet confirmed' or 'None' if no explicit personal/corporate anxiety is stated. Do NOT invent 'blind spots'.\n"
+        "4. Determine Decision Lens carefully. If they focus on governance, secrets, or info-sec, map strictly to 'Risk / Compliance-Locked'. If unknown, use 'Standard' or 'Strategic'.\n"
+        "5. Preserve previously extracted values. Do not empty them.\n\n"
         "Format response as JSON with keys: slots, tags, ai_guidance."
     )
 
@@ -173,7 +172,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt_analyse}
             ],
-            temperature=0.2
+            temperature=0.1
         )
         result = json.loads(response.choices[0].message.content)
         
@@ -196,7 +195,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
             for pk in possible_keys:
                 if pk in new_tags:
                     incoming_tag = str(new_tags[pk]).strip()
-                    if incoming_tag not in ["", "Standard", "null", "undefined"]:
+                    if incoming_tag not in ["", "null", "undefined"]:
                         st.session_state.tags[target_key] = incoming_tag
                         break
             
@@ -304,7 +303,6 @@ if st.session_state.stage == 4:
             st.balloons()
             with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
                 
-                # Check for confirmed inputs to customize outputs
                 root_cause_val = st.session_state.slots.get('RootCauses', 'Not yet confirmed')
                 is_unconfirmed = "not yet confirmed" in root_cause_val.lower() or "discovery" in root_cause_val.lower()
                 
@@ -313,7 +311,7 @@ if st.session_state.stage == 4:
                 
                 prompt_final = f"""
                 Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). 
-                Analyze this profile STRICTLY using the provided parameters:
+                Analyze this profile STRICTLY using the provided parameters. Do NOT assume, extrapolate, or invent details:
                 
                 - Role: {st.session_state.slots['Role']}
                 - Exact Company Size: {st.session_state.slots['CompanySize']}
@@ -325,24 +323,32 @@ if st.session_state.stage == 4:
                 - Extracted Fear: {st.session_state.tags.get('Fear', 'None')}
                 - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Standard')}
 
-                CRITICAL STABILITY RULES (PREVENT CONTAMINATION):
-                1. STRICT TOOL BLOCK: Do NOT name or assume systems like HubSpot or PostgreSQL unless explicitly written in 'Tech'. Use generic anonymous terms instead (e.g. "existing systems").
-                2. STRICT TERMINOLOGY BLOCK: If 'Pain' or 'Fear' do NOT explicitly mention "sales", "renewal", "churn", or "retention", do NOT use these words. Align the narrative with their focus on governance, security, and process compliance.
-                3. NO INVENTED FEARS: If 'Fear' is 'None' or 'Not yet confirmed', treat it as an absence of verified operational panic.
+                CRITICAL STRUCTURAL RULES (PRUDENCE & INTELLECTUAL HONESTY):
+                1. NO INVENTED TECH OR BRANDS: Do NOT use software names (HubSpot, Salesforce, PostgreSQL) unless explicitly written in 'Tech'. Speak strictly of "existing systems", "reporting assets" or "databases" as anonymized.
+                2. NO SALES OR REVENUE HALLUCINATIONS: If 'Pain' or 'Fear' do NOT explicitly mention "sales", "revenue", "churn", or "customers", you are STRICTLY FORBIDDEN from writing these words or referencing commercial growth.
+                3. PRUDENT CAUSALITY CHAIN: If the Root Cause is unconfirmed, write: "Current operational visibility is insufficient to confirm the underlying causes." or "Limited information prevents confirmation of structural bottlenecks." Do not assume or invent operational patterns.
+                4. REALISTIC RECOMMENDATIONS: Because details are restricted, do NOT recommend heavy, intrusive, or premature actions (e.g. "Initiate an internal audit", "Deploy anonymous role-based reporting", "Process redesign workshop", "Cross-department task force"). Only recommend light, safe, discovery-driven frameworks:
+                   * Discovery workshop
+                   * Architecture mapping
+                   * Data-flow assessment
+                   * Stakeholder interviews
+                5. RECOMMENDED STRATEGY: This must strictly be "Discovery & Architecture Mapping" under these circumstances.
+                6. CORE FEAR TREATMENT: If 'Fear' is 'None' or 'Not yet confirmed', write exactly "Not yet confirmed" or "Insufficient information to determine executive concerns". Do not deduce fear from limits.
 
-                Generate your report strictly incorporating these details and layout:
+                Generate your report strictly following this layout:
                 - Section 1: Strategic DNA Matrix (strictly display the extracted values).
-                - Section 2: Strategic Causality Chain.
-                - Section 3: Executive Blueprint Narrative.
-                - Section 4: Executive Recommendation callout box.
-                - Section 5: Expected Business Impact.
-                - Section 6: Immediate Priorities.
+                - Section 2: Strategic Causality Chain (use simple vertical arrow blocks showing Fear -> Root Cause -> Operational Pain -> Recommended Strategy).
+                - Section 3: Executive Blueprint Narrative (calm, risk-aware, zero hype).
+                - Section 4: Executive Recommendation callout box (emphasizing starting with a structured discovery phase before defining any roadmap).
+                - Section 5: Expected Business Impact (highly aligned with mapping and verification).
+                - Section 6: Immediate Priorities (must strictly be: Map current systems, Validate integration points, Identify reporting dependencies, Confirm executive objectives).
                 """
 
                 try:
                     final_diag = client.chat.completions.create(
                         model="gpt-4o",
-                        messages=[{"role": "user", "content": prompt_final}]
+                        messages=[{"role": "user", "content": prompt_final}],
+                        temperature=0.1
                     ).choices[0].message.content
 
                     st.markdown(f"""
@@ -379,7 +385,7 @@ if st.session_state.stage == 4:
                         st.markdown(f"""
                         * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
                         * **Business Risk:** {"🟡 **MEDIUM**" if is_unconfirmed else "🔴 **HIGH**"}
-                        * **Transformation Strategy:** {"Structured operational discovery & mapping" if is_unconfirmed else "Lightweight secure integration"}
+                        * **Transformation Strategy:** {"Discovery & Architecture Mapping" if is_unconfirmed else "Lightweight secure integration"}
                         """)
 
                 except Exception as e:
