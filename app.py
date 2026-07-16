@@ -18,28 +18,27 @@ You are an expert B2B sales psychologist and senior enterprise consultant. Your 
 Instead of a single flat tag, you must analyze the prospect's profile across two distinct operational axes:
 
 1. Buying Style (Decision Lens): This answers: "What argument will convince this person to sign?"
-   - Commercial / Revenue-Driven: Convicted by renewal rates, forecasting confidence, pipeline speed, and sales team efficiency (e.g., VP of Sales, Chief Revenue Officer). Even if they mention technical databases, if their goal is revenue, they belong here.
-   - Strategic / Growth-Driven: Convicted by market share, business model scalability, and long-term vision (e.g., CEO, Founders).
-   - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, and failure prevention (e.g., CFO, Legal Counsel).
-   - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems (CTO, Lead Architect) and who care about clean code, scalability, and stack modernism.
+   - Commercial / Revenue-Driven: Convicted by renewal rates, forecasting confidence, pipeline speed, and sales team efficiency.
+   - Strategic / Growth-Driven: Convicted by market share, business model scalability, and long-term vision.
+   - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, and failure prevention.
+   - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems.
 
-2. Tech Maturity: Assess the organizational complexity of their current tools. Do NOT output generic terms like 'Medium' or 'Low'. Instead, build a descriptive hybrid state representation:
-   - Formulate as: "Hybrid Stack - Modern SaaS ([Modern Tools]) with Legacy Database ([Legacy Tools]) dependency" or "Modern Agile - SaaS Native with data pipeline gaps".
+2. Tech Maturity: Assess the organizational complexity of their current tools. Do NOT output generic terms like 'Medium' or 'Low'. Instead, build a descriptive hybrid state representation (e.g., "Hybrid Stack - Mixed internal and third-party managed tools with varying ages").
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
-- 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
+- 'companysize': Must strictly reflect the prospect's employer scale. If they refuse to give numbers, extract the qualitative context (e.g., 'Undefined size; multi-unit structure').
 
-- 'Fear': Identify raw, high-stakes human and professional liabilities expressed by the executive. Reject abstract concepts like "losing competitive advantage" or "falling behind modern expectations." Focus strictly on:
-  * "Being surprised by a major renewal loss"
-  * "Making strategic decisions based on unreliable forecasts"
-  * "Losing executive or board confidence because pipeline data cannot be trusted"
+- 'Tech': STRICT EXTRACTION RULE. Do NOT leave this slot 'Empty' if the client mentions functional components (e.g., databases, integrations, reporting systems, communication tools), even if they refuse to name specific vendors or brands due to security. Extract these functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations').
 
-- OPERATIONAL DIAGNOSIS STRUCTURING (STRICTLY DISCONNECTED):
-  * Pain: Strictly limit this to the active, business/operational consequences expressed (e.g., 'Unreliable executive reporting and operational forecasting').
+- 'Pain': STRICT EXTRACTION RULE. If the client claims there is no specific pain point or refuses to discuss risks, do NOT leave this slot 'Empty'. Extract their state of diagnostic avoidance or operational inertia (e.g., 'Systemic reporting silo risks under investigation / Diagnostic avoidance').
+
+- 'Fear': Identify high-stakes human and professional liabilities. If none are stated, deduce the underlying vulnerability of their current posture (e.g., 'Risk of operational blind spots due to non-disclosure').
+
+- OPERATIONAL DIAGNOSIS STRUCTURING:
+  * Pain: Strictly limit this to the active, business/operational consequences expressed or diagnosed.
   * Root Causes: The structural or technical reasons behind the Pain. 
-    - CRITICAL: Do NOT copy communication constraints here. If the user refuses to share technical details (e.g., "I cannot disclose our systems due to info-sec"), the Root Cause MUST be categorized as "Not yet confirmed" or "Requires additional discovery".
-  * Limits (Constraints): The human, organizational, communication, or historical barriers that restrict possible solutions or disclosure.
-    - Information-security rules, NDAs, or "refusal to name vendors" MUST be classified under 'Limits', NEVER under 'Root Causes'.
+    - CRITICAL: If the user refuses to share technical details, the Root Cause MUST be categorized as "Not yet confirmed (due to strict information security limits)".
+  * Limits (Constraints): The human, organizational, communication, or security barriers (e.g., 'Refusal to name vendors due to info-sec protocols').
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
 """
@@ -146,13 +145,10 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State (Already Filled): {json.dumps(current_slots)}\n"
         f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
         "TASK:\n"
-        "1. Analyze the client's input. Identify technical facts AND emotional signals.\n"
-        "2. Update the Slots and Psychological Tags. CRITICAL RULES:\n"
-        "   - Parse Company Size (e.g., 'medium sized company', '10 employees') into 'CompanySize'.\n"
-        "   - Parse the job title/function into 'Role'. Never mix them up.\n"
-        "   - You MUST PRESERVE and carry forward all previously filled slots if they are not explicitly replaced. Do NOT overwrite existing data with 'Empty'.\n"
-        "   - If the prospect expresses that security rules prevent naming systems, classify this under 'Limits'. Set 'RootCauses' strictly to 'Not yet confirmed' or 'Requires additional discovery'.\n"
-        "3. Formulate the next strategic recommendation for the consultant.\n\n"
+        "1. Analyze the client's input. If they express general terms (like 'databases', 'integrations') but withhold names, extract those generic terms into 'Tech'. Do NOT leave it empty.\n"
+        "2. If they avoid defining a pain point, formulate their challenge under 'Pain' as an diagnostic block or operational transparency risk (e.g., 'Information silos and restricted visibility due to structural non-disclosure').\n"
+        "3. Preserve previously extracted values. If a slot was previously filled with an informative value (not 'Empty'), do NOT replace it with 'Empty' or 'None' just because the latest input is brief (like 'yes').\n"
+        "4. Formulate the next strategic recommendation for the consultant.\n\n"
         "Format your response STRICTLY as a JSON object with these exact keys:\n"
         "{\n"
         "  \"slots\": { \"Role\": \"...\", \"CompanySize\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"RootCauses\": \"...\", \"Limits\": \"...\" },\n"
@@ -173,13 +169,18 @@ def analyze_with_openai(user_text, context_web, current_stage):
         )
         result = json.loads(response.choices[0].message.content)
         
-        # Update Slots safely
+        # Update Slots strictly: NEVER overwrite a filled slot with "Empty", "None", or blank
         new_slots = result.get("slots", {})
         for key in st.session_state.slots:
-            if key in new_slots and new_slots[key] not in ["Empty", "", "None", "Keep existing or update"]:
-                st.session_state.slots[key] = new_slots[key]
+            if key in new_slots:
+                incoming_val = str(new_slots[key]).strip()
+                # Only update if the incoming value has real data AND we aren't overwriting good data with generic empty terms
+                if incoming_val not in ["Empty", "", "None", "Keep existing", "null", "undefined"]:
+                    # Prevent overwriting a strong existing slot with a weaker one on brief steps (like yes)
+                    if st.session_state.slots[key] == "Empty" or len(incoming_val) > len(str(st.session_state.slots[key])):
+                        st.session_state.slots[key] = incoming_val
         
-        # Robust Tag mapping to align with state definitions
+        # Robust Tag mapping
         new_tags = result.get("tags", {})
         for target_key, possible_keys in {
             "Lens": ["BuyingStyle", "Buying Style", "Lens", "decision_lens"],
@@ -187,19 +188,17 @@ def analyze_with_openai(user_text, context_web, current_stage):
             "TechMaturity": ["TechMaturity", "Tech Maturity", "tech_maturity"]
         }.items():
             for pk in possible_keys:
-                if pk in new_tags and new_tags[pk] not in ["None", "", "Standard"]:
-                    st.session_state.tags[target_key] = new_tags[pk]
-                    break
+                if pk in new_tags:
+                    incoming_tag = str(new_tags[pk]).strip()
+                    if incoming_tag not in ["None", "", "Standard", "null", "undefined"]:
+                        st.session_state.tags[target_key] = incoming_tag
+                        break
         
-        # Strategic fallback logic for Decision Lens based on Role keywords
+        # Override decision lens for evasive executive roles to ensure safety
         current_role = str(st.session_state.slots.get("Role", "")).upper()
-        non_tech_roles = ["SALES", "VP", "MARKETING", "CFO", "CEO", "FOUNDER", "DIRECTOR", "EXECUTIVE", "PRESIDENT", "MANAGER"]
-
-        if st.session_state.tags["Lens"] == "Standard":
-            if any(role in current_role for role in non_tech_roles):
-                st.session_state.tags["Lens"] = "Commercial / Revenue-Driven"
-            elif any(tech_role in current_role for tech_role in ["CTO", "ARCHITECT", "DEVELOPER", "ENGINEER"]):
-                st.session_state.tags["Lens"] = "Technical / Architecture-Driven"
+        if "ATTENTION" in current_role or "EXECUTIVE" in current_role or "MANAGER" in current_role:
+            if st.session_state.tags["Lens"] == "Standard":
+                st.session_state.tags["Lens"] = "Risk / Compliance-Locked"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
