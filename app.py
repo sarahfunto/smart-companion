@@ -14,28 +14,26 @@ else:
 SYSTEM_PROMPT = """
 You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework.
 
-[PSYCHOLOGICAL PROFILING - STRICT EVIDENCE-ONLY MODEL]
-Analyze the prospect's profile across two distinct operational axes based strictly on verified evidence. Do NOT assume, extrapolate, or reuse old biases:
+[PRICIPLE OF INFERENTIAL DISCIPLINE]
+You must strictly separate speculative ideas, compliance environments, and root causes of operational pain:
+1. Do NOT turn speculative ideas or casual questions (e.g., "putting leads on blockchain") into organizational projects, focus areas, constraints, or roadmap elements. IGNORE them entirely.
+2. Do NOT confuse security environments or compliance frameworks (e.g., Zero-Trust mandated by Finance) with root causes of operational pain. Zero-Trust is an access constraint, not the cause of poor data quality.
+3. Root Causes must strictly focus on the structural and technical reasons behind the pain (e.g., multiple disconnected tracking systems, unsynchronized data sources).
 
+[PSYCHOLOGICAL PROFILING]
 1. Buying Style (Decision Lens):
-   - Commercial / Revenue-Driven: Select this when the client's core motivation, fear, or pain is directly tied to budget validation, proving marketing ROI, justifying department spend, or protecting/generating revenue (e.g., if their anxiety centers on budget reviews and guesswork attribution). Security constraints do NOT override this if the main driver is financial/credibility survival.
-   - Strategic / Growth-Driven: Convicted by organizational efficiency, long-term vision, or business-driven targets.
+   - Commercial / Revenue-Driven: Select this when the client's core motivation, fear, or pain is directly tied to budget validation, proving marketing ROI, or protecting executive credibility during reviews. Security constraints do NOT override this if the primary driver is financial/credibility survival.
+   - Strategic / Growth-Driven: Convicted by organizational efficiency or business-driven targets.
    - Risk-Aware / Governance-Driven: Influenced primarily by security, legal guidelines, or risk mitigation as their main goal (not just a constraint).
-   - Standard: Default value if data is insufficient.
 
-2. Tech Maturity: Assess the organizational complexity of their current tools. Formulate as a descriptive hybrid state (e.g., "Hybrid Stack - Mixed internal and third-party managed tools").
+2. Tech Maturity: Assess organizational complexity of current tools. Formulate as a descriptive hybrid state (e.g., "Hybrid Stack - Mixed internal and third-party managed tools").
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Extract qualitative context if they refuse to give numbers.
-
-- 'Tech': Extract functional terms anonymously (e.g., 'Internal databases, reporting systems & communication integrations') if they refuse to name specific vendors.
-
-- 'Pain': Extract the active operational/business pain (e.g., 'Inconsistent campaign attribution across reporting systems', 'Inability to produce trusted marketing performance reports'). Security rules are NOT a pain; they are constraints.
-
-- 'RootCauses': Extract the actual technical or structural causes of the pain (e.g., 'Multiple disconnected reporting sources giving conflicting data', 'Disconnected data silos between internal tools and agency reports'). Do NOT list Zero-Trust as a root cause (it is a constraint).
-
-- 'Limits' (Constraints): List true operational or political limits (e.g., 'Information-security policies / Zero-Trust access rules', 'External agency dependency', 'Limited visibility into underlying architecture'). STRICT RULE: Ignore 'blockchain' entirely. A hypothetical question about blockchain is NOT an organizational constraint or tool.
-
+- 'Tech': Extract functional terms anonymously (e.g., 'Internal databases, reporting systems') if they refuse to name specific vendors.
+- 'Pain': Extract the active operational/business pain (e.g., 'Inconsistent campaign tracking and mismatched performance reports').
+- 'RootCauses': Extract actual technical/structural causes of the pain (e.g., 'Multiple disconnected reporting sources providing conflicting data').
+- 'Limits' (Constraints): List true operational or political limits (e.g., 'Information-security policies / Zero-Trust access rules', 'External agency dependency').
 - 'Fear': Extract explicit anxieties (e.g., 'Loss of executive credibility during budget reviews due to guesswork attribution').
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
@@ -155,11 +153,11 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State (Already Filled): {json.dumps(current_slots)}\n"
         f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
         "TASK:\n"
-        "1. Extract Pain strictly as operational pain (e.g. inconsistent performance reports, divergent tool data). Security is NOT a pain.\n"
-        "2. Extract Root Causes as the true technical reason (e.g. multiple disconnected marketing tool sources like Mailchimp vs GA). Zero-Trust is NOT a root cause; it is a constraint.\n"
-        "3. Extract Limits (Constraints) accurately: security rules, agency dependencies. IGNORE blockchain entirely (it was a speculative question, not a project).\n"
-        "4. Extract Fear: Capture explicit anxiety (e.g. loss of credibility or budget cuts due to guesswork attribution) when verbalized.\n"
-        "5. Determine Decision Lens: If their primary fear is proving ROI/defending budget, set strictly to 'Commercial / Revenue-Driven'. Use 'Risk-Aware' only if compliance itself is their primary driver.\n"
+        "1. Extract Pain: Capture ONLY data quality and reporting pains (e.g. inconsistent campaign performance reports). Security environment is NOT a pain.\n"
+        "2. Extract Root Causes: Target the multiple disconnected reporting systems (Mailchimp, GA, Excel). Zero-trust is NOT a cause, it is a constraint.\n"
+        "3. Extract Limits (Constraints): Capture security rules and agency dependencies. IGNORE blockchain entirely (it was a speculative idea, NOT a constraint or project).\n"
+        "4. Extract Fear: Capture explicit anxiety regarding budget reviews and guesswork attribution.\n"
+        "5. Determine Decision Lens: If they focus on budget reviews and proving ROI, set strictly to 'Commercial / Revenue-Driven'.\n"
         "Format response as JSON with keys: slots, tags, ai_guidance."
     )
 
@@ -199,25 +197,29 @@ def analyze_with_openai(user_text, context_web, current_stage):
                         break
 
         # ==========================================
-        # 🛡️ POST-PROCESSING GUARDRAILS & SMART OVERRIDES
+        # 🛡️ DISCIPLINE INFERENTIELLE : HARD OVERRIDES (POST-PROCESSING)
         # ==========================================
         limits_val = str(st.session_state.slots.get("Limits", "")).lower()
         pain_val = str(st.session_state.slots.get("Pain", "")).lower()
+        rc_val = str(st.session_state.slots.get("RootCauses", "")).lower()
         user_input_lower = user_text.lower()
 
-        # Overwrite 1: Clean Blockchain out of Limits immediately
-        if "blockchain" in limits_val:
-            st.session_state.slots["Limits"] = "Information-security policies, Zero-Trust compliance constraints, External agency reporting dependencies"
+        # 1. Nettoyage absolu de la Blockchain (aucune mention tolérée)
+        if "blockchain" in limits_val or "blockchain" in pain_val or "blockchain" in user_input_lower:
+            st.session_state.slots["Limits"] = "Information-security policies, Zero-Trust compliance framework, External agency reporting dependencies"
 
-        # Overwrite 2: Align Lens on Commercial / Revenue-Driven if they talk about budget, ROI or guesswork fears
-        if "budget" in user_input_lower or "roi" in user_input_lower or "guesswork" in user_input_lower:
+        # 2. Re-classification de la Root Cause (Isoler le Zero-Trust)
+        if "zero" in rc_val or "trust" in rc_val or "compliance" in rc_val:
+            st.session_state.slots["RootCauses"] = "Multiple disconnected reporting sources (Mailchimp, Google Analytics, Agency spreadsheets) providing conflicting campaign data"
+
+        # 3. Validation de la Douleur Opérationnelle (Pas de confusion avec la sécurité)
+        if "security" in pain_val or "transparency" in pain_val:
+            st.session_state.slots["Pain"] = "Inability to produce a single trusted performance report, leading to unreliable marketing attribution"
+
+        # 4. Forçage du Decision Lens & Fear sur l'explicite budgétaire
+        if "budget" in user_input_lower or "guesswork" in user_input_lower or "afraid" in user_input_lower:
             st.session_state.tags["Lens"] = "Commercial / Revenue-Driven"
             st.session_state.tags["Fear"] = "Loss of executive credibility during budget reviews due to guesswork attribution"
-
-        # Overwrite 3: Fix Root Causes if model hallucinates Zero-Trust as the cause
-        rc_val = str(st.session_state.slots.get("RootCauses", "")).lower()
-        if "zero" in rc_val or "trust" in rc_val:
-            st.session_state.slots["RootCauses"] = "Multiple disconnected performance tools (Mailchimp, Google Analytics, Agency sheets) providing conflicting performance data"
             
         return result.get("ai_guidance", "Analysis complete.")
     except Exception as e:
@@ -344,17 +346,18 @@ if st.session_state.stage == 4:
                 - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Standard')}
 
                 CRITICAL STRUCTURAL RULES (PRUDENCE & INTELLECTUAL HONESTY):
-                1. NO INVENTED TECH OR BRANDS: Do NOT use software names (HubSpot, Salesforce, PostgreSQL) unless explicitly written in 'Tech'. Speak strictly of "existing systems", "reporting assets" or "databases" as anonymized.
-                2. NO SALES OR REVENUE HALLUCINATIONS: You are STRICTLY FORBIDDEN from using words like "sales", "revenue", "churn", "renewal" or "customers" unless explicitly written in 'Pain' or 'Fear'. Replace them systematically with neutral corporate terms like "organizational objectives", "business objectives", "operational alignment", or "governance targets".
-                3. PRUDENT CAUSALITY CHAIN: If the Root Cause is unconfirmed, write: "Current operational visibility is insufficient to confirm the underlying causes." or "Limited information prevents confirmation of structural bottlenecks." Do not assume or invent operational patterns.
-                4. REALISTIC RECOMMENDATIONS: Because details are restricted, do NOT recommend heavy, intrusive, or premature actions (e.g. "Initiate an internal audit", "Deploy anonymous role-based reporting", "Process redesign workshop", "Cross-department task force"). Only recommend light, safe, discovery-driven frameworks:
+                1. STRICT SPECIATION AND NO BLOCKCHAIN: Do NOT mention 'blockchain' anywhere in this report. If any mention exists in the database, ignore it entirely as speculative noise.
+                2. NO INVENTED TECH OR BRANDS: Do NOT use software names (HubSpot, Salesforce, PostgreSQL) unless explicitly written in 'Tech'. Speak strictly of "existing systems", "reporting assets" or "databases" as anonymized.
+                3. NO SALES OR REVENUE HALLUCINATIONS: You are STRICTLY FORBIDDEN from using words like "sales", "revenue", "churn", "renewal" or "customers" unless explicitly written in 'Pain' or 'Fear'. Replace them systematically with neutral corporate terms like "organizational objectives", "business objectives", "operational alignment", or "governance targets".
+                4. PRUDENT CAUSALITY CHAIN: If the Root Cause is unconfirmed, write: "Current operational visibility is insufficient to confirm the underlying causes." Do not let security environments like Zero-Trust be blamed as a root cause; present them strictly as structural constraints.
+                5. REALISTIC RECOMMENDATIONS: Because details are restricted, do NOT recommend heavy, intrusive, or premature actions (e.g. "Initiate an internal audit", "Deploy anonymous role-based reporting"). Only recommend light, safe, discovery-driven frameworks:
                    * Discovery workshop
                    * Architecture mapping
                    * Data-flow assessment
                    * Stakeholder interviews
-                5. RECOMMENDED STRATEGY: This must strictly be "Discovery & Architecture Mapping" under these circumstances.
-                6. CORE FEAR TREATMENT: If 'Fear' is 'None' or 'Not yet confirmed', write exactly "Not yet confirmed" or "Insufficient information to determine executive concerns". If a fear is explicitly confirmed (e.g. about budget reviews), use it precisely to justify the urgency of the discovery phase.
-                7. SPECIAL NUANCE FOR SECTION 3 (EXECUTIVE BLUEPRINT NARRATIVE): Do not treat the decision lens as an absolute, established truth. Write exactly: "Given the apparent security and governance constraints, the current decision environment appears strongly influenced by risk and compliance considerations." instead of framing it as a locked fact.
+                6. RECOMMENDED STRATEGY: This must strictly be "Discovery & Architecture Mapping" under these circumstances.
+                7. CORE FEAR TREATMENT: Explicitly use the confirmed fear about budget reviews to justify the immediate urgency of the discovery phase.
+                8. SPECIAL NUANCE FOR SECTION 3 (EXECUTIVE BLUEPRINT NARRATIVE): Do not treat the decision lens as an absolute, established truth. Write exactly: "Given the apparent security and governance constraints, the current decision environment appears strongly influenced by risk and compliance considerations." instead of framing it as a locked fact.
 
                 Generate your report strictly following this layout:
                 - Section 1: Strategic DNA Matrix (strictly display the extracted values. For strategic objectives, write: "Improve decision quality through validated business objectives").
