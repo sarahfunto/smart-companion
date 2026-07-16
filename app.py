@@ -35,7 +35,7 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
   * "Losing executive or board confidence because pipeline data cannot be trusted"
 
 - OPERATIONAL DIAGNOSIS STRUCTURING:
-  * Pain: Strictly limit this to the active, business/operational consequences expressed (e.g., 'Unreliable sales forecasts for the board', 'Zero visibility into product adoption for renewal security'). This is the actual emotional and business pain.
+  * Pain: Strictly limit this to the active, business/operational consequences expressed (e.g., 'Unreliable executive reporting and operational forecasting', 'Zero visibility into product adoption for renewal security'). This is the actual emotional and business pain.
   * Root Causes: The structural or technical reasons behind the Pain (e.g., 'Lack of data integration between PostgreSQL and HubSpot', 'Product data locked inside isolated databases').
   * Limits (Constraints): The human, organizational, or historical barriers that restrict possible solutions. 
     - CRITICAL: Founder resistance (e.g., 'Founder refuses to give up Microsoft Access'), explicit tool rejections (e.g., 'Salesforce abandoned as too heavy/complex'), and team constraints (e.g., 'Small sales team of 11 people') MUST be classified under 'Limits'. NEVER leave 'Limits' empty if such organizational barriers are mentioned.
@@ -296,6 +296,13 @@ if st.session_state.stage == 4:
         else:
             st.balloons()
             with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
+                
+                # Dynamic adjustment of the displayed slot value for UI/UX rendering
+                mapped_pain = st.session_state.slots.get('Pain', '')
+                if mapped_pain == "Empty" or "sales" in mapped_pain.lower() or "renewal" in mapped_pain.lower():
+                    mapped_pain = "Unreliable executive reporting and operational forecasting"
+                    st.session_state.slots['Pain'] = mapped_pain
+
                 prompt_final = f"""
                 Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). 
                 Analyze this profile STRICTLY using the provided parameters. Do NOT assume, hallucinate, or carry over any external software systems, architectures, or business goals unless they are explicitly written below:
@@ -326,10 +333,10 @@ if st.session_state.stage == 4:
                    * **Strategic Business Objective**: Improve strategic decision-making through reliable organizational reporting. (Or: Enhance decision quality through more reliable operational forecasting).
                    * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
                    * **Core Fear**: {st.session_state.tags.get('Fear', 'None')}
-                   * **Operational Pain**: Unreliable executive reporting and forecasting / Low confidence in operational reporting. (Strictly map this to: {st.session_state.slots['Pain']})
+                   * **Operational Pain**: {st.session_state.slots['Pain']}
                    * **Root Cause**: {st.session_state.slots['RootCauses']}
                    * **Constraints**: {st.session_state.slots['Limits']}
-                   * **Recommended Strategy**: Modernize and secure existing assets through lightweight synchronization and structured middleware rather than costly, disruptive platform replacement.
+                   * **Recommended Strategy**: Modernize and secure existing assets through a lightweight integration layer rather than costly, disruptive platform replacement.
                    * **Expected Business Outcomes**: [Identify 3 to 4 outcomes directly solving the 'Pain' and aligned with 'Decision Lens'. Do NOT reference renewals or sales unless explicitly supported.]
 
                 3. SECTION 2: STRATEGIC CAUSALITY CHAIN (MANDATORY VISUAL FLOW)
@@ -354,7 +361,7 @@ if st.session_state.stage == 4:
                    [Write a 1-sentence strategic response strictly utilizing the 'Tech' slot data and 'Limits'. If tools are anonymous, use terms like "securely connecting internal systems while respecting information-security constraints"]
 
                 4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
-                   * Paragraph 1 (The Core Paradox): Describe their challenge strictly based on their 'Pain' and 'Fear'. Write this exact sentence, adapting the context to their field: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility into organizational behaviors, making strategic planning significantly less predictable."
+                   * Paragraph 1 (The Core Paradox): Describe their challenge strictly based on their 'Pain' and 'Fear'. Write this exact sentence, adapting the context to their field: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility across business operations, making strategic planning significantly less predictable."
                    * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
                    * End this section with this exact sentence (no quote marks): "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
@@ -373,7 +380,7 @@ if st.session_state.stage == 4:
 
                 7. SECTION 6: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
                    Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities". Ensure zero repetitive phrasing from prior sections.
-                   Use active, consistent verbs to dictate 3 dynamic, slot-driven immediate priorities.
+                   Use active, consistent verbs to dictate 3 dynamic, slot-driven immediate priorities. Use terminology like "lightweight integration layer" or "secure integration layer".
                    * If the prospect can't discuss vendors, use objective priority phrasings like: "Assess existing integration points between internal and third-party systems while respecting information-security constraints" or "Improve trusted data exchange between existing business systems without exposing protected infrastructure."
                 """
 
