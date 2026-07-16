@@ -18,7 +18,7 @@ You are an expert B2B sales psychologist and senior enterprise consultant. Your 
 Analyze the prospect's profile across two distinct operational axes based strictly on verified evidence. Do NOT assume, extrapolate, or reuse old biases:
 
 1. Buying Style (Decision Lens):
-   - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, governance, process compliance, and failure prevention. (Select this if the prospect emphasizes confidentiality, security rules, and governance constraints).
+   - Risk-Aware / Governance-Driven: Influenced strongly by security, legal guidelines, data privacy, compliance, and risk mitigation. (Select this if the prospect emphasizes confidentiality, security rules, and governance constraints).
    - Strategic / Growth-Driven: Convicted by organizational efficiency, long-term vision, or business-driven targets.
    - Standard: Default value if the client is highly evasive or data is insufficient to safely determine a lens. Do NOT default to Commercial.
    - Commercial / Revenue-Driven: ONLY if they explicitly talk about revenue, pipelines, sales, or renewals. Do NOT use if they talk about governance, privacy, or security.
@@ -159,7 +159,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "1. Analyze the input. If they withhold vendors, extract functional anonymous terms ('databases, reporting tools') into 'Tech'.\n"
         "2. If they avoid sharing pain points, log this in 'Pain' as 'Operational transparency and disclosure limits'. Do not assume sales/revenue pains.\n"
         "3. Set 'Fear' strictly to 'Not yet confirmed' or 'None' if no explicit personal/corporate anxiety is stated. Do NOT invent 'blind spots'.\n"
-        "4. Determine Decision Lens carefully. If they focus on governance, secrets, or info-sec, map strictly to 'Risk / Compliance-Locked'. If unknown, use 'Standard'. Do NOT use 'Commercial' unless explicitly verified.\n"
+        "4. Determine Decision Lens carefully. If they focus on governance, secrets, or info-sec, map strictly to 'Risk-Aware / Governance-Driven'. If unknown, use 'Standard'. Do NOT use 'Commercial' unless explicitly verified.\n"
         "5. Preserve previously extracted values. Do not empty them.\n\n"
         "Format response as JSON with keys: slots, tags, ai_guidance."
     )
@@ -206,10 +206,9 @@ def analyze_with_openai(user_text, context_web, current_stage):
         role_val = str(st.session_state.slots.get("Role", "")).lower()
         pain_val = str(st.session_state.slots.get("Pain", "")).lower()
 
-        # Overwrite 1: Force Lens to Risk/Compliance or Standard if evasive / security heavy
+        # Overwrite 1: Force Lens to Risk-Aware / Governance-Driven if evasive / security heavy
         if "security" in limits_val or "security" in pain_val or "disclos" in limits_val or "attention" in role_val:
-            if st.session_state.tags["Lens"] in ["Commercial / Revenue-Driven", "Standard"]:
-                st.session_state.tags["Lens"] = "Risk / Compliance-Locked"
+            st.session_state.tags["Lens"] = "Risk-Aware / Governance-Driven"
 
         # Overwrite 2: Force Fear to Not yet confirmed if it tries to hallucinate blind spots out of non-disclosure
         current_fear = str(st.session_state.tags.get("Fear", "")).lower()
@@ -351,11 +350,12 @@ if st.session_state.stage == 4:
                    * Stakeholder interviews
                 5. RECOMMENDED STRATEGY: This must strictly be "Discovery & Architecture Mapping" under these circumstances.
                 6. CORE FEAR TREATMENT: If 'Fear' is 'None' or 'Not yet confirmed', write exactly "Not yet confirmed" or "Insufficient information to determine executive concerns". Do not deduce fear from limits.
+                7. SPECIAL NUANCE FOR SECTION 3 (EXECUTIVE BLUEPRINT NARRATIVE): Do not treat the decision lens as an absolute, established truth. Write exactly: "Given the apparent security and governance constraints, the current decision environment appears strongly influenced by risk and compliance considerations." instead of framing it as a locked fact.
 
                 Generate your report strictly following this layout:
                 - Section 1: Strategic DNA Matrix (strictly display the extracted values. For strategic objectives, write: "Improve decision quality through validated business objectives").
                 - Section 2: Strategic Causality Chain (use simple vertical arrow blocks showing Fear -> Root Cause -> Operational Pain -> Recommended Strategy).
-                - Section 3: Executive Blueprint Narrative (calm, risk-aware, zero hype, strictly neutral).
+                - Section 3: Executive Blueprint Narrative (calm, risk-aware, zero hype, strictly neutral, employing the exact decision lens nuance instruction above).
                 - Section 4: Executive Recommendation callout box (emphasizing starting with a structured discovery phase before defining any roadmap).
                 - Section 5: Expected Business Impact (highly aligned with mapping and verification).
                 - Section 6: Immediate Priorities (must strictly be: Map current systems, Validate integration points, Identify reporting dependencies, Confirm executive objectives).
