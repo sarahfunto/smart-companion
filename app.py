@@ -23,10 +23,19 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
    - Risk / Compliance-Locked: Convicted by security, legal audits, data privacy, and failure prevention (e.g., CFO, Legal Counsel).
    - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems (CTO, Lead Architect) and who care about clean code, scalability, and stack modernism.
 
-2. Tech Maturity: Assess the organizational complexity of their current tools (Low, Medium, High).
+2. Tech Maturity: Assess the organizational complexity of their current tools. Do NOT output a single word like 'Medium' or 'Low'. Instead, categorize using descriptive hybrid states:
+   - "Hybrid (Modern tools with legacy bottlenecks)" - if they combine modern platforms (HubSpot, Slack) with archaic processes (Microsoft Access, Excel-heavy workflows).
+   - "Legacy Heavy (Fragile on-premise / siloed systems)" - if they rely heavily on unsupported software.
+   - "Modern Agile (SaaS Native with data pipeline gaps)" - if they have modern tools but lack automated synchronization.
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
+
+- 'Fear': Identify high-stakes business risks and emotional vulnerabilities. Reject abstract buzzwords like "falling behind modern expectations" or "general inefficiency." Capture highly specific, gut-wrenching professional liabilities such as:
+  * "Unexpected loss of major renewals due to invisible usage signals"
+  * "Board losing confidence in revenue forecasts"
+  * "C-Suite resistance to data-driven commercial strategies"
+  * "Wasted sales team capacity spent fighting legacy architecture"
 
 - OPERATIONAL DIAGNOSIS STRUCTURING:
   * Pain: Strictly limit this to the active, business/operational consequences expressed (e.g., 'Unreliable sales forecasts for the board', 'Zero visibility into product adoption for renewal security'). This is the actual emotional and business pain.
@@ -70,6 +79,7 @@ st.markdown("""
         border: 2px solid #134074;
         color: #EEF4F8;
         margin-top: 15px;
+        line-height: 1.6;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -77,7 +87,7 @@ st.markdown("""
 # SESSION STATE INITIALIZATION
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
-if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'None'}
+if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'None', 'TechMaturity': 'Standard'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial client statement to start the strategic analysis."
 
@@ -112,7 +122,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "Format your response STRICTLY as a JSON object with these exact keys:\n"
         "{\n"
         "  \"slots\": { \"Role\": \"...\", \"CompanySize\": \"...\", \"Tech\": \"...\", \"Pain\": \"...\", \"RootCauses\": \"...\", \"Limits\": \"...\" },\n"
-        "  \"tags\": { \"Lens\": \"...\", \"Fear\": \"...\" },\n"
+        "  \"tags\": { \"Lens\": \"...\", \"Fear\": \"...\", \"TechMaturity\": \"...\" },\n"
         "  \"ai_guidance\": \"Provide tactical, emotionally aware guidance here.\"\n"
         "}"
     )
@@ -235,6 +245,9 @@ with col2:
     lens_class = "status-box-filled" if st.session_state.tags['Lens'] != "Standard" else "status-box-empty"
     st.markdown(f"<div class='{lens_class}'><b>Decision Filter (Lens):</b> {st.session_state.tags['Lens']}</div>", unsafe_allow_html=True)
     
+    tech_class = "status-box-filled" if st.session_state.tags.get('TechMaturity', 'Standard') != "Standard" else "status-box-empty"
+    st.markdown(f"<div class='{tech_class}'><b>Tech Maturity:</b> {st.session_state.tags.get('TechMaturity', 'Standard')}</div>", unsafe_allow_html=True)
+
     fear_class = "status-box-filled" if st.session_state.tags['Fear'] != "None" else "status-box-empty"
     st.markdown(f"<div class='{fear_class}'><b>Identified Core Fear (Fear):</b> {st.session_state.tags['Fear']}</div>", unsafe_allow_html=True)
 
@@ -264,21 +277,26 @@ if st.session_state.stage == 4:
                 - Exact company Size: {st.session_state.slots['CompanySize']}
                 - Technical Stack: {st.session_state.slots['Tech']}
                 - Core Pain: {st.session_state.slots['Pain']}
-                - Psychological Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
+                - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
+                - Extracted Constraints & Political Limits: {st.session_state.slots['Limits']}
+                - Decision Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
                 - Extracted Fear: {st.session_state.tags.get('Fear', 'Operational Inefficiency')}
+                - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Medium')}
 
-                You must write a highly tailored, 3-paragraph diagnostic. Follow these constraints strictly:
+                You must write a highly tailored, incisive 3-paragraph diagnostic. Follow these instructions strictly to avoid generic "LLM boilerplate":
 
-                1. NO TECH-BABBLE FOR EXECUTIVE ROLES: If the Lens is 'Commercial / Executive' or the Role is 'VP of Sales', your language must be entirely business, revenue, and process-focused.
-                   * Do NOT propose building complex databases or writing SQL.
-                   * Do NOT recommend changing CRM platforms if their current CRM (e.g., HubSpot) is already working or lightweight.
-                   * Focus instead on data synchronization, building visibility bridges (e.g., pushing product usage data from PostgreSQL to HubSpot), and automating renewal alert workflows.
+                1. UNCOMPROMISING FIRST PARAGRAPH (The "Gut-Punch" Diagnosis):
+                   * Start DIRECTLY with the harsh operational and psychological reality. No greetings, no polite preambles, and absolutely NO generic SaaS filler words like "optimizing your sales", "staying competitive", or "meeting modern expectations".
+                   * Address their core paradox: e.g., "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have."
+                   * Explicitly connect their lack of visibility to their greatest stated fear ({st.session_state.tags.get('Fear', '')}). Explain that because key metrics are disconnected, catastrophic business events (like losing a major renewal with no warning) remain invisible until it is too late.
 
-                2. STRICT COHERENCE WITH STATE:
-                   * Do NOT refer to abandoned tools (like Salesforce) as current bottlenecks.
-                   * Match the scale: If company size is {st.session_state.slots['CompanySize']}, ensure recommendations are agile, cost-effective, and require zero heavy corporate overhead.
+                2. EMBRACING CONSTRAINTS IN THE STRATEGY:
+                   * The second paragraph must adapt to their real-world friction. 
+                   * Actively reference the limitations specified in "Limits" ({st.session_state.slots['Limits']}).
+                   * Example: "Because migrating away from legacy tools like Microsoft Access is politically friction-heavy or resource-constrained, you should reject heavy migrations. Instead, prioritize a lightweight synchronization bridge..."
+                   * Ground the recommendations to match their scale ({st.session_state.slots['CompanySize']}) so it fits their actual human and logistical capacity.
 
-                3. BUSINESS ACTION PLAN:
+                3. REVENUE-DRIVEN BUSINESS ACTION PLAN:
                    * Step 1: Connect existing product data pipelines to their active CRM ({st.session_state.slots['Tech']}) to give the sales team immediate visibility.
                    * Step 2: Establish early-warning indicators (Account Health Scores) to proactively spot renewal risks.
                    * Step 3: Implement structured sales forecasting reviews to restore board and executive trust.
@@ -300,7 +318,7 @@ if st.session_state.stage == 4:
                     st.write(f"• **Prospect Role:** {st.session_state.slots['Role']}")
                     st.write(f"• **Company Scale:** {st.session_state.slots['CompanySize']}")
                     st.write(f"• **Tech Maturity:** {st.session_state.tags.get('TechMaturity', 'Medium')}")
-                    st.write(f"• **Decision Lens:** {st.session_state.tags.get('BuyingStyle', 'Commercial / Revenue-Driven')}")
+                    st.write(f"• **Decision Lens:** {st.session_state.tags.get('Lens', 'Commercial / Revenue-Driven')}")
 
                     st.markdown("---")
                     st.subheader("📊 Operational Diagnosis")
