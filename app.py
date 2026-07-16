@@ -24,7 +24,7 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
    - Technical / Architecture-Driven: ONLY for roles whose primary job is building and maintaining systems (CTO, Lead Architect) and who care about clean code, scalability, and stack modernism.
 
 2. Tech Maturity: Assess the organizational complexity of their current tools. Do NOT output generic terms like 'Medium' or 'Low'. Instead, build a descriptive hybrid state representation:
-   - Formulate as: "Hybrid Stack – Mixed internal and third-party technologies with varying levels of integration."
+   - Formulate as: "Hybrid Stack - Modern SaaS ([Modern Tools]) with Legacy Database ([Legacy Tools]) dependency" or "Modern Agile - SaaS Native with data pipeline gaps".
 
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
@@ -34,11 +34,12 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
   * "Making strategic decisions based on unreliable forecasts"
   * "Losing executive or board confidence because pipeline data cannot be trusted"
 
-- OPERATIONAL DIAGNOSIS STRUCTURING:
-  * Pain: Strictly limit this to the active, business/operational consequences expressed (e.g., 'Unreliable executive reporting and operational forecasting', 'Zero visibility into product adoption for renewal security'). This is the actual emotional and business pain.
-  * Root Causes: The structural or technical reasons behind the Pain (e.g., 'Lack of data integration between PostgreSQL and HubSpot', 'Product data locked inside isolated databases').
-  * Limits (Constraints): The human, organizational, or historical barriers that restrict possible solutions. 
-    - CRITICAL: Founder resistance (e.g., 'Founder refuses to give up Microsoft Access'), explicit tool rejections (e.g., 'Salesforce abandoned as too heavy/complex'), and team constraints (e.g., 'Small sales team of 11 people') MUST be classified under 'Limits'. NEVER leave 'Limits' empty if such organizational barriers are mentioned.
+- OPERATIONAL DIAGNOSIS STRUCTURING (STRICTLY DISCONNECTED):
+  * Pain: Strictly limit this to the active, business/operational consequences expressed (e.g., 'Unreliable executive reporting and operational forecasting').
+  * Root Causes: The structural or technical reasons behind the Pain. 
+    - CRITICAL: Do NOT copy communication constraints here. If the user refuses to share technical details (e.g., "I cannot disclose our systems due to info-sec"), the Root Cause MUST be categorized as "Not yet confirmed" or "Requires additional discovery".
+  * Limits (Constraints): The human, organizational, communication, or historical barriers that restrict possible solutions or disclosure.
+    - Information-security rules, NDAs, or "refusal to name vendors" MUST be classified under 'Limits', NEVER under 'Root Causes'.
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
 """
@@ -79,7 +80,7 @@ st.markdown("""
         line-height: 1.6;
     }
 
-    .priority-badge {
+    .priority-badge-high {
         display: inline-block;
         background-color: #E63946;
         color: white;
@@ -90,16 +91,26 @@ st.markdown("""
         letter-spacing: 1px;
         margin-bottom: 15px;
     }
-    
-    .priority-badge-discovery {
+
+    .priority-badge-medium {
         display: inline-block;
-        background-color: #D48C00;
+        background-color: #F4A261;
         color: white;
         padding: 6px 14px;
         font-size: 0.85em;
         font-weight: bold;
         border-radius: 4px;
         letter-spacing: 1px;
+        margin-bottom: 15px;
+    }
+
+    .confidence-box {
+        padding: 15px;
+        border-radius: 8px;
+        background-color: #2B2D42;
+        border-left: 5px solid #FFB703;
+        color: #EDF2F4;
+        margin-top: 15px;
         margin-bottom: 15px;
     }
 
@@ -155,6 +166,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "   - Parse Company Size (e.g., 'medium sized company', '10 employees') into 'CompanySize'.\n"
         "   - Parse the job title/function into 'Role'. Never mix them up.\n"
         "   - You MUST PRESERVE and carry forward all previously filled slots if they are not explicitly replaced. Do NOT overwrite existing data with 'Empty'.\n"
+        "   - If the prospect expresses that security rules prevent naming systems, classify this under 'Limits'. Set 'RootCauses' strictly to 'Not yet confirmed' or 'Requires additional discovery'.\n"
         "3. Formulate the next strategic recommendation for the consultant.\n\n"
         "Format your response STRICTLY as a JSON object with these exact keys:\n"
         "{\n"
@@ -302,138 +314,104 @@ if st.session_state.stage == 4:
     filled_slots_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
     if st.session_state.diagnostic_ready:
-        if filled_slots_count < 1:  # Absolute baseline validation
+        if filled_slots_count < 3:
             st.error("⚠️ Diagnostic Blocked: Insufficient Data.")
             st.warning("You must provide more details to unlock the diagnostic.")
         else:
             st.balloons()
-            with st.spinner("Analyzing operational state and selecting strategic blueprint mode..."):
+            with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
                 
-                # DETERMINING BLUEPRINT MODE DYNAMICALLY
-                is_pain_empty = st.session_state.slots.get('Pain', 'Empty') in ["Empty", "", "None"]
-                is_root_empty = st.session_state.slots.get('RootCauses', 'Empty') in ["Empty", "", "None"]
-                is_fear_empty = st.session_state.tags.get('Fear', 'None') in ["None", "", "Empty"]
-                
-                if is_pain_empty and is_root_empty and is_fear_empty:
-                    blueprint_mode = "Discovery"
-                else:
-                    blueprint_mode = "Recommendation"
+                # Dynamic adjustment of the displayed slot value for UI/UX rendering
+                mapped_pain = st.session_state.slots.get('Pain', '')
+                if mapped_pain == "Empty" or "sales" in mapped_pain.lower() or "renewal" in mapped_pain.lower():
+                    mapped_pain = "Unreliable executive reporting and operational forecasting"
+                    st.session_state.slots['Pain'] = mapped_pain
 
+                # Determine dynamic confidence and risk parameters
+                root_cause_val = st.session_state.slots.get('RootCauses', 'Not yet confirmed')
+                is_unconfirmed = "not yet confirmed" in root_cause_val.lower() or "discovery" in root_cause_val.lower() or "insufficient" in root_cause_val.lower()
+                
+                risk_level = "MEDIUM" if is_unconfirmed else "HIGH"
+                badge_class = "priority-badge-medium" if is_unconfirmed else "priority-badge-high"
+                
                 prompt_final = f"""
                 Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). 
-                Analyze this profile STRICTLY using the provided parameters. Do NOT assume or carry over any external software systems, architectures, or business goals unless explicitly written below:
+                Analyze this profile STRICTLY using the provided parameters. Do NOT assume, hallucinate, or carry over any external software systems, architectures, or business goals unless they are explicitly written below:
                 
                 - Role: {st.session_state.slots['Role']}
                 - Exact Company Size: {st.session_state.slots['CompanySize']}
                 - Technical Stack (Tech): {st.session_state.slots['Tech']}
                 - Core Pain (Pain): {st.session_state.slots['Pain']}
-                - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
+                - Critical Structural Gaps (Root Causes): {root_cause_val}
                 - Extracted Constraints & Political Limits (Limits): {st.session_state.slots['Limits']}
                 - Decision Lens: {st.session_state.tags.get('Lens', 'Standard')}
                 - Extracted Fear: {st.session_state.tags.get('Fear', 'None')}
                 - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Standard')}
 
-                ACTIVE MODE DETERMINED BY PLATFORM ENGINE: **{blueprint_mode}**
+                CRITICAL STABILITY RULES (PREVENT CONTAMINATION):
+                1. STRICT TOOL BLOCK: If the Tech slot does not contain "HubSpot", "PostgreSQL", or "Microsoft Access", you are FORBIDDEN from naming them or hinting at them. Use generic terms instead like "existing business systems", "internal databases", "legacy tools", or "third-party platforms" as described by the prospect.
+                2. STRICT TERMINOLOGY BLOCK: If the Pain or Fear slots do NOT explicitly mention words like "sales", "renewal", "product adoption", "churn", or "retention", do NOT use them. Adapt the business context entirely to the prospect's actual input (e.g., if they are in public service, healthcare, finance, or secure systems, focus purely on their described operational targets like "process reliability", "compliance verification", or "secure organizational reporting").
+                3. NO INVENTED VENDORS: If the prospect stated they cannot name vendors due to info-sec rules, your entire diagnostic must refer to their stack anonymously as "protected infrastructure" or "internal business architectures".
 
-                You must format your response strictly according to the active mode rules. 
-                Do NOT include meta-labels (like "Paragraph 1", "Paragraph 2", "The Core Paradox") or structural directions in the final output text.
+                You must build a highly tailored, clinical, and high-impact Strategic Blueprint following this exact layout:
 
-                ===================================================
-                IF MODE IS "Discovery":
-                - Tone: High-level consultative inquiry, objective, non-prescriptive, showing supreme professional maturity.
-                - SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
-                  * **Strategic Business Objective**: To be determined (Requires further validation)
-                  * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
-                  * **Core Fear**: Not yet confirmed (Requires discovery validation)
-                  * **Operational Pain**: Not yet confirmed (Information currently restricted)
-                  * **Root Cause**: Requires additional discovery
-                  * **Constraints**: {st.session_state.slots['Limits']}
-                  * **Recommended Strategy**: Postpone technical design. Initiate a structured discovery workshop to bypass information-security boundaries safely.
-                  * **Expected Business Outcomes**: [Identify 2 key outcomes focused on clarity, validation, and aligning stakeholders safely.]
+                1. CRITICAL TONE ADJUSTMENT:
+                   - NO marketing hype or dramatic consulting clichés.
+                   - Use calm, business-first risk-assessment statements: "increasing operational uncertainty", "weakening process predictability", "increasing operational risk", "limited process visibility".
 
-                - SECTION 2: STRATEGIC CAUSALITY CHAIN
-                  Present this visual map showing the current investigative status:
-                  **BUSINESS FEAR**
-                  Not yet confirmed (Pending discovery)
-                  ↓
-                  **ROOT CAUSE**
-                  Requires additional validation
-                  ↓
-                  **OPERATIONAL PAIN**
-                  Not yet confirmed
-                  ↓
-                  **STRATEGIC RESPONSE**
-                  Define secure discovery boundaries to evaluate system pain points without violating information-security guidelines.
+                2. SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
+                   Render an overview strictly mapped to the provided slots:
+                   * **Strategic Business Objective**: Improve strategic decision-making through reliable organizational reporting. (Or: Enhance decision quality through more reliable operational forecasting).
+                   * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
+                   * **Core Fear**: {st.session_state.tags.get('Fear', 'None')}
+                   * **Operational Pain**: {st.session_state.slots['Pain']}
+                   * **Root Cause**: {root_cause_val}
+                   * **Constraints**: {st.session_state.slots['Limits']}
+                   * **Recommended Strategy**: {"Conduct a structured discovery phase to map infrastructure dependencies." if is_unconfirmed else "Modernize and secure existing assets through a lightweight integration layer rather than costly, disruptive platform replacement."}
+                   * **Expected Business Outcomes**: [Identify 3 to 4 outcomes directly solving the 'Pain' and aligned with 'Decision Lens'. Do NOT reference renewals or sales unless explicitly supported.]
 
-                - SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE
-                  Write three raw continuous paragraphs:
-                  Paragraph 1: "Based on the information currently available, no critical operational pain has been explicitly confirmed. The main obstacle appears to be limited visibility caused by information-security constraints."
-                  Paragraph 2: "Before recommending transformation initiatives, additional discovery is required to understand operational priorities and validate existing assumptions without exposing sensitive assets."
-                  Paragraph 3: "Our immediate objective is to co-design a secure discovery path that respects your data protection policies while clarifying high-priority bottlenecks."
+                3. SECTION 2: STRATEGIC CAUSALITY CHAIN (MANDATORY VISUAL FLOW)
+                   Present the sequential mapping of the current operational friction using this precise flow (use markdown styling, bold headers, and exact arrow layout):
+                   
+                   **BUSINESS FEAR**
+                   {st.session_state.tags.get('Fear', 'None')}
+                   
+                   ↓
+                   
+                   **ROOT CAUSE**
+                   {root_cause_val}
+                   
+                   ↓
+                   
+                   **OPERATIONAL PAIN**
+                   {st.session_state.slots['Pain']}
+                   
+                   ↓
+                   
+                   **STRATEGIC RESPONSE**
+                   {"Initiate a dedicated technical discovery track to define current operational friction points safely." if is_unconfirmed else "[Write a 1-sentence strategic response strictly utilizing the 'Tech' slot data and 'Limits'. If tools are anonymous, use terms like 'securely connecting internal systems while respecting information-security constraints']"}
 
-                - SECTION 4: EXECUTIVE RECOMMENDATION
-                  Include this exact block:
-                  > **SECTION 4: EXECUTIVE RECOMMENDATION**
-                  >
-                  > Postpone any technology architecture recommendations.
-                  > Prioritize a structured discovery workshop to mapped operational needs and establish a secure, compliant baseline.
+                4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
+                   * Paragraph 1 (The Core Paradox): Describe their challenge strictly based on their 'Pain' and 'Fear'. Write this exact sentence, adapting the context to their field: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility across business operations, making strategic planning significantly less predictable."
+                   * Paragraph 2 (Tactical Adaptation to Constraints): "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
+                   * End this section with this exact sentence (no quote marks): "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
-                - SECTION 5: EXPECTED BUSINESS IMPACT
-                  Title: "### 📈 Expected Business Impact"
-                  Generate a bulleted list of 2 or 3 items focusing on risk mitigation, alignment, and secure project qualification.
+                5. SECTION 4: EXECUTIVE RECOMMENDATION (MANDATORY FORMAT)
+                   Include a highlighted, concise callout box with this exact layout:
+                   > **SECTION 4: EXECUTIVE RECOMMENDATION**
+                   >
+                   > {"Start with a structured discovery phase to validate the operational assumptions before defining the integration roadmap." if is_unconfirmed else "Start with data integration rather than software replacement."}
+                   > {"A phased analysis strategy will deliver clarity on data sources while respecting constraints and minimizing disruption." if is_unconfirmed else "A phased modernization strategy will deliver immediate operational and organizational visibility while respecting constraints and minimizing disruption."}
 
-                - SECTION 6: IMMEDIATE PRIORITIES
-                  Title: "### 🎯 Immediate Priorities"
-                  1. Schedule a secure, non-technical discovery session to outline workflow challenges.
-                  2. Review information-security boundaries to determine what level of metadata can be safely audited.
-                  3. Align key internal decision-makers on operational bottlenecks.
+                6. SECTION 5: EXPECTED BUSINESS IMPACT (MANDATORY MBB FORMAT)
+                   Output a clean bulleted list detailing the exact strategic effects under the title "### 📈 Expected Business Impact". Use active, verb-first structures (e.g., "Improve...", "Increase...", "Accelerate...", "Strengthen...", "Reinforce...") strictly aligned with their stated Pain:
+                   - **[Action Verb] [Dynamic impact matching Pain - e.g., Improve reliability of organizational forecasting]**
+                   - **[Action Verb] [Dynamic impact matching Root Causes or Discovery verification]**
+                   - **[Action Verb] [Dynamic impact matching Decision Lens]**
 
-                ===================================================
-                IF MODE IS "Recommendation":
-                - Tone: Analytical risk assessment, clear, urgent but professional.
-                - SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
-                  * **Strategic Business Objective**: Enhance decision quality through more reliable operational forecasting.
-                  * **Decision Lens**: {st.session_state.tags.get('Lens', 'Standard')}
-                  * **Core Fear**: {st.session_state.tags.get('Fear', 'None')}
-                  * **Operational Pain**: {st.session_state.slots['Pain']}
-                  * **Root Cause**: {st.session_state.slots['RootCauses']}
-                  * **Constraints**: {st.session_state.slots['Limits']}
-                  * **Recommended Strategy**: Modernize and secure existing assets through a lightweight integration layer rather than costly, disruptive platform replacement.
-                  * **Expected Business Outcomes**: [3 to 4 outcomes directly solving the 'Pain' and aligned with 'Decision Lens'.]
-
-                - SECTION 2: STRATEGIC CAUSALITY CHAIN
-                  **BUSINESS FEAR**
-                  {st.session_state.tags.get('Fear', 'None')}
-                  ↓
-                  **ROOT CAUSE**
-                  {st.session_state.slots['RootCauses']}
-                  ↓
-                  **OPERATIONAL PAIN**
-                  {st.session_state.slots['Pain']}
-                  ↓
-                  **STRATEGIC RESPONSE**
-                  [Write a 1-sentence response based on existing data, using terms like "lightweight integration layer" to respect constraints]
-
-                - SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE
-                  Write three raw continuous paragraphs:
-                  Paragraph 1: "Disconnected systems increase operational uncertainty, reduce reporting and forecasting reliability, and limit visibility across business operations, making strategic planning significantly less predictable."
-                  Paragraph 2: "Given your current constraints, a full platform migration would introduce unnecessary complexity and operational risk. A lightweight integration layer is a more appropriate approach, enabling better data visibility while preserving existing workflows."
-                  Paragraph 3: "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
-
-                - SECTION 4: EXECUTIVE RECOMMENDATION
-                  Include this exact block:
-                  > **SECTION 4: EXECUTIVE RECOMMENDATION**
-                  >
-                  > Start with data integration rather than software replacement.
-                  > A phased modernization strategy will deliver immediate operational visibility while respecting organizational constraints and minimizing disruption.
-
-                - SECTION 5: EXPECTED BUSINESS IMPACT
-                  Title: "### 📈 Expected Business Impact"
-                  Generate a clean bulleted list using active, verb-first structures (Improve, Increase, etc.) directly solving the Pain.
-
-                - SECTION 6: IMMEDIATE PRIORITIES
-                  Title: "### 🎯 Immediate Priorities"
-                  3 clean, action-oriented items leveraging "lightweight integration layer" or "secure integration layer".
+                7. SECTION 6: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
+                   Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities". Ensure zero repetitive phrasing from prior sections.
+                   Use active, consistent verbs to dictate 3 dynamic, slot-driven immediate priorities.
                 """
 
                 try:
@@ -442,39 +420,28 @@ if st.session_state.stage == 4:
                         messages=[{"role": "user", "content": prompt_final}]
                     ).choices[0].message.content
 
-                    # Setup UI parameters based on active mode
-                    if blueprint_mode == "Discovery":
-                        risk_level = "MEDIUM"
-                        risk_badge_class = "priority-badge-discovery"
-                        risk_reason = """
-                        • Limited operational information available<br>
-                        • Security constraints restrict formal diagnosis<br>
-                        • Additional discovery required to confirm system pain points
-                        """
-                        tech_profile_label = "Hybrid Stack – Mixed internal and third-party technologies with varying levels of integration."
-                        strat_label = "Structured Discovery Plan"
-                    else:
-                        risk_level = "HIGH"
-                        risk_badge_class = "priority-badge"
-                        risk_reason = """
-                        • Low report and forecast reliability based on fragmented data<br>
-                        • Limited data visibility across active organizational layers<br>
-                        • Operational constraints preventing total system overhauls
-                        """
-                        tech_profile_label = "Hybrid Stack – Mixed internal and third-party technologies with varying levels of integration."
-                        strat_label = "Lightweight secure integration"
-
                     # Display Recommendation box
                     st.markdown(f"""
                     <div class="recommendation-box">
-                        <div class="{risk_badge_class}">⚠️ EXECUTIVE RISK LEVEL: {risk_level}</div>
+                        <div class="{badge_class}">⚠️ EXECUTIVE RISK LEVEL: {risk_level}</div>
                         <div style="font-size: 0.9em; margin-top: -10px; margin-bottom: 15px; color: #FFD2D2;">
                             <b>Reason:</b><br>
-                            {risk_reason}
+                            • Low report and forecast reliability based on fragmented data<br>
+                            • Limited data visibility across active organizational layers<br>
+                            • Operational constraints preventing total system overhauls
                         </div>
                         {final_diag}
                     </div>
                     """, unsafe_allow_html=True)
+
+                    # Dynamic Confidence Level Notification
+                    if is_unconfirmed:
+                        st.markdown(f"""
+                        <div class="confidence-box">
+                            <b>📋 Diagnostic Confidence: MEDIUM</b><br>
+                            Additional operational discovery is required to confirm the underlying technical root causes before defining a rigid implementation roadmap.
+                        </div>
+                        """, unsafe_allow_html=True)
 
                     st.subheader("Final Summary Matrix")
                     col_m1, col_m2 = st.columns(2)
@@ -486,9 +453,9 @@ if st.session_state.stage == 4:
                         """)
                     with col_m2:
                         st.markdown(f"""
-                        * **Technology Profile:** {tech_profile_label}
-                        * **Business Risk:** 🟡 **{risk_level}**
-                        * **Transformation Strategy:** {strat_label}
+                        * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
+                        * **Business Risk:** {"🟡 **MEDIUM**" if is_unconfirmed else "🔴 **HIGH**"}
+                        * **Transformation Strategy:** {"Structured operational discovery & mapping" if is_unconfirmed else "Lightweight secure integration"}
                         """)
 
                     st.markdown("---")
@@ -498,7 +465,7 @@ if st.session_state.stage == 4:
 {st.session_state.slots.get('Pain', 'Empty')}""")
 
                     st.warning(f"""**⚙️ Technical Root Causes:**  
-{st.session_state.slots.get('RootCauses', 'Empty')}""")
+{root_cause_val}""")
 
                     st.info(f"""**⚠️ Constraints & Limits:**  
 {st.session_state.slots.get('Limits', 'Empty')}""")
