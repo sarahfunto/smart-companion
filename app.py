@@ -29,10 +29,10 @@ Instead of a single flat tag, you must analyze the prospect's profile across two
 [CRITICAL EXTRACTION & PIPELINE COHERENCE]
 - 'companysize': Must strictly reflect the prospect's employer scale (e.g., '11 employees').
 
-- 'Fear': Identify high-stakes business risks and emotional vulnerabilities. Reject abstract buzzwords like "falling behind modern expectations" or "general inefficiency." Capture highly specific, professional liabilities such as:
-  * "Unexpected loss of major renewals due to invisible usage signals"
-  * "Losing executive confidence because forecasts cannot be trusted"
-  * "Wasted sales team capacity spent fighting legacy architecture"
+- 'Fear': Identify raw, high-stakes human and professional liabilities expressed by the executive. Reject abstract concepts like "losing competitive advantage" or "falling behind modern expectations." Focus strictly on:
+  * "Being surprised by a major renewal loss"
+  * "Making strategic decisions based on unreliable forecasts"
+  * "Losing executive or board confidence because pipeline data cannot be trusted"
 
 - OPERATIONAL DIAGNOSIS STRUCTURING:
   * Pain: Strictly limit this to the active, business/operational consequences expressed (e.g., 'Unreliable sales forecasts for the board', 'Zero visibility into product adoption for renewal security'). This is the actual emotional and business pain.
@@ -199,7 +199,7 @@ stage_questions = {
     "1": "Who am I speaking with today, what is the scale of your organization, and what corporate trigger brought you here?",
     "2": "What does your current software infrastructure look like? Are your daily workflows mostly manual or cloud-based?",
     "3": "Where are your teams losing the most hours, and if we deployed AI tomorrow, what are your core operational fears or constraints?",
-    "4": "Reviewing your strategic situation: Here is what we know. Do you want to add, modify, or complete any data before receiving your final custom roadmap?"
+    "4": "Reviewing your strategic situation: Here is what we know. Do you want to add, modify, or complete any data before receiving your final custom blueprint?"
 }
 
 st.subheader(f"👉 {stage_questions[str(st.session_state.stage)]}")
@@ -293,36 +293,40 @@ if st.session_state.stage == 4:
                 - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
                 - Extracted Constraints & Political Limits: {st.session_state.slots['Limits']}
                 - Decision Lens: {st.session_state.tags.get('Lens', 'Commercial / Executive')}
-                - Extracted Fear: {st.session_state.tags.get('Fear', 'Unexpected renewal loss')}
+                - Extracted Fear: {st.session_state.tags.get('Fear', 'Being surprised by a major renewal loss')}
                 - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Hybrid Stack')}
 
                 You must build a highly tailored, clinical, and high-impact Strategic Blueprint. Follow these instructions strictly to maintain a calm, highly objective, senior enterprise consultant tone:
 
                 1. CRITICAL TONE ADJUSTMENT:
                    - NO marketing hype, overly dramatic words, or SaaS sales pitches. 
-                   - Do NOT use phrases like "flirting with disaster", "cold, hard truth", "operational blindness", "becoming irrelevant", or "unforgiving market".
+                   - Do NOT use phrases like "flirting with disaster", "cold, hard truth", "operational blindness", "becoming irrelevant", "unforgiving market", or "reducing your competitive advantage".
                    - Use calm, business-first risk-assessment statements:
-                     * "creates unnecessary uncertainty around renewals and revenue planning"
+                     * "increasing operational uncertainty and renewal risk"
+                     * "weakening revenue predictability"
                      * "increasing business risk"
-                     * "reducing your competitive advantage"
                      * "limited operational visibility"
 
                 2. SECTION 1: STRATEGIC DNA MATRIX (MANDATORY FORMAT)
                    Render a clean, high-impact overview using the following structured fields. Rely strictly on the exact context and details gathered during the interview:
-                   * **Business Objective**: [Determine the primary executive goal, e.g., Protect recurring revenue]
+                   * **Business Objective**: Protect recurring revenue
                    * **Decision Lens**: {st.session_state.tags.get('Lens', 'Commercial / Revenue-Driven')}
-                   * **Core Fear**: {st.session_state.tags.get('Fear', '')}
+                   * **Core Fear**: {st.session_state.tags.get('Fear', 'Being surprised by a major renewal loss')}
                    * **Operational Pain**: {st.session_state.slots['Pain']}
                    * **Root Cause**: {st.session_state.slots['RootCauses']}
                    * **Constraints**: {st.session_state.slots['Limits']}
                    * **Recommended Strategy**: Modernize and bridge existing assets through lightweight synchronization rather than costly, disruptive tool replacement.
-                   * **Expected Business Outcomes**: [Identify 2-3 key business outcomes like: Reliable board forecasting, Early customer renewal risk detection, Stabilized retention rate]
+                   * **Expected Business Outcomes**:
+                     - Reliable revenue forecasting
+                     - Early renewal risk detection
+                     - Higher renewal confidence
+                     - Improved customer retention
 
                 3. SECTION 2: STRATEGIC CAUSALITY CHAIN (MANDATORY VISUAL FLOW)
-                   Present the sequential mapping of the current operational friction using this precise flow (use markdown styling and arrows):
+                   Present the sequential mapping of the current operational friction using this precise flow (use markdown styling, bold headers, and exact arrow layout):
                    
                    **BUSINESS FEAR**
-                   {st.session_state.tags.get('Fear', '')}
+                   {st.session_state.tags.get('Fear', 'Being surprised by a major renewal loss')}
                    
                    ↓
                    
@@ -337,16 +341,17 @@ if st.session_state.stage == 4:
                    ↓
                    
                    **STRATEGIC RESPONSE**
-                   [Describe the exact architectural fix, focusing on bridging workflows without introducing unneeded platform changes]
+                   Connect PostgreSQL product usage data with HubSpot while preserving Microsoft Access during a phased modernization.
 
                 4. SECTION 3: EXECUTIVE BLUEPRINT NARRATIVE:
-                   * Paragraph 1 (The Core Paradox): "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have." Explain clearly, without dramatic hyperbole, how disconnecting system data creates unnecessary uncertainty around forecasts and renewal cycles.
-                   * Paragraph 2 (Tactical Adaptation to Constraints): Actively address the limitations listed in 'Limits' ({st.session_state.slots['Limits']}). Explicitly advise against total migrations or heavy tool replacements (especially considering their specific constraints/team size). Propose a lightweight integration layer or middleware layer instead. DO NOT reference any specific third-party integration brands (like Zapier, Make, etc.) to keep the consulting strictly independent.
+                   * Paragraph 1 (The Core Paradox): "Your biggest challenge is not generating more pipeline—it is trusting the pipeline you already have." Explain clearly, without dramatic hyperbole, how disconnecting system data creates unnecessary uncertainty around forecasts and renewal cycles. Use terms like "increasing operational uncertainty and renewal risk" or "weakening revenue predictability."
+                   * Paragraph 2 (Tactical Adaptation to Constraints): Actively address the limitations listed in 'Limits' ({st.session_state.slots['Limits']}). Explicitly advise against total migrations or heavy tool replacements (especially considering their specific constraints/team size of {st.session_state.slots['CompanySize']}). Propose a lightweight integration layer or middleware layer instead. DO NOT reference any specific third-party integration brands (like Zapier, Make, etc.) to keep the consulting strictly independent.
+                   * End this section with the exact closing sentence: "The objective is not to replace your existing ecosystem, but to make it work as a unified decision-support platform."
 
                 5. SECTION 4: IMMEDIATE PRIORITIES (MANDATORY FORMAT)
-                   Instead of prose paragraphs, output a highly-structured numbered list under the title "### 🎯 Immediate Priorities".
-                   * 1. **Establish the Data Bridge**: Detail how to expose product data signals to the commercial team using a lightweight, non-intrusive integration layer.
-                   * 2. **Implement Account Risk Health Scores**: Explain how to map these signals to early warning indicators within {st.session_state.slots['Tech']} before renewals are threatened.
+                   Output a highly-structured numbered list under the title "### 🎯 Immediate Priorities" with these exact objectives:
+                   * 1. **Establish the Data Bridge**: Connect PostgreSQL product usage data with HubSpot while preserving Microsoft Access during a phased modernization, avoiding heavy platform migrations.
+                   * 2. **Implement Account Health Scores**: Implement Account Health Scores based on product usage signals to identify renewal risks early.
                    * 3. **Standardize Forecasting Reviews**: Detail how to align these technical indicators with forecasting reviews to restore executive and board confidence.
                 """
 
