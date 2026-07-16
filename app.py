@@ -12,9 +12,9 @@ else:
     client = None
 
 SYSTEM_PROMPT = """
-You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework.
+You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework with absolute inferential discipline.
 
-[PRICIPLE OF INFERENTIAL DISCIPLINE - STRICT SECURITY SEPARATION]
+[PRINCIPLE OF INFERENTIAL DISCIPLINE]
 1. NEVER qualify a security posture or compliance framework (e.g., "Zero-Trust model") as a structural gap, flaw, or root cause. It is strictly an organizational limit/constraint.
 2. Structural gaps must only describe functional or technical dysfunctions:
    - 'Marketing attribution cannot be consistently validated across reporting systems'
@@ -32,7 +32,7 @@ You are an expert B2B sales psychologist and senior enterprise consultant. Your 
 - 'companysize': Qualitative context if they refuse numbers.
 - 'Tech': Anonymized technical descriptions.
 - 'Pain': 'Inconsistent campaign tracking and mismatched performance reports'.
-- 'RootCauses': 'Multiple disconnected reporting sources giving conflicting performance data' or 'Current operational visibility is insufficient to confirm the underlying causes.'
+- 'RootCauses': 'Marketing attribution cannot be consistently validated across reporting systems. Single source of truth for campaign performance has not been established.'
 - 'Limits' (Constraints): 'Information-security policies / Zero-Trust access rules', 'External agency dependency'.
 - 'Fear': 'Loss of executive credibility during budget reviews due to guesswork attribution'.
 
@@ -347,30 +347,56 @@ if st.session_state.stage == 4:
 
                 CRITICAL STRUCTURAL RULES (PRUDENCE & INTELLECTUAL HONESTY):
                 1. STRICT NO-BLOCKCHAIN RULE: Do NOT mention 'blockchain' anywhere in the output. Ignore it entirely as speculative noise.
-                2. STRICT CAUSALITY PROTECTION: Do NOT blame 'Zero-Trust' or any security protocol as a structural gap or root cause. Gaps must strictly describe functional or technical issues like:
+                2. STRICT CAUSALITY PROTECTION: Do NOT blame 'Zero-Trust' or any security protocol as a structural gap or root cause.
+                3. STRUCTURAL GAPS TEXTUAL LIMITATION: Structural gaps must strictly describe functional or technical issues like:
                    * 'Marketing attribution cannot be consistently validated across reporting systems'
                    * 'Single source of truth for campaign performance has not been established'
                    * 'Underlying reporting architecture remains insufficiently understood'
-                3. NO INVENTED TECH OR BRANDS: Do NOT use software names (HubSpot, Salesforce, PostgreSQL) unless explicitly written in 'Tech'. Speak strictly of "existing systems", "reporting assets" or "databases" as anonymized.
-                4. NO SALES OR REVENUE HALLUCINATIONS: You are STRICTLY FORBIDDEN from using words like "sales", "revenue", "churn", "renewal" or "customers" unless explicitly written in 'Pain' or 'Fear'. Replace them systematically with neutral corporate terms like "organizational objectives", "business objectives", "operational alignment", or "governance targets".
-                5. PRUDENT CAUSALITY CHAIN: If the Root Cause is unconfirmed, write: "Current operational visibility is insufficient to confirm the underlying causes."
-                6. REALISTIC RECOMMENDATIONS: Focus strictly on:
+                4. NO INVENTED TECH OR BRANDS: Do NOT use software names (HubSpot, Salesforce, PostgreSQL) unless explicitly written in 'Tech'. Speak strictly of "existing systems", "reporting assets" or "databases" as anonymized.
+                5. NO SALES OR REVENUE HALLUCINATIONS: You are STRICTLY FORBIDDEN from using words like "sales", "revenue", "churn", "renewal" or "customers" unless explicitly written in 'Pain' or 'Fear'. Replace them systematically with neutral corporate terms like "organizational objectives", "business objectives", "operational alignment", or "governance targets".
+                6. STRICT FORMATTING FOR SECTION 2 (STRATEGIC CAUSALITY CHAIN): You must strictly follow this exact layout for Section 2, showing structural gaps and exact pains instead of unconfirmed visibility indicators:
+                   **Fear**
+                   ↓
+                   Loss of executive credibility during budget reviews due to guesswork attribution
+                   
+                   ↓
+                   **Observed Structural Gaps**
+                   
+                   ↓
+                   Marketing attribution cannot be consistently validated across reporting systems
+                   
+                   ↓
+                   **Operational Pain**
+                   
+                   ↓
+                   Inconsistent trust in marketing data and mismatched campaign reporting
+                   
+                   ↓
+                   **Strategy**
+                   
+                   ↓
+                   Discovery & Architecture Mapping
+                7. REALISTIC RECOMMENDATIONS: Focus strictly on:
                    * Discovery workshop
                    * Architecture mapping
                    * Data-flow assessment
                    * Stakeholder interviews
-                7. RECOMMENDED STRATEGY: This must strictly be "Discovery & Architecture Mapping" under these circumstances.
-                8. CORE FEAR TREATMENT: Explicitly use the confirmed fear about budget reviews to justify the immediate urgency of the discovery phase.
-                9. NARRATIVE MANDATORY FORMULATION (SECTION 3): You must output EXACTLY this paragraph to frame the executive context:
+                8. RECOMMENDED STRATEGY: This must strictly be "Discovery & Architecture Mapping" under these circumstances.
+                9. CORE FEAR TREATMENT: Explicitly use the confirmed fear about budget reviews to justify the immediate urgency of the discovery phase.
+                10. NARRATIVE MANDATORY FORMULATION (SECTION 3): You must output EXACTLY this paragraph to frame the executive context:
                    "The organization operates under strict governance and information-security constraints, limiting visibility into its reporting architecture. At the same time, inconsistent marketing attribution across multiple reporting sources reduces confidence in executive reporting and creates uncertainty ahead of budget reviews."
-                   Do NOT append, modify, or mix Zero-Trust as a cause of pain in Section 3.
+                11. STRICT FORMATTING FOR SECTION 5 (EXPECTED BUSINESS IMPACT): You must strictly list these four outcomes exactly, without adding generic jargon:
+                    - Trusted campaign attribution across reporting systems
+                    - Higher confidence during executive budget reviews
+                    - Reduced disputes over marketing contribution
+                    - Faster executive decision cycles
 
                 Generate your report strictly following this layout:
                 - Section 1: Strategic DNA Matrix (strictly display the extracted values. For strategic objectives, write: "Improve decision quality through validated business objectives").
-                - Section 2: Strategic Causality Chain (use simple vertical arrow blocks showing Fear -> Root Cause -> Operational Pain -> Recommended Strategy).
+                - Section 2: Strategic Causality Chain (using the exact structural gap sequence outlined above).
                 - Section 3: Executive Blueprint Narrative (incorporating the mandatory paragraph above).
                 - Section 4: Executive Recommendation callout box (emphasizing starting with a structured discovery phase before defining any roadmap).
-                - Section 5: Expected Business Impact (highly aligned with mapping and verification).
+                - Section 5: Expected Business Impact (displaying exactly the four high-fidelity business outcomes).
                 - Section 6: Immediate Priorities (must strictly be: Map current systems, Validate integration points, Identify reporting dependencies, Confirm executive objectives).
                 """
 
