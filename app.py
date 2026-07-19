@@ -36,10 +36,8 @@ st.markdown("""
 
 # 2. BULLETPROOF RESET MECHANISM
 def execute_hard_reset():
-    # Completely clear session state dictionary
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    # Re-initialize clean structural defaults
     st.session_state.stage = 1
     st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
     st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard', 'Verbatims': 'None'}
@@ -127,13 +125,14 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.info(f"Smart Companion Strategy Insight: {st.session_state.ai_guidance}")
     
-    # We use stage variable inside the key to ensure the text field is clean on reset
-    manual_input = st.text_area("✍️ Saisie de l'entretien (Prospect Input):", height=120, key=f"input_stage_{st.session_state.stage}")
+    manual_input = st.text_area("✍️ Prospect Input (Type what the client says):", height=120, key=f"input_stage_{st.session_state.stage}")
     
     if st.button("⚡ Analyze and Validate Input"):
         if manual_input:
             st.session_state['ai_guidance'] = analyze_with_openai(manual_input, web_context_input, st.session_state.stage)
             st.rerun()
+        else:
+            st.warning("Please type the prospect input before running analysis pipelines.")
             
     st.markdown("---")
     nav_col1, nav_col2 = st.columns(2)
@@ -141,12 +140,13 @@ with col1:
         if st.session_state.stage > 1:
             if st.button("⏮️ Previous Stage"):
                 st.session_state.stage -= 1
-                st.session_state.blueprint_generated = False
+                st.session_state.blueprint_generated = False  # Security lock
                 st.rerun()
     with nav_col2:
         if st.session_state.stage < 4:
             if st.button("➡️ Next Stage"):
                 st.session_state.stage += 1
+                st.session_state.blueprint_generated = False  # Force hide blueprint upon arrival at Step 4
                 st.rerun()
 
 with col2:
@@ -177,5 +177,58 @@ if st.session_state.stage == 4:
 
     if st.session_state.blueprint_generated and filled_count >= 3:
         st.header("📋 Comprehensive Strategic Blueprint")
-        # Blueprint dynamic generation code executes strictly here...
-        st.info("Dynamic blueprint output matching explicitly captured variables is ready.")
+        
+        with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
+            prompt_final = f"""
+            Act as an elite B2B Sales Psychologist and Enterprise Management Consultant.
+            Generate a custom business architecture report following strict anti-hallucination protocols.
+
+            - Role: {st.session_state.slots['Role']}
+            - Company Size: {st.session_state.slots['CompanySize']}
+            - Technical Stack (Tech): {st.session_state.slots['Tech']}
+            - Core Pain (Pain): {st.session_state.slots['Pain']}
+            - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
+            - Extracted Constraints & Political Limits (Limits): {st.session_state.slots['Limits']}
+            - Decision Lens: {st.session_state.tags.get('Lens', 'Standard')}
+            - Extracted Fear (The Personal Stakes): {st.session_state.tags.get('Fear', 'None')}
+            - Captured Verbatims / Client Metaphors: {st.session_state.tags.get('Verbatims', 'None')}
+
+            Follow sections 1 to 6 layout constraints literally. No internal leaked tokens. Completely generic interface terms.
+            """
+            
+            try:
+                final_diag = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt_final}],
+                    temperature=0.0
+                ).choices[0].message.content
+
+                st.markdown(f"""
+                <div class="recommendation-box">
+                    <div class="priority-badge-high">⚠️ EXECUTIVE RISK LEVEL: HIGH</div>
+                    <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
+                        <b>Human & Corporate Posture Risk Assessment:</b><br>
+                        • <b>Personal Stakes:</b> High political risk regarding personal credibility ahead of upcoming budget reviews.<br>
+                        • <b>Operational Friction:</b> Navigating focused systems like a small cog in a massive machine limits baseline visibility.<br>
+                        • <b>Strategic Path:</b> A non-disruptive, safe architectural mapping is mandatory to shield the team from errors and safeguard your position.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown(final_diag)
+                
+                st.subheader("Final Summary Matrix")
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    st.markdown(f"""
+                    * **Prospect Role:** {st.session_state.slots['Role']}
+                    * **Company Size:** {st.session_state.slots['CompanySize']}
+                    * **Decision Lens:** {st.session_state.tags.get('Lens', 'Standard')}
+                    """)
+                with col_m2:
+                    st.markdown(f"""
+                    * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
+                    * **Transformation Strategy:** Discovery & Architecture Mapping
+                    """)
+            except Exception as e:
+                st.error(f"Error compiling document asset: {e}")
