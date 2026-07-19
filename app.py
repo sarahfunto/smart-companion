@@ -425,7 +425,6 @@ if st.session_state.stage == 4:
                         st.markdown(f"""
                         * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
                         * **Transformation Strategy:** Discovery & Architecture Mapping
-                        * **Factual Status:** ✅ *Validated against slot hallucination rules.*
                         """)
 
                 except Exception as e:
