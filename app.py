@@ -20,13 +20,13 @@ You are an expert B2B sales psychologist and senior enterprise consultant. Your 
    - 'Marketing attribution cannot be consistently validated across reporting systems'
    - 'Single source of truth for campaign performance has not been established'
    - 'Underlying reporting architecture remains insufficiently understood'
-3. STRICT FACTUAL BOUNDARY: You are absolutely forbidden from inventing, assuming, or injecting any software names, brands, tools, or platforms (e.g., Mailchimp, HubSpot, Google Analytics, Salesforce) that are not explicitly provided by the user in the data inputs. If you need to refer to unmentioned tools, use strictly generic terms like 'campaign management platforms', 'reporting tools', or 'associated interfaces'.
+3. STRICT FACTUAL BOUNDARY: You are absolutely forbidden from inventing, assuming, or injecting any software names, brands, tools, or platforms (e.g., Mailchimp, HubSpot, Salesforce, Google Analytics) that are not explicitly provided by the user in the data inputs. If you need to refer to unmentioned tools, use strictly generic terms like 'campaign management platforms', 'reporting tools', or 'associated interfaces'.
 4. Discard speculative noise entirely: If 'blockchain' is mentioned as a question, ignore it completely.
 
 [STRATEGIC MIRRORING & SOBRIETY]
 - Capture the client's emotional landscape, metaphors, and structural feelings (e.g., feeling like a 'small cog in a massive machine' or a 'junior guy' relative to the enterprise scale).
 - Address these constraints with absolute professional sobriety. Avoid over-dramatic, theatrical, or pompous consulting jargon (e.g., avoid 'vast expanse', 'maneuver with assurance', 'theatrical landscape'). Stay grounded, direct, and human.
-- Store these key phrases inside the 'Verbatims' capture layer to humanize the final output.
+- ABSOLUTE PROMPT BOUNDARY: Never leak or output internal technical words like 'mirroring', 'verbatim tracking', 'slots', or 'psychological tags' inside the generated customer-facing text. The adaptation must be entirely implicit and natural.
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear, Verbatims...
 """
@@ -344,9 +344,10 @@ if st.session_state.stage == 4:
                 CRITICAL ANTI-HALLUCINATION & STYLE RULES:
                 1. STRICT NOMENCLATURE SECURITY: Do NOT invent, assume, or output any application names, third-party brands, or platform titles (e.g., Mailchimp, HubSpot, Salesforce, Google Analytics) that are missing from the Technical Stack input above. Refer to them strictly using generic nouns (e.g., 'your existing tracking databases', 'marketing reporting tools', 'campaign platforms').
                 2. SOBER PROFESSIONAL TONE: Avoid overly dramatic, theatrical, or pompous vocabulary ('vast expanse', 'maneuver through the landscape with assurance', 'corporate universe'). Use clean, clear, grounded professional enterprise prose.
-                3. EMOTIONAL MIRRORING: Safely acknowledge the dynamic of managing agile tracking tasks within a massive framework. Explicitly weave the client's raw verbatim expressions ('small cog in a massive machine', 'feeling like a junior guy') into the opening narrative and recommendation blocks to demonstrate exact listening alignment.
-                4. DEEP CAUSALITY SEGMENTATION: Never treat Zero-Trust as a structural flaw or root cause. Frame it exclusively as an organizational policy limit that restricts direct visibility.
-                5. SECTION 2 CAUSALITY CHAIN TEMPLATE: You must output this sequence exactly:
+                3. NO JARGON LEAKS: Never explicitly use internal system terms like 'mirroring', 'structural feeling', 'slots', 'verbatims', or 'psychological tags' within the text of Section 4 or any other narrative block.
+                4. EMOTIONAL MIRRORING: Safely acknowledge the dynamic of managing agile tracking tasks within a massive framework. Explicitly weave the client's raw verbatim expressions ('small cog in a massive machine', 'feeling like a junior guy') into the opening narrative and recommendation blocks to demonstrate exact listening alignment without sounding forced.
+                5. DEEP CAUSALITY SEGMENTATION: Never treat Zero-Trust as a structural flaw or root cause. Frame it exclusively as an organizational policy limit that restricts direct visibility.
+                6. SECTION 2 CAUSALITY CHAIN TEMPLATE: You must output this sequence exactly:
                    **Fear**
                    ↓
                    Loss of executive credibility during budget reviews due to guesswork attribution
@@ -368,16 +369,16 @@ if st.session_state.stage == 4:
                    
                    ↓
                    Discovery & Architecture Mapping
-                6. SECTION 3 NARRATIVE REQUIREMENT: Open by validating the internal stakes. Incorporate this precise framing verbatim:
+                7. SECTION 3 NARRATIVE REQUIREMENT: Open by validating the internal stakes. Incorporate this precise framing verbatim:
                    "The organization operates under strict governance and information-security constraints, limiting visibility into its reporting architecture. At the same time, inconsistent marketing attribution across multiple reporting sources reduces confidence in executive reporting and creates uncertainty ahead of budget reviews."
                    Surround this with a sober acknowledgement of their specific verbatim context (managing focused tracking outputs inside a huge enterprise framework).
-                7. SECTION 4 RECOMMENDATION: Target a structured, non-intrusive architectural discovery phase designed to protect their political standing and map the exact reporting flows without clashing with existing Zero-Trust rules or agency handoffs. Mirror their structural feeling safely.
-                8. SECTION 5 BUSINESS IMPACTS: Output exactly these four business outcomes without modifications or extra jargon:
+                8. SECTION 4 RECOMMENDATION: Target a structured, non-intrusive architectural discovery phase designed to protect their political standing and map the exact reporting flows without clashing with existing Zero-Trust rules or agency handoffs. Incorporate this direct framing: "This approach respects the operational constraints you are navigating while addressing the core technical vulnerabilities."
+                9. SECTION 5 BUSINESS IMPACTS: Output exactly these four business outcomes without modifications or extra jargon:
                    - Trusted campaign attribution across reporting systems
                    - Higher confidence during executive budget reviews
                    - Reduced disputes over marketing contribution
                    - Faster executive decision cycles
-                9. SECTION 6 IMMEDIATE PRIORITIES: Anchor these strictly in their exact practical inputs and limits, using zero invented brand names:
+                10. SECTION 6 IMMEDIATE PRIORITIES: Anchor these strictly in their exact practical inputs and limits, using zero invented brand names:
                    - Map current data paths without breaching existing Zero-Trust constraints
                    - Validate integration points between internal reporting structures and external assets
                    - Identify external agency reporting dependencies and gaps
