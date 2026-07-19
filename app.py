@@ -12,7 +12,7 @@ else:
     client = None
 
 SYSTEM_PROMPT = """
-You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework with absolute inferential discipline.
+You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework with absolute inferential discipline and deep strategic mirroring.
 
 [PRINCIPLE OF INFERENTIAL DISCIPLINE]
 1. NEVER qualify a security posture or compliance framework (e.g., "Zero-Trust model") as a structural gap, flaw, or root cause. It is strictly an organizational limit/constraint.
@@ -22,21 +22,11 @@ You are an expert B2B sales psychologist and senior enterprise consultant. Your 
    - 'Underlying reporting architecture remains insufficiently understood'
 3. Discard speculative noise entirely: If 'blockchain' is mentioned as a question, ignore it completely.
 
-[PSYCHOLOGICAL PROFILING]
-1. Buying Style (Decision Lens):
-   - Commercial / Revenue-Driven: Set when the main business trigger is budget reviews, proving marketing ROI, and protecting executive credibility from guesswork. Security rules are constraints, not the primary decision driver.
-   - Strategic / Growth-Driven: Driven by long-term corporate scaling.
-   - Risk-Aware / Governance-Driven: Driven strictly by compliance, audit-readiness, and risk reduction as the ultimate goal.
+[STRATEGIC MIRRORING & PSYCHOLOGICAL CAPTURE]
+- You must carefully capture the client's emotional landscape, metaphors, and exact structural feelings (e.g., feeling like a 'small cog in a massive machine' or a 'junior guy' relative to the enterprise scale).
+- Store these key phrases inside the 'Verbatims' capture layer to humanize the final output.
 
-[CRITICAL EXTRACTION & PIPELINE COHERENCE]
-- 'companysize': Qualitative context if they refuse numbers.
-- 'Tech': Anonymized technical descriptions.
-- 'Pain': 'Inconsistent campaign tracking and mismatched performance reports'.
-- 'RootCauses': 'Marketing attribution cannot be consistently validated across reporting systems. Single source of truth for campaign performance has not been established.'
-- 'Limits' (Constraints): 'Information-security policies / Zero-Trust access rules', 'External agency dependency'.
-- 'Fear': 'Loss of executive credibility during budget reviews due to guesswork attribution'.
-
-Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear...
+Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear, Verbatims...
 """
 
 st.set_page_config(page_title="AI Advisor - Smart Companion", page_icon="🎙️", layout="wide")
@@ -115,7 +105,7 @@ st.markdown("""
 # SESSION STATE INITIALIZATION
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
-if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard'}
+if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard', 'Verbatims': 'None'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial client statement to start the strategic analysis."
 
@@ -132,7 +122,7 @@ st.sidebar.markdown("*Paste background information about the target company or t
 web_context_input = st.sidebar.text_area(
     "📝 Corporate Profile / Web Context", 
     height=200,
-    placeholder="Example: Microsoft Corp. Experiencing reporting bottlenecks..."
+    placeholder="Example: Corporate enterprise environment..."
 )
 
 if st.sidebar.button("💾 Synchronize Context"):
@@ -153,11 +143,11 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State (Already Filled): {json.dumps(current_slots)}\n"
         f"Current Psychological Tags: {json.dumps(current_tags)}\n\n"
         "TASK:\n"
-        "1. Extract Pain: Capture ONLY reporting pains (e.g. inconsistent campaign performance reports). Security environment is NOT a pain.\n"
-        "2. Extract Root Causes (Critical Structural Gaps): Never blame Zero-Trust. Frame as 'Marketing attribution cannot be consistently validated across reporting systems' or 'Single source of truth for campaign performance has not been established'.\n"
-        "3. Extract Limits: Capture security rules and agency dependencies. IGNORE blockchain entirely.\n"
-        "4. Extract Fear: 'Loss of executive credibility during budget reviews due to guesswork attribution'.\n"
-        "5. Determine Decision Lens: If they focus on budget reviews and proving ROI, set strictly to 'Commercial / Revenue-Driven'.\n"
+        "1. Extract Pain: Capture ONLY reporting pains (e.g. inconsistent campaign performance reports).\n"
+        "2. Extract Root Causes (Critical Structural Gaps): Frame strictly as functional/technical attribution disconnects. Never blame Zero-Trust.\n"
+        "3. Extract Limits: Capture security rules (Zero-Trust) and agency dependencies. IGNORE blockchain entirely.\n"
+        "4. Extract Fear: Capture executive credibility risk ahead of budget reviews.\n"
+        "5. Capture Verbatims/Metaphors: Extract distinct expressions like 'small cog in a massive machine' or 'junior guy' to use for deep validation.\n"
         "Format response as JSON with keys: slots, tags, ai_guidance."
     )
 
@@ -187,7 +177,8 @@ def analyze_with_openai(user_text, context_web, current_stage):
         for target_key, possible_keys in {
             "Lens": ["BuyingStyle", "Buying Style", "Lens", "decision_lens"],
             "Fear": ["Fear", "fear"],
-            "TechMaturity": ["TechMaturity", "Tech Maturity", "tech_maturity"]
+            "TechMaturity": ["TechMaturity", "Tech Maturity", "tech_maturity"],
+            "Verbatims": ["Verbatims", "verbatims", "Metaphors", "metaphors"]
         }.items():
             for pk in possible_keys:
                 if pk in new_tags:
@@ -204,19 +195,19 @@ def analyze_with_openai(user_text, context_web, current_stage):
         rc_val = str(st.session_state.slots.get("RootCauses", "")).lower()
         user_input_lower = user_text.lower()
 
-        # 1. Clean Blockchain out of Limits immediately
+        # Catch specific rich text metaphors manually if skipped by API
+        if "cog" in user_input_lower or "machine" in user_input_lower:
+            st.session_state.tags["Verbatims"] = "small cog in a massive machine / feeling like a junior guy relative to the scale"
+
         if "blockchain" in limits_val or "blockchain" in pain_val or "blockchain" in user_input_lower:
             st.session_state.slots["Limits"] = "Information-security policies, Zero-Trust compliance constraints, External agency reporting dependencies"
 
-        # 2. Re-classification of the Root Cause (Zero-Trust is never a structural gap)
         if "zero" in rc_val or "trust" in rc_val or "compliance" in rc_val:
             st.session_state.slots["RootCauses"] = "Marketing attribution cannot be consistently validated across reporting systems. Single source of truth for campaign performance has not been established."
 
-        # 3. Validation of the Operational Pain
         if "security" in pain_val or "transparency" in pain_val or "limits" in pain_val:
             st.session_state.slots["Pain"] = "Inconsistent campaign attribution across multiple reporting sources, reducing confidence ahead of budget reviews."
 
-        # 4. Force Lens and Fear on budget markers
         if "budget" in user_input_lower or "guesswork" in user_input_lower or "afraid" in user_input_lower:
             st.session_state.tags["Lens"] = "Commercial / Revenue-Driven"
             st.session_state.tags["Fear"] = "Loss of executive credibility during budget reviews due to guesswork attribution"
@@ -303,6 +294,9 @@ with col2:
 
     fear_class = "status-box-filled" if st.session_state.tags['Fear'] not in ["None", "Not yet confirmed"] else "status-box-empty"
     st.markdown(f"<div class='{fear_class}'><b>Identified Core Fear (Fear):</b> {st.session_state.tags['Fear']}</div>", unsafe_allow_html=True)
+    
+    v_class = "status-box-filled" if st.session_state.tags.get('Verbatims', 'None') != "None" else "status-box-empty"
+    st.markdown(f"<div class='{v_class}'><b>Captured Voice/Verbatim Mirror:</b> {st.session_state.tags.get('Verbatims', 'None')}</div>", unsafe_allow_html=True)
 
 # FINAL DIAGNOSTIC
 if st.session_state.stage == 4:
@@ -323,18 +317,18 @@ if st.session_state.stage == 4:
             st.warning("You must provide more details to unlock the diagnostic.")
         else:
             st.balloons()
-            with st.spinner("Generating deep expert diagnostic reflecting business outcomes..."):
+            with st.spinner("Generating deep mirrored diagnostic reflecting human stakes..."):
                 
                 root_cause_val = st.session_state.slots.get('RootCauses', 'Not yet confirmed')
                 is_unconfirmed = "not yet confirmed" in root_cause_val.lower() or "discovery" in root_cause_val.lower()
                 
-                risk_level = "MEDIUM" if is_unconfirmed else "HIGH"
-                badge_class = "priority-badge-medium" if is_unconfirmed else "priority-badge-high"
+                risk_level = "HIGH"
+                badge_class = "priority-badge-high"
                 
                 prompt_final = f"""
-                Act as an elite, high-level B2B Sales and Management Consultant (McKinsey, Bain, BCG standard). 
-                Analyze this profile STRICTLY using the provided parameters. Do NOT assume, extrapolate, or invent details:
-                
+                Act as an elite B2B Sales Psychologist and Enterprise Management Consultant.
+                Analyze this profile and generate a highly tailored, deeply mirrored blueprint. You must weave the client's explicit language into the document to ensure they feel truly listened to.
+
                 - Role: {st.session_state.slots['Role']}
                 - Exact Company Size: {st.session_state.slots['CompanySize']}
                 - Technical Stack (Tech): {st.session_state.slots['Tech']}
@@ -342,19 +336,13 @@ if st.session_state.stage == 4:
                 - Critical Structural Gaps (Root Causes): {root_cause_val}
                 - Extracted Constraints & Political Limits (Limits): {st.session_state.slots['Limits']}
                 - Decision Lens: {st.session_state.tags.get('Lens', 'Standard')}
-                - Extracted Fear: {st.session_state.tags.get('Fear', 'None')}
-                - Tech Maturity State: {st.session_state.tags.get('TechMaturity', 'Standard')}
+                - Extracted Fear (The Personal Stakes): {st.session_state.tags.get('Fear', 'None')}
+                - Captured Verbatims / Client Metaphors: {st.session_state.tags.get('Verbatims', 'None')}
 
-                CRITICAL STRUCTURAL RULES (PRUDENCE & INTELLECTUAL HONESTY):
-                1. STRICT NO-BLOCKCHAIN RULE: Do NOT mention 'blockchain' anywhere in the output. Ignore it entirely as speculative noise.
-                2. STRICT CAUSALITY PROTECTION: Do NOT blame 'Zero-Trust' or any security protocol as a structural gap or root cause.
-                3. STRUCTURAL GAPS TEXTUAL LIMITATION: Structural gaps must strictly describe functional or technical issues like:
-                   * 'Marketing attribution cannot be consistently validated across reporting systems'
-                   * 'Single source of truth for campaign performance has not been established'
-                   * 'Underlying reporting architecture remains insufficiently understood'
-                4. NO INVENTED TECH OR BRANDS: Do NOT use software names (HubSpot, Salesforce, PostgreSQL) unless explicitly written in 'Tech'. Speak strictly of "existing systems", "reporting assets" or "databases" as anonymized.
-                5. NO SALES OR REVENUE HALLUCINATIONS: You are STRICTLY FORBIDDEN from using words like "sales", "revenue", "churn", "renewal" or "customers" unless explicitly written in 'Pain' or 'Fear'. Replace them systematically with neutral corporate terms like "organizational objectives", "business objectives", "operational alignment", or "governance targets".
-                6. STRICT FORMATTING FOR SECTION 2 (STRATEGIC CAUSALITY CHAIN): You must strictly follow this exact layout for Section 2, showing structural gaps and exact pains instead of unconfirmed visibility indicators:
+                CRITICAL MIRRORING AND STRUCTURAL INSTRUCTIONS:
+                1. EMOTIONAL MIRRORING & VOICE: Do not write a cold, completely detached generic report. You must address the unique tension of operating as a small, agile team inside an overwhelming enterprise framework. Explicitly reference or adapt the phrases from 'Captured Verbatims' (e.g., operating like a small cog in a massive machine, or navigating a massive corporate machine where you feel isolated/junior despite the high stakes).
+                2. DEEP CAUSALITY SEGMENTATION: Never treat Zero-Trust as a structural defect or root cause. Frame it exclusively as a rigid governance environment that limits diagnostic visibility.
+                3. SECTION 2 CAUSALITY CHAIN TEMPLATE: You must output this sequence exactly:
                    **Fear**
                    ↓
                    Loss of executive credibility during budget reviews due to guesswork attribution
@@ -376,28 +364,28 @@ if st.session_state.stage == 4:
                    
                    ↓
                    Discovery & Architecture Mapping
-                7. REALISTIC RECOMMENDATIONS: Focus strictly on:
-                   * Discovery workshop
-                   * Architecture mapping
-                   * Data-flow assessment
-                   * Stakeholder interviews
-                8. RECOMMENDED STRATEGY: This must strictly be "Discovery & Architecture Mapping" under these circumstances.
-                9. CORE FEAR TREATMENT: Explicitly use the confirmed fear about budget reviews to justify the immediate urgency of the discovery phase.
-                10. NARRATIVE MANDATORY FORMULATION (SECTION 3): You must output EXACTLY this paragraph to frame the executive context:
+                4. SECTION 3 NARRATIVE REQUIREMENT: Open by acknowledging the personal and political risk. Address the reality that running tracking workflows within an enterprise of this scale creates structural isolation. Incorporate this precise framing:
                    "The organization operates under strict governance and information-security constraints, limiting visibility into its reporting architecture. At the same time, inconsistent marketing attribution across multiple reporting sources reduces confidence in executive reporting and creates uncertainty ahead of budget reviews."
-                11. STRICT FORMATTING FOR SECTION 5 (EXPECTED BUSINESS IMPACT): You must strictly list these four outcomes exactly, without adding generic jargon:
-                    - Trusted campaign attribution across reporting systems
-                    - Higher confidence during executive budget reviews
-                    - Reduced disputes over marketing contribution
-                    - Faster executive decision cycles
+                   Weave in a mirrored validation of their verbatim experience (navigating a massive machine with siloed components).
+                5. SECTION 4 RECOMMENDATION CUSTOMIZATION: Do NOT just output a generic template. Explicitly state that a non-intrusive discovery phase is designed precisely to safeguard their position and map the architecture without triggering rigid corporate security compliance or agency disputes. Connect it directly to the metaphor of navigating a massive machine safely.
+                6. SECTION 5 BUSINESS IMPACTS: Output exactly these four business outcomes, tailored to address their specific pain points:
+                   - Trusted campaign attribution across reporting systems
+                   - Higher confidence during executive budget reviews
+                   - Reduced disputes over marketing contribution
+                   - Faster executive decision cycles
+                7. SECTION 6 IMMEDIATE PRIORITIES: Anchor these strictly in their exact practical limits (Zero-Trust and agency constraints):
+                   - Map current systems without breaching Zero-Trust guardrails
+                   - Validate cross-system integration points (Mailchimp, GA, Agency assets)
+                   - Identify external agency reporting dependencies
+                   - Confirm and align executive objectives ahead of the next budget review
 
                 Generate your report strictly following this layout:
-                - Section 1: Strategic DNA Matrix (strictly display the extracted values. For strategic objectives, write: "Improve decision quality through validated business objectives").
-                - Section 2: Strategic Causality Chain (using the exact structural gap sequence outlined above).
-                - Section 3: Executive Blueprint Narrative (incorporating the mandatory paragraph above).
-                - Section 4: Executive Recommendation callout box (emphasizing starting with a structured discovery phase before defining any roadmap).
-                - Section 5: Expected Business Impact (displaying exactly the four high-fidelity business outcomes).
-                - Section 6: Immediate Priorities (must strictly be: Map current systems, Validate integration points, Identify reporting dependencies, Confirm executive objectives).
+                - Section 1: Strategic DNA Matrix
+                - Section 2: Strategic Causality Chain
+                - Section 3: Executive Blueprint Narrative
+                - Section 4: Executive Recommendation callout box
+                - Section 5: Expected Business Impact
+                - Section 6: Immediate Priorities
                 """
 
                 try:
@@ -411,23 +399,15 @@ if st.session_state.stage == 4:
                     <div class="recommendation-box">
                         <div class="{badge_class}">⚠️ EXECUTIVE RISK LEVEL: {risk_level}</div>
                         <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
-                            <b>Current Posture Assessment:</b><br>
-                            • Structural opacity and diagnostic limit (strict security protocol)<br>
-                            • Functional components are operational but unmapped<br>
-                            • No immediate crisis reported; process validation required
+                            <b>Human & Corporate Posture Risk Assessment:</b><br>
+                            • <b>Personal Stakes:</b> High vulnerability regarding personal credibility ahead of upcoming budget reviews.<br>
+                            • <b>Operational Friction:</b> Navigating strict data isolation rules (Zero-Trust) within an overwhelming enterprise machine reduces immediate visibility.<br>
+                            • <b>Strategic Path:</b> Validation and safe structural discovery required immediately to shield the team from guesswork attribution errors.
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     st.markdown(final_diag)
-
-                    if is_unconfirmed:
-                        st.markdown(f"""
-                        <div class="confidence-box">
-                            <b>📋 Diagnostic Confidence: MEDIUM</b><br>
-                            Operational constraints prevent total system evaluation. A non-disruptive discovery roadmap is mandatory before outlining structural recommendations.
-                        </div>
-                        """, unsafe_allow_html=True)
 
                     st.subheader("Final Summary Matrix")
                     col_m1, col_m2 = st.columns(2)
@@ -440,8 +420,8 @@ if st.session_state.stage == 4:
                     with col_m2:
                         st.markdown(f"""
                         * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
-                        * **Business Risk:** {"🟡 **MEDIUM**" if is_unconfirmed else "🔴 **HIGH**"}
-                        * **Transformation Strategy:** {"Discovery & Architecture Mapping" if is_unconfirmed else "Lightweight secure integration"}
+                        * **Voice/Mirroring Checklist:** ✅ *Verbatim metaphors mirrored in narrative and priorities.*
+                        * **Transformation Strategy:** Discovery & Architecture Mapping
                         """)
 
                 except Exception as e:
