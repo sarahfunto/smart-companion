@@ -179,7 +179,7 @@ with col1:
         else:
             st.warning("Please type the prospect input before running analysis pipelines.")
             
-    # RE-INTRODUCED: Last Analyzed Input UI Layer
+    # Last Analyzed Input UI Layer
     if st.session_state.last_analyzed:
         st.markdown(f"<div class='last-input-box'><b>Last Analyzed Input:</b> {st.session_state.last_analyzed}</div>", unsafe_allow_html=True)
 
@@ -190,12 +190,14 @@ with col1:
             if st.button("⏮️ Previous Stage"):
                 st.session_state.stage -= 1
                 st.session_state.blueprint_generated = False
+                st.session_state.step4_validated = False  # Reset gate state on navigation
                 st.rerun()
     with nav_col2:
         if st.session_state.stage < 4:
             if st.button("➡️ Next Stage"):
                 st.session_state.stage += 1
                 st.session_state.blueprint_generated = False
+                st.session_state.step4_validated = False  # Reset gate state on navigation
                 st.rerun()
 
 with col2:
@@ -222,7 +224,7 @@ with col2:
 if st.session_state.stage == 4:
     filled_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
-    # CONDITION: Show button ONLY when on Step 4 AND Step 4 validation has been executed
+    # CRITICAL SECURITY FIX: Strict check for step4_validated flag inside the rendering scope
     if st.session_state.step4_validated:
         st.markdown("---")
         st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
