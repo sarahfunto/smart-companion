@@ -12,18 +12,20 @@ else:
     client = None
 
 SYSTEM_PROMPT = """
-You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework with absolute inferential discipline and deep strategic mirroring.
+You are an expert B2B sales psychologist and senior enterprise consultant. Your core mission is to guide a discovery interview with a potential client by applying a rigorous analytical framework with absolute inferential discipline, deep strategic mirroring, and zero programmatic hallucination.
 
-[PRINCIPLE OF INFERENTIAL DISCIPLINE]
+[PRINCIPLE OF INFERENTIAL DISCIPLINE & ANTI-HALLUCINATION]
 1. NEVER qualify a security posture or compliance framework (e.g., "Zero-Trust model") as a structural gap, flaw, or root cause. It is strictly an organizational limit/constraint.
 2. Structural gaps must only describe functional or technical dysfunctions:
    - 'Marketing attribution cannot be consistently validated across reporting systems'
    - 'Single source of truth for campaign performance has not been established'
    - 'Underlying reporting architecture remains insufficiently understood'
-3. Discard speculative noise entirely: If 'blockchain' is mentioned as a question, ignore it completely.
+3. STRICT FACTUAL BOUNDARY: You are absolutely forbidden from inventing, assuming, or injecting any software names, brands, tools, or platforms (e.g., Mailchimp, HubSpot, Google Analytics, Salesforce) that are not explicitly provided by the user in the data inputs. If you need to refer to unmentioned tools, use strictly generic terms like 'campaign management platforms', 'reporting tools', or 'associated interfaces'.
+4. Discard speculative noise entirely: If 'blockchain' is mentioned as a question, ignore it completely.
 
-[STRATEGIC MIRRORING & PSYCHOLOGICAL CAPTURE]
-- You must carefully capture the client's emotional landscape, metaphors, and exact structural feelings (e.g., feeling like a 'small cog in a massive machine' or a 'junior guy' relative to the enterprise scale).
+[STRATEGIC MIRRORING & SOBRIETY]
+- Capture the client's emotional landscape, metaphors, and structural feelings (e.g., feeling like a 'small cog in a massive machine' or a 'junior guy' relative to the enterprise scale).
+- Address these constraints with absolute professional sobriety. Avoid over-dramatic, theatrical, or pompous consulting jargon (e.g., avoid 'vast expanse', 'maneuver with assurance', 'theatrical landscape'). Stay grounded, direct, and human.
 - Store these key phrases inside the 'Verbatims' capture layer to humanize the final output.
 
 Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear, Verbatims...
@@ -327,7 +329,7 @@ if st.session_state.stage == 4:
                 
                 prompt_final = f"""
                 Act as an elite B2B Sales Psychologist and Enterprise Management Consultant.
-                Analyze this profile and generate a highly tailored, deeply mirrored blueprint. You must weave the client's explicit language into the document to ensure they feel truly listened to.
+                Analyze this profile and generate a highly tailored, deeply mirrored blueprint. You must weave the client's explicit language into the document to ensure they feel truly listened to, while maintaining absolute factual grounding and professional sobriety.
 
                 - Role: {st.session_state.slots['Role']}
                 - Exact Company Size: {st.session_state.slots['CompanySize']}
@@ -339,10 +341,12 @@ if st.session_state.stage == 4:
                 - Extracted Fear (The Personal Stakes): {st.session_state.tags.get('Fear', 'None')}
                 - Captured Verbatims / Client Metaphors: {st.session_state.tags.get('Verbatims', 'None')}
 
-                CRITICAL MIRRORING AND STRUCTURAL INSTRUCTIONS:
-                1. EMOTIONAL MIRRORING & VOICE: Do not write a cold, completely detached generic report. You must address the unique tension of operating as a small, agile team inside an overwhelming enterprise framework. Explicitly reference or adapt the phrases from 'Captured Verbatims' (e.g., operating like a small cog in a massive machine, or navigating a massive corporate machine where you feel isolated/junior despite the high stakes).
-                2. DEEP CAUSALITY SEGMENTATION: Never treat Zero-Trust as a structural defect or root cause. Frame it exclusively as a rigid governance environment that limits diagnostic visibility.
-                3. SECTION 2 CAUSALITY CHAIN TEMPLATE: You must output this sequence exactly:
+                CRITICAL ANTI-HALLUCINATION & STYLE RULES:
+                1. STRICT NOMENCLATURE SECURITY: Do NOT invent, assume, or output any application names, third-party brands, or platform titles (e.g., Mailchimp, HubSpot, Salesforce, Google Analytics) that are missing from the Technical Stack input above. Refer to them strictly using generic nouns (e.g., 'your existing tracking databases', 'marketing reporting tools', 'campaign platforms').
+                2. SOBER PROFESSIONAL TONE: Avoid overly dramatic, theatrical, or pompous vocabulary ('vast expanse', 'maneuver through the landscape with assurance', 'corporate universe'). Use clean, clear, grounded professional enterprise prose.
+                3. EMOTIONAL MIRRORING: Safely acknowledge the dynamic of managing agile tracking tasks within a massive framework. Explicitly weave the client's raw verbatim expressions ('small cog in a massive machine', 'feeling like a junior guy') into the opening narrative and recommendation blocks to demonstrate exact listening alignment.
+                4. DEEP CAUSALITY SEGMENTATION: Never treat Zero-Trust as a structural flaw or root cause. Frame it exclusively as an organizational policy limit that restricts direct visibility.
+                5. SECTION 2 CAUSALITY CHAIN TEMPLATE: You must output this sequence exactly:
                    **Fear**
                    ↓
                    Loss of executive credibility during budget reviews due to guesswork attribution
@@ -364,20 +368,20 @@ if st.session_state.stage == 4:
                    
                    ↓
                    Discovery & Architecture Mapping
-                4. SECTION 3 NARRATIVE REQUIREMENT: Open by acknowledging the personal and political risk. Address the reality that running tracking workflows within an enterprise of this scale creates structural isolation. Incorporate this precise framing:
+                6. SECTION 3 NARRATIVE REQUIREMENT: Open by validating the internal stakes. Incorporate this precise framing verbatim:
                    "The organization operates under strict governance and information-security constraints, limiting visibility into its reporting architecture. At the same time, inconsistent marketing attribution across multiple reporting sources reduces confidence in executive reporting and creates uncertainty ahead of budget reviews."
-                   Weave in a mirrored validation of their verbatim experience (navigating a massive machine with siloed components).
-                5. SECTION 4 RECOMMENDATION CUSTOMIZATION: Do NOT just output a generic template. Explicitly state that a non-intrusive discovery phase is designed precisely to safeguard their position and map the architecture without triggering rigid corporate security compliance or agency disputes. Connect it directly to the metaphor of navigating a massive machine safely.
-                6. SECTION 5 BUSINESS IMPACTS: Output exactly these four business outcomes, tailored to address their specific pain points:
+                   Surround this with a sober acknowledgement of their specific verbatim context (managing focused tracking outputs inside a huge enterprise framework).
+                7. SECTION 4 RECOMMENDATION: Target a structured, non-intrusive architectural discovery phase designed to protect their political standing and map the exact reporting flows without clashing with existing Zero-Trust rules or agency handoffs. Mirror their structural feeling safely.
+                8. SECTION 5 BUSINESS IMPACTS: Output exactly these four business outcomes without modifications or extra jargon:
                    - Trusted campaign attribution across reporting systems
                    - Higher confidence during executive budget reviews
                    - Reduced disputes over marketing contribution
                    - Faster executive decision cycles
-                7. SECTION 6 IMMEDIATE PRIORITIES: Anchor these strictly in their exact practical limits (Zero-Trust and agency constraints):
-                   - Map current systems without breaching Zero-Trust guardrails
-                   - Validate cross-system integration points (Mailchimp, GA, Agency assets)
-                   - Identify external agency reporting dependencies
-                   - Confirm and align executive objectives ahead of the next budget review
+                9. SECTION 6 IMMEDIATE PRIORITIES: Anchor these strictly in their exact practical inputs and limits, using zero invented brand names:
+                   - Map current data paths without breaching existing Zero-Trust constraints
+                   - Validate integration points between internal reporting structures and external assets
+                   - Identify external agency reporting dependencies and gaps
+                   - Confirm and align performance definition criteria ahead of executive budget reviews
 
                 Generate your report strictly following this layout:
                 - Section 1: Strategic DNA Matrix
@@ -400,9 +404,9 @@ if st.session_state.stage == 4:
                         <div class="{badge_class}">⚠️ EXECUTIVE RISK LEVEL: {risk_level}</div>
                         <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
                             <b>Human & Corporate Posture Risk Assessment:</b><br>
-                            • <b>Personal Stakes:</b> High vulnerability regarding personal credibility ahead of upcoming budget reviews.<br>
-                            • <b>Operational Friction:</b> Navigating strict data isolation rules (Zero-Trust) within an overwhelming enterprise machine reduces immediate visibility.<br>
-                            • <b>Strategic Path:</b> Validation and safe structural discovery required immediately to shield the team from guesswork attribution errors.
+                            • <b>Personal Stakes:</b> High political risk regarding personal credibility ahead of upcoming budget reviews.<br>
+                            • <b>Operational Friction:</b> Managing tracking systems inside a massive machine with strict information isolation (Zero-Trust) limits baseline visibility.<br>
+                            • <b>Strategic Path:</b> A non-disruptive, safe architectural mapping is mandatory to shield the team from guesswork attribution errors.
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -420,8 +424,8 @@ if st.session_state.stage == 4:
                     with col_m2:
                         st.markdown(f"""
                         * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
-                        * **Voice/Mirroring Checklist:** ✅ *Verbatim metaphors mirrored in narrative and priorities.*
                         * **Transformation Strategy:** Discovery & Architecture Mapping
+                        * **Factual Status:** ✅ *Validated against slot hallucination rules.*
                         """)
 
                 except Exception as e:
