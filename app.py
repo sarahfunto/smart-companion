@@ -35,16 +35,21 @@ if 'slots' not in st.session_state:
 if 'tags' not in st.session_state:
     st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard'}
 if 'ai_guidance' not in st.session_state:
-    st.session_state.ai_guidance = "Sandbox ready for Scenario 3 evaluation. Please input the initial discovery statement."
-if 'gate_evaluated' not in st.session_state:
-    st.session_state.gate_evaluated = False
+    st.session_state.ai_guidance = "Sandbox ready for Scenario 3 evaluation. Input discovery notes."
 
 def trigger_hard_reset():
     st.session_state.stage = 1
     st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
     st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard'}
     st.session_state.ai_guidance = "State cleared. All cached parameters purged."
-    st.session_state.gate_evaluated = False
+
+# Dynamic contextual objective texts displayed transparently above inputs
+STEP_GUIDELINES = {
+    1: "Step 1 Focus: Document explicitly stated corporate roles, responsibilities, and preliminary scope.",
+    2: "Step 2 Focus: Verify real technical infrastructure tools and components. Strip away buzzwords.",
+    3: "Step 3 Focus: Isolate primary business pain metrics, workflow degradation, or operational friction.",
+    4: "Step 4 Focus: Review all captured parameters and execute the definitive strategic gate check."
+}
 
 # =====================================================================
 # MODULE 3: UI LAYOUT & CLASSES
@@ -64,14 +69,6 @@ st.sidebar.markdown("## ⚙️ Administrative Controls")
 if st.sidebar.button("🔄 Execute Hard Reset", use_container_width=True):
     trigger_hard_reset()
     st.rerun()
-
-# Dynamic contextual prompt guidelines displayed per step to guide the user
-STEP_GUIDELINES = {
-    1: "Step 1: Focus on parsing the client's explicit role, operational mandates, and initial business boundaries.",
-    2: "Step 2: Technical Stack Review. Listen for specific, verifiable tools or architecture. Filter out strategic buzzword salads.",
-    3: "Step 3: Deep Dive into Core Bottlenecks. Identify explicit operational failures, quantitative metrics down, or friction points.",
-    4: "Step 4: Governance and Final Blueprint Gateway. Review captured boundaries before triggering final compilation assessment."
-}
 
 # =====================================================================
 # MODULE 4: INTERACTION & ANALYSIS LAYER
@@ -103,7 +100,7 @@ def execute_extraction_call(user_input):
         for key in st.session_state.slots:
             val = str(incoming_slots.get(key, "Empty")).strip()
             
-            # Independent Clean-up for the latent Tech bug
+            # Safe clean-up for the latent Tech bug
             if key == "Tech" and "digital transformation" in val.lower():
                 val = "Empty"
                 
@@ -121,33 +118,31 @@ def execute_extraction_call(user_input):
         st.error(f"Extraction Pipeline Failure: {e}")
 
 # INTERVIEW VIEWPORTS
-st.markdown(f"### 💬 Scenario Sandbox: Step {st.session_state.stage} / 4")
-st.caption(f"**Contextual Objective:** {STEP_GUIDELINES[st.session_state.stage]}")
+st.markdown(f"### 💬 Interview Progress: Step {st.session_state.stage} / 4")
+st.markdown(f"📍 **Current Objective:** `{STEP_GUIDELINES[st.session_state.stage]}`")
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
     st.info(f"System Message Tracker: {st.session_state.ai_guidance}")
-    current_text = st.text_area("✍️ Prospect Input:", height=120, key=f"scen3_input_turn_{st.session_state.stage}")
+    current_text = st.text_area("✍️ Saisie de l'entretien (Prospect Input):", height=120, key=f"scen3_input_turn_{st.session_state.stage}")
     
-    # Process turn button
-    if st.button("⚡ Analyze and Validate Turn"):
+    # Process turn execution
+    if st.button("⚡ Analyze and Validate Turn", use_container_width=True):
         if current_text:
             execute_extraction_call(current_text)
-            if st.session_state.stage == 4:
-                st.session_state.gate_evaluated = True
             st.rerun()
             
+    st.markdown("---")
     nav1, nav2 = st.columns(2)
     with nav1:
         if st.session_state.stage > 1:
-            if st.button("⏮️ Previous Step"):
+            if st.button("⏮️ Previous Step", use_container_width=True):
                 st.session_state.stage -= 1
-                # We do NOT reset gate_evaluated here so memory context remains alive and intact
                 st.rerun()
     with nav2:
         if st.session_state.stage < 4:
-            if st.button("➡️ Next Step"):
+            if st.button("➡️ Next Step", use_container_width=True):
                 st.session_state.stage += 1
                 st.rerun()
 
@@ -165,67 +160,68 @@ with col2:
 # =====================================================================
 # MODULE 5: AUDITABLE & EXPLICIT VALIDATION GATEKEEPER
 # =====================================================================
-# The logic now requires EITHER explicitly clicking the validate button OR having data in memory at stage 4
-if st.session_state.stage == 4 and st.session_state.gate_evaluated:
+if st.session_state.stage == 4:
     st.markdown("---")
-    st.header("🛡️ Gatekeeper Security Audit & Verification Logs")
+    st.subheader("🛡️ Strategic Gatekeeper Evaluation Control")
     
-    core_requirements = {
-        'Pain': 'Operational Pain & Dysfunctions',
-        'RootCauses': 'Technical Structural Gaps',
-        'Limits': 'Governance & Architecture Limits'
-    }
-    
-    scorecard = {}
-    filled_structural_count = 0
-    
-    for key, description in core_requirements.items():
-        current_val = st.session_state.slots.get(key, 'Empty')
-        is_valid = current_val not in ['Empty', '', 'None', 'null', 'undefined']
+    # The evaluation execution is isolated completely behind this action trigger
+    if st.button("🎯 Run Final Blueprint Security Audit", type="primary", use_container_width=True):
+        core_requirements = {
+            'Pain': 'Operational Pain & Dysfunctions',
+            'RootCauses': 'Technical Structural Gaps',
+            'Limits': 'Governance & Architecture Limits'
+        }
         
-        if is_valid:
-            scorecard[key] = {"status": "✅ VALIDATED", "color": "#8BFF8B", "val": current_val}
-            filled_structural_count += 1
-        else:
-            scorecard[key] = {"status": "❌ INSUFFICIENT / EMPTY", "color": "#FF8B8B", "val": "No granular business data extracted."}
-
-    if filled_structural_count < 3:
-        html_component_content = f"""
-        <div style="padding: 20px; border-radius: 8px; background-color: #2D1A1A; border: 2px solid #A63A3A; color: #FFEBEB; font-family: sans-serif;">
-            <h3 style="color: #FF8B8B; margin-top: 0;">🛑 STRATEGIC GENERATION BLOCKED</h3>
-            <p style="font-size: 14px;"><b>Reason:</b> Data integrity checks failed. The analysis gateway requires <b>all 3 core structural blocks</b> to compile a valid blueprint. Non-structural profile fields (like Role or Tech) are excluded from this safety calculation.</p>
+        scorecard = {}
+        filled_structural_count = 0
+        
+        for key, description in core_requirements.items():
+            current_val = st.session_state.slots.get(key, 'Empty')
+            is_valid = current_val not in ['Empty', '', 'None', 'null', 'undefined']
             
-            <table style="width: 100%; margin-top: 15px; border-collapse: collapse; font-size: 13px; color: #FFEBEB;">
-                <thead>
-                    <tr style="border-bottom: 2px solid #A63A3A; text-align: left;">
-                        <th style="padding: 8px;">Required Structural Block</th>
-                        <th style="padding: 8px;">Audit Status</th>
-                        <th style="padding: 8px;">Extracted Content Checked in Memory</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr style="border-bottom: 1px solid #4A2828;">
-                        <td style="padding: 8px;"><b>{core_requirements['Pain']} (Pain)</b></td>
-                        <td style="padding: 8px; color: {scorecard['Pain']['color']}; font-weight: bold;">{scorecard['Pain']['status']}</td>
-                        <td style="padding: 8px;"><i>{scorecard['Pain']['val']}</i></td>
-                    </tr>
-                    <tr style="border-bottom: 1px solid #4A2828;">
-                        <td style="padding: 8px;"><b>{core_requirements['RootCauses']} (Root Causes)</b></td>
-                        <td style="padding: 8px; color: {scorecard['RootCauses']['color']}; font-weight: bold;">{scorecard['RootCauses']['status']}</td>
-                        <td style="padding: 8px;"><i>{scorecard['RootCauses']['val']}</i></td>
-                    </tr>
-                    <tr style="border-bottom: 1px solid #4A2828;">
-                        <td style="padding: 8px;"><b>{core_requirements['Limits']} (Limits)</b></td>
-                        <td style="padding: 8px; color: {scorecard['Limits']['color']}; font-weight: bold;">{scorecard['Limits']['status']}</td>
-                        <td style="padding: 8px;"><i>{scorecard['Limits']['val']}</i></td>
-                    </tr>
-                </tbody>
-            </table>
-            <br>
-            <p style="font-size: 12px; font-style: italic; color: #CCA3A3;">Security Directive: The blueprint generation has been short-circuited. No documents will be inferred from the current transcript due to the high density of conversational noise, buzzwords, or qualitative statements.</p>
-        </div>
-        """
-        st.components.v1.html(html_component_content, height=280, scrolling=False)
-    else:
-        st.success("🎯 Quality assurance gate passed. Data depth is verified as accurate for compilation.")
+            if is_valid:
+                scorecard[key] = {"status": "✅ VALIDATED", "color": "#8BFF8B", "val": current_val}
+                filled_structural_count += 1
+            else:
+                scorecard[key] = {"status": "❌ INSUFFICIENT / EMPTY", "color": "#FF8B8B", "val": "No granular business data extracted."}
+
+        if filled_structural_count < 3:
+            html_component_content = f"""
+            <div style="padding: 20px; border-radius: 8px; background-color: #2D1A1A; border: 2px solid #A63A3A; color: #FFEBEB; font-family: sans-serif;">
+                <h3 style="color: #FF8B8B; margin-top: 0;">🛑 STRATEGIC GENERATION BLOCKED</h3>
+                <p style="font-size: 14px;"><b>Reason:</b> Data integrity checks failed. The analysis gateway requires <b>all 3 core structural blocks</b> to compile a valid blueprint. Non-structural profile fields (like Role or Tech) are excluded from this safety calculation.</p>
+                
+                <table style="width: 100%; margin-top: 15px; border-collapse: collapse; font-size: 13px; color: #FFEBEB;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #A63A3A; text-align: left;">
+                            <th style="padding: 8px;">Required Structural Block</th>
+                            <th style="padding: 8px;">Audit Status</th>
+                            <th style="padding: 8px;">Extracted Content Checked in Memory</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid #4A2828;">
+                            <td style="padding: 8px;"><b>{core_requirements['Pain']} (Pain)</b></td>
+                            <td style="padding: 8px; color: {scorecard['Pain']['color']}; font-weight: bold;">{scorecard['Pain']['status']}</td>
+                            <td style="padding: 8px;"><i>{scorecard['Pain']['val']}</i></td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #4A2828;">
+                            <td style="padding: 8px;"><b>{core_requirements['RootCauses']} (Root Causes)</b></td>
+                            <td style="padding: 8px; color: {scorecard['RootCauses']['color']}; font-weight: bold;">{scorecard['RootCauses']['status']}</td>
+                            <td style="padding: 8px;"><i>{scorecard['RootCauses']['val']}</i></td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #4A2828;">
+                            <td style="padding: 8px;"><b>{core_requirements['Limits']} (Limits)</b></td>
+                            <td style="padding: 8px; color: {scorecard['Limits']['color']}; font-weight: bold;">{scorecard['Limits']['status']}</td>
+                            <td style="padding: 8px;"><i>{scorecard['Limits']['val']}</i></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <br>
+                <p style="font-size: 12px; font-style: italic; color: #CCA3A3;">Security Directive: The blueprint generation has been short-circuited. No documents will be inferred from the current transcript due to the high density of conversational noise, buzzwords, or qualitative statements.</p>
+            </div>
+            """
+            st.components.v1.html(html_component_content, height=280, scrolling=False)
+        else:
+            st.success("🎯 Quality assurance gate passed. Data depth is verified as accurate for compilation.")
 
