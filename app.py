@@ -33,6 +33,7 @@ st.markdown("""
     .status-box-filled { padding: 12px; border-radius: 10px; background-color: #155724; border: 2px solid #28a745; margin-bottom: 8px; color: #D4EDDA; font-weight: bold; }
     .recommendation-box { padding: 25px; border-radius: 15px; background-color: #0B2545; border: 2px solid #134074; color: #EEF4F8; margin-top: 15px; margin-bottom: 20px; line-height: 1.6; }
     .priority-badge-high { display: inline-block; background-color: #E63946; color: white; padding: 6px 14px; font-size: 0.85em; font-weight: bold; border-radius: 4px; letter-spacing: 1px; margin-bottom: 15px; }
+    .last-input-box { background-color: #1E2530; border-left: 4px solid #2E6BFF; padding: 12px; border-radius: 4px; margin-top: 15px; color: #A0AEC0; font-style: italic; font-size: 0.95em; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -44,15 +45,19 @@ def execute_hard_reset():
     st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
     st.session_state.tags = {'Fear': 'Not yet confirmed', 'Verbatims': 'None'}
     st.session_state.transcript = ''
+    st.session_state.last_analyzed = ''
     st.session_state.ai_guidance = "Simulation state completely reset. All parameter blocks cleared."
     st.session_state.blueprint_generated = False
+    st.session_state.step4_validated = False
 
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
 if 'tags' not in st.session_state: st.session_state.tags = {'Fear': 'Not yet confirmed', 'Verbatims': 'None'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
+if 'last_analyzed' not in st.session_state: st.session_state.last_analyzed = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial statement."
 if 'blueprint_generated' not in st.session_state: st.session_state.blueprint_generated = False
+if 'step4_validated' not in st.session_state: st.session_state.step4_validated = False
 
 # SIDEBAR SIMULATION LAYER
 st.sidebar.markdown("## ⚙️ Simulation Control")
@@ -166,11 +171,18 @@ with col1:
     if st.button("⚡ Analyze and Validate Input"):
         if manual_input:
             st.session_state.transcript += "\\n" + manual_input
+            st.session_state.last_analyzed = manual_input
             st.session_state['ai_guidance'] = analyze_with_openai(manual_input, web_context_input, st.session_state.stage)
+            if st.session_state.stage == 4:
+                st.session_state.step4_validated = True
             st.rerun()
         else:
             st.warning("Please type the prospect input before running analysis pipelines.")
             
+    # RE-INTRODUCED: Last Analyzed Input UI Layer
+    if st.session_state.last_analyzed:
+        st.markdown(f"<div class='last-input-box'><b>Last Analyzed Input:</b> {st.session_state.last_analyzed}</div>", unsafe_allow_html=True)
+
     st.markdown("---")
     nav_col1, nav_col2 = st.columns(2)
     with nav_col1:
@@ -208,19 +220,21 @@ with col2:
 
 # STRATEGIC GATEKEEPER COMPLIANCE BLUEPRINT COMPILATION
 if st.session_state.stage == 4:
-    st.markdown("---")
-    st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
-    
     filled_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
-    if filled_count >= 3:
-        if st.button("🎯 Compile Custom Strategic Blueprint", type="primary", use_container_width=True):
-            st.session_state.blueprint_generated = True
-            st.rerun()
-    else:
-        st.warning("🛑 Blueprint locked: The slots matrix requires at least 3 valid operational parameters in memory to pass the security gate.")
+    # CONDITION: Show button ONLY when on Step 4 AND Step 4 validation has been executed
+    if st.session_state.step4_validated:
+        st.markdown("---")
+        st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
+        
+        if filled_count >= 3:
+            if st.button("🎯 Compile Custom Strategic Blueprint", type="primary", use_container_width=True):
+                st.session_state.blueprint_generated = True
+                st.rerun()
+        else:
+            st.warning("🛑 Blueprint locked: The slots matrix requires at least 3 valid operational parameters in memory to pass the security gate.")
 
-    if st.session_state.blueprint_generated and filled_count >= 3:
+    if st.session_state.blueprint_generated and filled_count >= 3 and st.session_state.step4_validated:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
