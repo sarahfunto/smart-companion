@@ -50,6 +50,7 @@ def execute_hard_reset():
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
 if 'tags' not in st.session_state: st.session_state.tags = {'Fear': 'Not yet confirmed', 'Verbatims': 'None'}
+if 'transcript' not in st.session_state: st.session_state.transcript = ''  # Fixed initialization position
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial statement."
 if 'blueprint_generated' not in st.session_state: st.session_state.blueprint_generated = False
 
