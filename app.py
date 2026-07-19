@@ -54,25 +54,6 @@ st.markdown("""
     .stButton>button { border-radius: 4px; height: 3em; }
     .status-box-empty { padding: 12px; border-radius: 6px; background-color: #1A1F26; border: 1px solid #2D3139; margin-bottom: 8px; color: #8A92A6; }
     .status-box-filled { padding: 12px; border-radius: 6px; background-color: #1E3A2F; border: 1px solid #2E694E; margin-bottom: 8px; color: #E3F9ED; font-weight: bold; }
-    
-    .gatekeeper-panel {
-        padding: 25px;
-        border-radius: 8px;
-        background-color: #2D1A1A;
-        border: 2px solid #A63A3A;
-        color: #FFEBEB;
-        margin-top: 20px;
-    }
-    .metric-table {
-        width: 100%;
-        margin-top: 10px;
-        border-collapse: collapse;
-    }
-    .metric-table td, .metric-table th {
-        padding: 8px;
-        border-bottom: 1px solid #4A2828;
-        text-align: left;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -88,11 +69,10 @@ def execute_extraction_call(user_input):
     if not user_input or client is None:
         return
     
-    # Simple formatting instruction passed at runtime to protect the pure extraction loop
     runtime_payload = (
         f"Transcript input to parse: {user_input}\n"
         f"Current state memory: {json.dumps(st.session_state.slots)}\n"
-        "Output JSON only with keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Lens, Fear, TechMaturity), ai_guidance."
+        "Output JSON only with keys: slots, tags, ai_guidance."
     )
     
     try:
@@ -111,6 +91,11 @@ def execute_extraction_call(user_input):
         incoming_slots = payload.get("slots", {})
         for key in st.session_state.slots:
             val = str(incoming_slots.get(key, "Empty")).strip()
+            
+            # Independent Clean-up for the latent Tech bug
+            if key == "Tech" and "digital transformation" in val.lower():
+                val = "Empty"
+                
             if val not in ["Empty", "", "None", "null", "undefined"]:
                 st.session_state.slots[key] = val
                 
@@ -163,13 +148,12 @@ with col2:
         st.markdown(f"<div class='{css}'><b>{k}:</b> {v}</div>", unsafe_allow_html=True)
 
 # =====================================================================
-# MODULE 5: AUDITABLE & EXPLICIT VALIDATION GATEKEEPER
+# MODULE 5: AUDITABLE & EXPLICIT VALIDATION GATEKEEPER (HTML RENDERING FIXED)
 # =====================================================================
 if st.session_state.stage == 4:
     st.markdown("---")
     st.header("🛡️ Gatekeeper Security Audit & Verification Logs")
     
-    # Audit trail definitions
     core_requirements = {
         'Pain': 'Operational Pain & Dysfunctions',
         'RootCauses': 'Technical Structural Gaps',
@@ -189,43 +173,44 @@ if st.session_state.stage == 4:
         else:
             scorecard[key] = {"status": "❌ INSUFFICIENT / EMPTY", "color": "#FF8B8B", "val": "No granular business data extracted."}
 
-    # AUDIT LOG COMPILATION DISPLAY
     if filled_structural_count < 3:
-        st.markdown(f"""
-        <div class="gatekeeper-panel">
+        # Native safe HTML structure injection
+        html_component_content = f"""
+        <div style="padding: 20px; border-radius: 8px; background-color: #2D1A1A; border: 2px solid #A63A3A; color: #FFEBEB; font-family: sans-serif;">
             <h3 style="color: #FF8B8B; margin-top: 0;">🛑 STRATEGIC GENERATION BLOCKED</h3>
-            <p><b>Reason:</b> Data integrity checks failed. The analysis gateway requires <b>all 3 core structural blocks</b> to compile a valid blueprint. Non-structural profile fields (like Role or Tech) are excluded from this safety calculation.</p>
+            <p style="font-size: 14px;"><b>Reason:</b> Data integrity checks failed. The analysis gateway requires <b>all 3 core structural blocks</b> to compile a valid blueprint. Non-structural profile fields (like Role or Tech) are excluded from this safety calculation.</p>
             
-            <table class="metric-table">
+            <table style="width: 100%; margin-top: 15px; border-collapse: collapse; font-size: 13px; color: #FFEBEB;">
                 <thead>
-                    <tr style="border-bottom: 2px solid #A63A3A;">
-                        <th>Required Structural Block</th>
-                        <th>Audit Status</th>
-                        <th>Extracted Content Checked in Memory</th>
+                    <tr style="border-bottom: 2px solid #A63A3A; text-align: left;">
+                        <th style="padding: 8px;">Required Structural Block</th>
+                        <th style="padding: 8px;">Audit Status</th>
+                        <th style="padding: 8px;">Extracted Content Checked in Memory</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td><b>{core_requirements['Pain']} (Pain)</b></td>
-                        <td style="color: {scorecard['Pain']['color']}; font-weight: bold;">{scorecard['Pain']['status']}</td>
-                        <td><i>{scorecard['Pain']['val']}</i></td>
+                    <tr style="border-bottom: 1px solid #4A2828;">
+                        <td style="padding: 8px;"><b>{core_requirements['Pain']} (Pain)</b></td>
+                        <td style="padding: 8px; color: {scorecard['Pain']['color']}; font-weight: bold;">{scorecard['Pain']['status']}</td>
+                        <td style="padding: 8px;"><i>{scorecard['Pain']['val']}</i></td>
                     </tr>
-                    <tr>
-                        <td><b>{core_requirements['RootCauses']} (Root Causes)</b></td>
-                        <td style="color: {scorecard['RootCauses']['color']}; font-weight: bold;">{scorecard['RootCauses']['status']}</td>
-                        <td><i>{scorecard['RootCauses']['val']}</i></td>
+                    <tr style="border-bottom: 1px solid #4A2828;">
+                        <td style="padding: 8px;"><b>{core_requirements['RootCauses']} (Root Causes)</b></td>
+                        <td style="padding: 8px; color: {scorecard['RootCauses']['color']}; font-weight: bold;">{scorecard['RootCauses']['status']}</td>
+                        <td style="padding: 8px;"><i>{scorecard['RootCauses']['val']}</i></td>
                     </tr>
-                    <tr>
-                        <td><b>{core_requirements['Limits']} (Limits)</b></td>
-                        <td style="color: {scorecard['Limits']['color']}; font-weight: bold;">{scorecard['Limits']['status']}</td>
-                        <td><i>{scorecard['Limits']['val']}</i></td>
+                    <tr style="border-bottom: 1px solid #4A2828;">
+                        <td style="padding: 8px;"><b>{core_requirements['Limits']} (Limits)</b></td>
+                        <td style="padding: 8px; color: {scorecard['Limits']['color']}; font-weight: bold;">{scorecard['Limits']['status']}</td>
+                        <td style="padding: 8px;"><i>{scorecard['Limits']['val']}</i></td>
                     </tr>
                 </tbody>
             </table>
             <br>
-            <p><i>Security Directive: The blueprint generation has been short-circuited. No documents will be inferred from the current transcript due to the high density of conversational noise, buzzwords, or qualitative statements.</i></p>
+            <p style="font-size: 12px; font-style: italic; color: #CCA3A3;">Security Directive: The blueprint generation has been short-circuited. No documents will be inferred from the current transcript due to the high density of conversational noise, buzzwords, or qualitative statements.</p>
         </div>
-        """, unsafe_allow_html=True)
+        """
+        st.components.v1.html(html_component_content, height=280, scrolling=False)
     else:
         st.success("🎯 Quality assurance gate passed. Data depth is verified as accurate for compilation.")
 
