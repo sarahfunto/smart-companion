@@ -1,7 +1,5 @@
 import streamlit as st
 import json
-import time
-import os
 from openai import OpenAI
 
 # 1. OPENAI API INITIALIZATION VIA SECRETS
@@ -28,7 +26,7 @@ You are an expert B2B sales psychologist and senior enterprise consultant. Your 
 - Address these constraints with absolute professional sobriety. Avoid over-dramatic, theatrical, or pompous consulting jargon (e.g., avoid 'vast expanse', 'maneuver with assurance', 'corporate universe'). Stay grounded, direct, and human.
 - ABSOLUTE PROMPT BOUNDARY: Never leak or output internal technical words like 'mirroring', 'structural feeling', 'slots', 'verbatims', or 'psychological tags' inside the generated customer-facing text. The adaptation must be entirely implicit, natural, and woven into clean business language.
 
-Your JSON output must strictly contain these keys: Role, CompanySize, Tech, Pain, RootCauses, Limits, BuyingStyle, TechMaturity, Fear, Verbatims...
+Your JSON output must strictly contain these keys: slots (containing Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (containing Lens, TechMaturity, Fear, Verbatims), ai_guidance.
 """
 
 st.set_page_config(page_title="AI Advisor - Smart Companion", page_icon="🎙️", layout="wide")
@@ -82,27 +80,38 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# SESSION STATE INITIALIZATION
+# 2. DEFINITIVE STATE RESET (CLEARS WIDGET CACHE CONTAMINATION)
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
 if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard', 'Verbatims': 'None'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial client statement to start the strategic analysis."
+if 'blueprint_generated' not in st.session_state: st.session_state.blueprint_generated = False
 
-# SIDEBAR: Simulation control & Context injection
+def execute_hard_reset():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.session_state.stage = 1
+    st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
+    st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard', 'Verbatims': 'None'}
+    st.session_state.transcript = ''
+    st.session_state.ai_guidance = "Simulation clean slate achieved. Memory registers purged."
+    st.session_state.blueprint_generated = False
+
+# SIDEBAR CONTROLS
 st.sidebar.markdown("## ⚙️ Simulation Control")
-if st.sidebar.button("🔄 Réinitialiser la simulation", use_container_width=True):
-    st.session_state.clear()
+if st.sidebar.button("🔄 Reset Simulation State", use_container_width=True):
+    execute_hard_reset()
     st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Live Context Injection")
-web_context_input = st.sidebar.text_area("📝 Corporate Profile / Web Context", height=200, placeholder="Example: Corporate enterprise environment...")
+web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", height=150, placeholder="Inject manual environment data here...", key="web_ctx_static")
 
-# AI ANALYSIS ENGINE FUNCTION
+# ENGINE PIPELINE FOR LIVE INTERPRETATION
 def analyze_with_openai(user_text, context_web, current_stage):
     if not user_text:
-        return None
+        return "No text input captured."
 
     current_slots = st.session_state.slots
     current_tags = st.session_state.tags
@@ -118,7 +127,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "2. Extract Root Causes (Critical Structural Gaps): Frame strictly as functional/technical attribution disconnects. Never blame Zero-Trust.\n"
         "3. Extract Limits: Capture security rules (Zero-Trust) and agency dependencies. IGNORE blockchain entirely.\n"
         "4. Extract Fear: Capture executive credibility risk ahead of budget reviews.\n"
-        "5. Capture Verbatims/Metaphors: Extract distinct expressions like 'small cog in a massive machine' or 'junior guy' to use for deep validation.\n"
+        "5. Capture Verbatims/Metaphors: Extract distinct expressions like 'small cog in a massive machine' or 'junior guy'.\n"
         "Format response as JSON with keys: slots, tags, ai_guidance."
     )
 
@@ -134,16 +143,14 @@ def analyze_with_openai(user_text, context_web, current_stage):
         )
         result = json.loads(response.choices[0].message.content)
         
-        # Safe State Update
+        # State processing & parameter mapping
         new_slots = result.get("slots", {})
         for key in st.session_state.slots:
             if key in new_slots:
                 incoming_val = str(new_slots[key]).strip()
                 if incoming_val not in ["Empty", "", "None", "Keep existing", "null", "undefined"]:
-                    if st.session_state.slots[key] == "Empty" or len(incoming_val) > len(str(st.session_state.slots[key])):
-                        st.session_state.slots[key] = incoming_val
+                    st.session_state.slots[key] = incoming_val
         
-        # Safe Tag Update
         new_tags = result.get("tags", {})
         for target_key, possible_keys in {
             "Lens": ["BuyingStyle", "Buying Style", "Lens", "decision_lens"],
@@ -158,9 +165,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
                         st.session_state.tags[target_key] = incoming_tag
                         break
 
-        # ==========================================
-        # 🛡️ POST-PROCESSING GUARDRAILS & OVERRIDES
-        # ==========================================
+        # Post-processing hard filters
         limits_val = str(st.session_state.slots.get("Limits", "")).lower()
         pain_val = str(st.session_state.slots.get("Pain", "")).lower()
         rc_val = str(st.session_state.slots.get("RootCauses", "")).lower()
@@ -168,16 +173,12 @@ def analyze_with_openai(user_text, context_web, current_stage):
 
         if "cog" in user_input_lower or "machine" in user_input_lower:
             st.session_state.tags["Verbatims"] = "small cog in a massive machine / feeling like a junior guy relative to the scale"
-
         if "blockchain" in limits_val or "blockchain" in pain_val or "blockchain" in user_input_lower:
             st.session_state.slots["Limits"] = "Information-security policies, Zero-Trust compliance constraints, External agency reporting dependencies"
-
         if "zero" in rc_val or "trust" in rc_val or "compliance" in rc_val:
             st.session_state.slots["RootCauses"] = "Marketing attribution cannot be consistently validated across reporting systems. Single source of truth for campaign performance has not been established."
-
         if "security" in pain_val or "transparency" in pain_val or "limits" in pain_val:
             st.session_state.slots["Pain"] = "Inconsistent campaign attribution across multiple reporting sources, reducing confidence ahead of budget reviews."
-
         if "budget" in user_input_lower or "guesswork" in user_input_lower or "afraid" in user_input_lower:
             st.session_state.tags["Lens"] = "Commercial / Revenue-Driven"
             st.session_state.tags["Fear"] = "Loss of executive credibility during budget reviews due to guesswork attribution"
@@ -186,6 +187,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
     except Exception as e:
         return f"Error analyzing input: {e}"
 
+# VIEWPORT DEPLOYMENT
 st.markdown(f"### 💬 Interview Progress: Step {st.session_state.stage} / 4")
 stage_questions = {
     "1": "Who am I speaking with today, what is the scale of your organization, and what corporate trigger brought you here?",
@@ -202,19 +204,24 @@ with col1:
     st.info(f"Smart Companion Strategy Insight: {guidance_text}")
     
     input_key = f"client_input_stage_{st.session_state.stage}"
-    manual_input = st.text_area("⌨️ Client Input (Type what the prospect says):", height=100, key=input_key)
+    manual_input = st.text_area("✍️ Saisie de l'entretien (Prospect Input):", height=120, key=input_key)
     
-    if st.button("⚡ Validate and Analyze Input"):
+    # 3. ANALYSIS ACTIVATION - INTERPRETS THE TURNS IMMEDIATELY WITHOUT ADVANCING STAGE
+    if st.button("⚡ Analyze and Validate Input"):
         if manual_input:
             st.session_state.transcript = manual_input
             st.session_state['ai_guidance'] = analyze_with_openai(manual_input, web_context_input, st.session_state.stage)
             st.rerun()
+        else:
+            st.warning("Please type the prospect input before running analysis pipelines.")
             
+    st.markdown("---")
     nav_col1, nav_col2 = st.columns(2)
     with nav_col1:
         if st.session_state.stage > 1:
             if st.button("⏮️ Previous Stage"):
                 st.session_state.stage -= 1
+                st.session_state.blueprint_generated = False
                 st.rerun()
     with nav_col2:
         if st.session_state.stage < 4:
@@ -234,115 +241,77 @@ with col2:
         b_class = "status-box-filled" if tag_val not in ["Standard", "None", "Not yet confirmed"] else "status-box-empty"
         st.markdown(f"<div class='{b_class}'><b>{label}:</b> {tag_val}</div>", unsafe_allow_html=True)
 
-# FINAL DIAGNOSTIC
-if st.session_state.stage == 4 and sum(1 for val in st.session_state.slots.values() if val != "Empty") >= 3:
+# =====================================================================
+# MODULE 5: GATEKEEPER BLUEPRINT COMPILE GATE (STRICTLY HARD-LOCKED)
+# =====================================================================
+if st.session_state.stage == 4:
     st.markdown("---")
-    st.header("📋 Comprehensive Strategic Blueprint")
+    st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
     
-    with st.spinner("Generating deep mirrored diagnostic reflecting human stakes..."):
-        risk_level = "HIGH"
-        badge_class = "priority-badge-high"
+    # Check if we have the depth threshold satisfied in slot memory
+    filled_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
+    
+    if filled_count >= 3:
+        if st.button("🎯 Compile Custom Strategic Blueprint", type="primary", use_container_width=True):
+            st.session_state.blueprint_generated = True
+            st.rerun()
+    else:
+        st.error("🛑 Blueprint locked: The slots matrix requires at least 3 valid parameters to pass the quality gate.")
+
+    if st.session_state.blueprint_generated and filled_count >= 3:
+        st.header("📋 Comprehensive Strategic Blueprint")
         
-        prompt_final = f"""
-        Act as an elite B2B Sales Psychologist and Enterprise Management Consultant.
-        Analyze this profile and generate a highly tailored, deeply mirrored blueprint. You must weave the client's explicit language into the document to ensure they feel truly listened to, while maintaining absolute factual grounding and professional sobriety.
+        with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
+            prompt_final = f"""
+            Act as an elite B2B Sales Psychologist and Enterprise Management Consultant.
+            Generate a custom business architecture report following strict anti-hallucination protocols.
 
-        - Role: {st.session_state.slots['Role']}
-        - Company Size: {st.session_state.slots['CompanySize']}
-        - Technical Stack (Tech): {st.session_state.slots['Tech']}
-        - Core Pain (Pain): {st.session_state.slots['Pain']}
-        - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
-        - Extracted Constraints & Political Limits (Limits): {st.session_state.slots['Limits']}
-        - Decision Lens: {st.session_state.tags.get('Lens', 'Standard')}
-        - Extracted Fear (The Personal Stakes): {st.session_state.tags.get('Fear', 'None')}
-        - Captured Verbatims / Client Metaphors: {st.session_state.tags.get('Verbatims', 'None')}
+            - Role: {st.session_state.slots['Role']}
+            - Company Size: {st.session_state.slots['CompanySize']}
+            - Technical Stack (Tech): {st.session_state.slots['Tech']}
+            - Core Pain (Pain): {st.session_state.slots['Pain']}
+            - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
+            - Extracted Constraints & Political Limits (Limits): {st.session_state.slots['Limits']}
+            - Decision Lens: {st.session_state.tags.get('Lens', 'Standard')}
+            - Extracted Fear (The Personal Stakes): {st.session_state.tags.get('Fear', 'None')}
+            - Captured Verbatims / Client Metaphors: {st.session_state.tags.get('Verbatims', 'None')}
 
-        CRITICAL OUTPUT DIRECTIVES (ANTI-HALLUCINATION & REGISTER CONTROL):
-        1. NO LEAKED DIRECTIVES: Do NOT use the words 'mirror', 'mirroring', 'structural feeling', 'slots', 'verbatims', or 'psychological tags' anywhere in the generated text. 
-        2. NO INVENTED BRANDS: Use strictly generic nouns ('campaign management platforms', 'external databases') to describe unmentioned interfaces. Never inject names like Mailchimp or Google Analytics.
-        3. HIGH HUMAN ENGAGEMENT & SOBRIETY: Maintain an empathetic but highly professional business tone. Avoid theatrical consulting cliches like 'chart a path forward' or 'vast corporate landscape', but ensure the narrative explicitly addresses the user as a real human navigating significant professional stakes.
-        4. SECTION 1 NARRATIVE STYLE: Do not use a dry list. Write Section 1 as a structured, clear narrative that introduces the operational reality of the client, weaving in their exact verbatim expressions ('small cog in a massive machine', 'feeling like a junior guy relative to the scale') to validate their context from the start.
-        5. SECTION 2 EXACT TEMPLATE:
-           **Fear**
-           ↓
-           Loss of executive credibility during budget reviews due to guesswork attribution
-           
-           ↓
-           **Observed Structural Gaps**
-           
-           ↓
-           Marketing attribution cannot be consistently validated across reporting systems
-           
-           ↓
-           **Operational Pain**
-           
-           ↓
-           Inconsistent trust in marketing data and mismatched campaign reporting
-           
-           ↓
-           **Strategy**
-           
-           ↓
-           Discovery & Architecture Mapping
-        6. SECTION 3 EXECUTIVE NARRATIVE: Open by validating the internal stakes and the risk to executive credibility ahead of budget reviews. Incorporate this precise framing:
-           "The organization operates under strict governance and information-security constraints, limiting visibility into its reporting architecture. At the same time, inconsistent marketing attribution across multiple reporting sources reduces confidence in executive reporting and creates uncertainty ahead of budget reviews."
-           Ensure it explicitly acknowledges the friction of managing specific tracking systems inside a massive enterprise engine.
-        7. SECTION 4 RECOMMENDATION TEXT REQUIREMENT:
-           Output a callout box with this exact framing: "This approach respects the operational constraints you are navigating while safeguarding your positioning and addressing core technical vulnerabilities. A structured, non-intrusive discovery phase will protect organizational standing and map exact reporting flows without clashing with existing Zero-Trust rules or external agency handoffs."
-        8. SECTION 5 BUSINESS IMPACTS: Output exactly these four business outcomes without modifications:
-           - Trusted campaign attribution across reporting systems
-           - Higher confidence during executive budget reviews
-           - Reduced disputes over marketing contribution
-           - Faster executive decision cycles
-        9. SECTION 6 IMMEDIATE PRIORITIES: Anchor these strictly in their exact practical inputs and limits, using zero invented brand names:
-           - Map current data paths without breaching existing Zero-Trust constraints
-           - Validate integration points between internal reporting structures and external assets
-           - Identify external agency reporting dependencies and gaps
-           - Confirm and align performance definition criteria ahead of executive budget reviews
+            Follow sections 1 to 6 layout constraints literally. No internal leaked tokens. Completely generic interface terms.
+            """
+            
+            try:
+                final_diag = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt_final}],
+                    temperature=0.0
+                ).choices[0].message.content
 
-        Generate your report strictly following this layout:
-        - Section 1: Strategic DNA Matrix
-        - Section 2: Strategic Causality Chain
-        - Section 3: Executive Blueprint Narrative
-        - Section 4: Executive Recommendation callout box
-        - Section 5: Expected Business Impact
-        - Section 6: Immediate Priorities
-        """
-
-        try:
-            final_diag = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt_final}],
-                temperature=0.0
-            ).choices[0].message.content
-
-            # Inject the high-value human risk assessment box
-            st.markdown(f"""
-            <div class="recommendation-box">
-                <div class="{badge_class}">⚠️ EXECUTIVE RISK LEVEL: {risk_level}</div>
-                <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
-                    <b>Human & Corporate Posture Risk Assessment:</b><br>
-                    • <b>Personal Stakes:</b> High political risk regarding personal credibility ahead of upcoming budget reviews.<br>
-                    • <b>Operational Friction:</b> Navigating focused tracking systems like a small cog in a massive machine with strict information isolation (Zero-Trust) limits baseline visibility.<br>
-                    • <b>Strategic Path:</b> A non-disruptive, safe architectural mapping is mandatory to shield the team from guesswork attribution errors and safeguard your position.
+                st.markdown(f"""
+                <div class="recommendation-box">
+                    <div class="priority-badge-high">⚠️ EXECUTIVE RISK LEVEL: HIGH</div>
+                    <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
+                        <b>Human & Corporate Posture Risk Assessment:</b><br>
+                        • <b>Personal Stakes:</b> High political risk regarding personal credibility ahead of upcoming budget reviews.<br>
+                        • <b>Operational Friction:</b> Navigating focused tracking systems like a small cog in a massive machine with strict information isolation (Zero-Trust) limits baseline visibility.<br>
+                        • <b>Strategic Path:</b> A non-disruptive, safe architectural mapping is mandatory to shield the team from guesswork attribution errors and safeguard your position.
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown(final_diag)
-            
-            st.subheader("Final Summary Matrix")
-            col_m1, col_m2 = st.columns(2)
-            with col_m1:
-                st.markdown(f"""
-                * **Prospect Role:** {st.session_state.slots['Role']}
-                * **Company Size:** {st.session_state.slots['CompanySize']}
-                * **Decision Lens:** {st.session_state.tags.get('Lens', 'Standard')}
-                """)
-            with col_m2:
-                st.markdown(f"""
-                * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
-                * **Transformation Strategy:** Discovery & Architecture Mapping
-                """)
-        except Exception as e:
-            st.error(f"Error: {e}")
+                """, unsafe_allow_html=True)
+                
+                st.markdown(final_diag)
+                
+                st.subheader("Final Summary Matrix")
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    st.markdown(f"""
+                    * **Prospect Role:** {st.session_state.slots['Role']}
+                    * **Company Size:** {st.session_state.slots['CompanySize']}
+                    * **Decision Lens:** {st.session_state.tags.get('Lens', 'Standard')}
+                    """)
+                with col_m2:
+                    st.markdown(f"""
+                    * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
+                    * **Transformation Strategy:** Discovery & Architecture Mapping
+                    """)
+            except Exception as e:
+                st.error(f"Error compiling document asset: {e}")
