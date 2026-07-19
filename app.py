@@ -16,7 +16,7 @@ Your sole objective is to parse the latest client transcript turn and populate t
 
 [CRITICAL INFERENTIAL DIRECTIVES]
 1. ZERO INFERENCE ON UNMENTIONED TOOLS: Never invent software names, brands, or platforms. If the client mentions HubSpot or PostgreSQL, map them exactly. For unmentioned tools, use strictly generic definitions like 'existing CRM tools' or 'internal databases'. Never suggest migrations to tools like Zoho or Pipedrive unless requested. Focus on 'bridging ecosystems, not replacing'.
-2. COMPANY SIZE RULE: If the prospect is vague, evasive, or explicitly avoids giving a precise metric or definitive scale (e.g., saying 'not huge, not small, in-between', 'decent-sized'), you are strictly forbidden from guessing 'Medium' or 'Large'. You MUST leave 'CompanySize' as 'Empty'.
+2. COMPANY SIZE RULE: If the prospect provides a specific number of employees (e.g., '11 employees') or an explicit size, map it directly to 'CompanySize'. If the prospect is vague, evasive, or explicitly avoids giving a precise metric or definitive scale (e.g., saying 'not huge, not small, in-between'), leave 'CompanySize' as 'Empty'.
 3. ACCURATE VERBATIMS: Extract exact phrases or strong emotional markers used by the prospect (e.g., 'wearing many hats', 'people are tired', 'founder refuses to abandon Access').
 
 Output strictly as a JSON object containing keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Fear, Verbatims), ai_guidance.
@@ -50,7 +50,7 @@ def execute_hard_reset():
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
 if 'tags' not in st.session_state: st.session_state.tags = {'Fear': 'Not yet confirmed', 'Verbatims': 'None'}
-if 'transcript' not in st.session_state: st.session_state.transcript = ''  # Fixed initialization position
+if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial statement."
 if 'blueprint_generated' not in st.session_state: st.session_state.blueprint_generated = False
 
@@ -67,7 +67,7 @@ web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", he
 # DECOUPLED CLASSIFICATION LOGIC FOR METADATA
 def classify_decision_lens(slots_data, transcript_data):
     combined = (str(slots_data.get('Pain', '')) + " " + str(slots_data.get('RootCauses', '')) + " " + transcript_data).lower()
-    commercial_keywords = ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget']
+    commercial_keywords = ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'employee']
     if any(kw in combined for kw in commercial_keywords):
         return "Commercial / Revenue-Driven"
     return "Standard"
@@ -92,7 +92,6 @@ def infer_transformation_strategy(slots_data):
     tech_str = str(slots_data.get('Tech', '')).lower()
     pain_str = str(slots_data.get('Pain', '')).lower()
     
-    # High richness + clear metrics detected (Scenario 1 indicators)
     if filled_count >= 4 and ('hubspot' in tech_str or 'postgresql' in tech_str or 'renewal' in pain_str or 'pipeline' in pain_str):
         return "Incremental Modernization & Ecosystem Bridging"
     return "Discovery & Architecture Mapping"
@@ -108,7 +107,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State: {json.dumps(st.session_state.slots)}\n"
         f"Current Psychological Tags: {json.dumps(st.session_state.tags)}\n\n"
         "TASK:\n"
-        "Extract raw factual metrics matching keys. Keep fields 'Empty' if not explicitly stated.\n"
+        "Extract raw factual metrics matching keys. Pay close attention to numbers for CompanySize.\n"
         "Format response as a JSON object with keys: slots, tags, ai_guidance."
     )
 
@@ -242,8 +241,11 @@ if st.session_state.stage == 4:
             - Target Strategy: {derived_strategy}
 
             REPORT STRATEGIC MANDATES:
-            1. BRIDGE, DO NOT REPLACE: Validate that the existing stack components are structurally sound, but lacking visibility interfaces. Explicitly treat tools like Microsoft Access as immutable parameters: write recommendations around 'preserving the existing Microsoft Access layer while progressively reducing its operational dependency through zero-loss database integration' rather than suggesting updating or modernizing it directly.
-            2. HIGH PERSONALITY ARCHITECTURE NARRATIVE: Avoid generic audit structures like 'Executive Summary'. Write using highly specific diagnostic pillars targeting the concrete pain points (e.g., 'Ecosystem Visibility Gaps', 'Pipeline and Renewal Exposure Risks', 'Targeted Revenue Acceleration Path').
+            1. BRIDGE, DO NOT REPLACE: Validate that the existing stack components are structurally sound, but lacking visibility interfaces. Explicitly treat tools like Microsoft Access as immutable business rules: write recommendations around 'preserving the existing Microsoft Access layer as a required legacy dependency while minimizing its operational friction through zero-loss database integration' rather than suggesting updating or modernizing it directly.
+            2. CLIENT-READY BUSINESS HEADINGS: Write the report using clear business headers targeted to a decision maker. Use these exact titles for the strategic pillars:
+               - Revenue Protection Strategy
+               - Core Architectural Principles
+               - Ecosystem Integration Priorities
             3. NO EXTERNAL SOLUTION INFERENCES: Focus on fixing the visibility bridge between the current systems. Never introduce unauthorized vendor names.
             """
             
