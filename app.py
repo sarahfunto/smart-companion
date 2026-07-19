@@ -9,25 +9,22 @@ else:
     st.error("⚠️ OPENAI_API_KEY is missing in Streamlit Secrets. Please configure it in your App Settings.")
     client = None
 
-# ADAPTIVE SYSTEM PROMPT WITH BUILT-IN STRATEGIC INTELLIGENCE
+# SYSTEM PROMPT FOCUSING EXCLUSIVELY ON RAW DATA EXTRACTION WITH NO SCENARIO BIAS
 SYSTEM_PROMPT = """
-You are an expert B2B sales psychologist and senior enterprise infrastructure consultant operating with absolute literal discipline.
-Your job is to parse the latest client input, update parameters, and apply an adaptive evaluation framework based on data density.
+You are a rigorous, literal B2B sales data extractor operating with strict inferential discipline. 
+Your sole objective is to parse the latest client transcript turn and populate the target slots and psychological tags based ONLY on explicit facts provided.
 
-[CRITICAL EXTRACTION DIRECTIVES]
+[CRITICAL INFERENTIAL DIRECTIVES]
 1. ZERO INFERENCE ON UNMENTIONED TOOLS: Never invent software names, brands, or platforms. If the client mentions HubSpot or PostgreSQL, map them exactly. For unmentioned tools, use strictly generic definitions like 'existing CRM tools' or 'internal databases'. Never suggest migrations to tools like Zoho or Pipedrive unless requested. Focus on 'bridging ecosystems, not replacing'.
-2. PRECISE TECH MATURITY & STACK PROFILE: 
-   - If the client describes a split ecosystem (e.g., modern software interacting with siloed backend infrastructure), classify 'TechMaturity' as 'Hybrid Stack (Modern Cloud & Legacy Access Assets)'.
-   - Only use 'Standard' or 'Empty' if no infrastructure details are provided.
-3. ADAPTIVE DECISION FILTER (LENS):
-   - Analyze the underlying business driver. If the dialogue explicitly focuses on renewal risk, revenue impacts, board expectations, or forecast pipeline errors, classify 'Lens' as 'Commercial / Revenue-Driven'.
-4. COMPANY SIZE COMPLIANCE: If the client is intentionally vague or avoiding exact employee metrics (e.g., 'not huge, not small, in-between'), keep 'CompanySize' as 'Empty'. Do not default to 'Medium'.
+2. COMPANY SIZE RULE: If the prospect is vague, evasive, or explicitly avoids giving a precise metric or definitive scale (e.g., saying 'not huge, not small, in-between', 'decent-sized'), you are strictly forbidden from guessing 'Medium' or 'Large'. You MUST leave 'CompanySize' as 'Empty'.
+3. ACCURATE VERBATIMS: Extract exact phrases or strong emotional markers used by the prospect (e.g., 'wearing many hats', 'people are tired', 'founder refuses to abandon Access').
 
-Output strictly as a JSON object containing keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Lens, TechMaturity, Fear, Verbatims), ai_guidance.
+Output strictly as a JSON object containing keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Fear, Verbatims), ai_guidance.
 """
 
 st.set_page_config(page_title="AI Advisor - Smart Companion", page_icon="🎙️", layout="wide")
 
+# CSS Styling
 st.markdown("""
     <style>
     .main { background-color: #0E1117; color: white; }
@@ -45,14 +42,14 @@ def execute_hard_reset():
         del st.session_state[key]
     st.session_state.stage = 1
     st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
-    st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard', 'Verbatims': 'None'}
+    st.session_state.tags = {'Fear': 'Not yet confirmed', 'Verbatims': 'None'}
     st.session_state.transcript = ''
     st.session_state.ai_guidance = "Simulation state completely reset. All parameter blocks cleared."
     st.session_state.blueprint_generated = False
 
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
-if 'tags' not in st.session_state: st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard', 'Verbatims': 'None'}
+if 'tags' not in st.session_state: st.session_state.tags = {'Fear': 'Not yet confirmed', 'Verbatims': 'None'}
 if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial statement."
 if 'blueprint_generated' not in st.session_state: st.session_state.blueprint_generated = False
 
@@ -66,6 +63,39 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Live Context Injection")
 web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", height=150, placeholder="Inject manual environment data here...", key="web_ctx_static")
 
+# DECOUPLED CLASSIFICATION LOGIC FOR METADATA
+def classify_decision_lens(slots_data, transcript_data):
+    combined = (str(slots_data.get('Pain', '')) + " " + str(slots_data.get('RootCauses', '')) + " " + transcript_data).lower()
+    commercial_keywords = ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget']
+    if any(kw in combined for kw in commercial_keywords):
+        return "Commercial / Revenue-Driven"
+    return "Standard"
+
+def classify_technology_profile(slots_data):
+    tech_str = str(slots_data.get('Tech', '')).lower()
+    limits_str = str(slots_data.get('Limits', '')).lower()
+    
+    has_modern = any(m in tech_str for m in ['hubspot', 'saas', 'slack', 'sheets', 'cloud'])
+    has_legacy = any(l in tech_str or l in limits_str for l in ['postgresql', 'access', 'legacy', 'database'])
+    
+    if has_modern and has_legacy:
+        return "Hybrid Stack – Modern SaaS with Legacy Database dependency"
+    elif has_modern:
+        return "Modern SaaS Stack"
+    elif has_legacy:
+        return "Legacy Infrastructure Stack"
+    return "Standard"
+
+def infer_transformation_strategy(slots_data):
+    filled_count = sum(1 for val in slots_data.values() if val != "Empty")
+    tech_str = str(slots_data.get('Tech', '')).lower()
+    pain_str = str(slots_data.get('Pain', '')).lower()
+    
+    # High richness + clear metrics detected (Scenario 1 indicators)
+    if filled_count >= 4 and ('hubspot' in tech_str or 'postgresql' in tech_str or 'renewal' in pain_str or 'pipeline' in pain_str):
+        return "Incremental Modernization & Ecosystem Bridging"
+    return "Discovery & Architecture Mapping"
+
 def analyze_with_openai(user_text, context_web, current_stage):
     if not user_text or client is None:
         return "No text input captured."
@@ -77,9 +107,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State: {json.dumps(st.session_state.slots)}\n"
         f"Current Psychological Tags: {json.dumps(st.session_state.tags)}\n\n"
         "TASK:\n"
-        "Extract factual structures matching keys. If parameters are explicitly commercial or revenue-impacting, "
-        "ensure 'Lens' updates accurately. If technical configurations detail custom integrations with legacy databases, "
-        "classify 'TechMaturity' as 'Hybrid Stack (Modern Cloud & Legacy Access Assets)'.\n"
+        "Extract raw factual metrics matching keys. Keep fields 'Empty' if not explicitly stated.\n"
         "Format response as a JSON object with keys: slots, tags, ai_guidance."
     )
 
@@ -113,7 +141,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
     except Exception as e:
         return f"Error analyzing input: {e}"
 
-# MAIN UI INTERACTION VIEWPORT
+# UI VIEWPORT
 st.markdown(f"### 💬 Interview Progress: Step {st.session_state.stage} / 4")
 stage_questions = {
     "1": "Who am I speaking with today, what is the scale of your organization, and what corporate trigger brought you here?",
@@ -122,6 +150,11 @@ stage_questions = {
     "4": "Reviewing your strategic situation: Here is what we know. Do you want to add, modify, or complete any data before receiving your final custom blueprint?"
 }
 st.subheader(f"👉 {stage_questions[str(st.session_state.stage)]}")
+
+# Dynamically compute decoupled metadata on the fly
+derived_lens = classify_decision_lens(st.session_state.slots, st.session_state.transcript)
+derived_tech_profile = classify_technology_profile(st.session_state.slots)
+derived_strategy = infer_transformation_strategy(st.session_state.slots)
 
 col1, col2 = st.columns([2, 1])
 
@@ -132,6 +165,7 @@ with col1:
     
     if st.button("⚡ Analyze and Validate Input"):
         if manual_input:
+            st.session_state.transcript += "\\n" + manual_input
             st.session_state['ai_guidance'] = analyze_with_openai(manual_input, web_context_input, st.session_state.stage)
             st.rerun()
         else:
@@ -158,13 +192,21 @@ with col2:
         box_class = "status-box-filled" if val != "Empty" else "status-box-empty"
         st.markdown(f"<div class='{box_class}'><b>{key}:</b> {val}</div>", unsafe_allow_html=True)
         
-    st.markdown("#### 🧠 Psychological Profiling")
-    for tag_name, label in [("Lens", "Decision Filter (Lens)"), ("TechMaturity", "Tech Maturity"), ("Fear", "Identified Core Fear"), ("Verbatims", "Voice/Verbatim Mirror")]:
+    st.markdown("#### 🧠 Decoupled Psychological Profiling")
+    
+    # Display Decoupled Metadata Fields
+    box_lens = "status-box-filled" if derived_lens != "Standard" else "status-box-empty"
+    st.markdown(f"<div class='{box_lens}'><b>Decision Filter (Lens):</b> {derived_lens}</div>", unsafe_allow_html=True)
+    
+    box_tech = "status-box-filled" if derived_tech_profile != "Standard" else "status-box-empty"
+    st.markdown(f"<div class='{box_tech}'><b>Tech Profile:</b> {derived_tech_profile}</div>", unsafe_allow_html=True)
+    
+    for tag_name, label in [("Fear", "Identified Core Fear"), ("Verbatims", "Voice/Verbatim Mirror")]:
         tag_val = st.session_state.tags.get(tag_name, 'Standard')
         b_class = "status-box-filled" if tag_val not in ["Standard", "None", "Not yet confirmed"] else "status-box-empty"
         st.markdown(f"<div class='{b_class}'><b>{label}:</b> {tag_val}</div>", unsafe_allow_html=True)
 
-# DYNAMIC & ADAPTIVE STRATEGIC BLUEPRINT GATE
+# STRATEGIC GATEKEEPER COMPLIANCE BLUEPRINT COMPILATION
 if st.session_state.stage == 4:
     st.markdown("---")
     st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
@@ -179,16 +221,7 @@ if st.session_state.stage == 4:
         st.warning("🛑 Blueprint locked: The slots matrix requires at least 3 valid operational parameters in memory to pass the security gate.")
 
     if st.session_state.blueprint_generated and filled_count >= 3:
-        # HIGH CONFIDENCE EXTRACTION GATE (E.G., SCENARIO 1 DATA RICHNESS DETECTED)
-        is_high_confidence = (
-            st.session_state.slots['Pain'] != 'Empty' and 
-            st.session_state.slots['RootCauses'] != 'Empty' and 
-            ("commercial" in str(st.session_state.tags.get('Lens', '')).lower() or "hubspot" in str(st.session_state.slots.get('Tech', '')).lower() or "postgresql" in str(st.session_state.slots.get('Tech', '')).lower())
-        )
-        
-        transformation_strategy = "Incremental Modernization & Ecosystem Bridging" if is_high_confidence else "Discovery & Architecture Mapping"
-        
-        st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {transformation_strategy}]")
+        st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
             prompt_final = f"""
@@ -201,15 +234,16 @@ if st.session_state.stage == 4:
             - Core Pain (Pain): {st.session_state.slots['Pain']}
             - Critical Structural Gaps (Root Causes): {st.session_state.slots['RootCauses']}
             - Extracted Constraints & Political Limits (Limits): {st.session_state.slots['Limits']}
-            - Decision Lens: {st.session_state.tags.get('Lens', 'Standard')}
+            - Calculated Decision Filter (Lens): {derived_lens}
+            - Calculated Tech Profile: {derived_tech_profile}
             - Extracted Fear (The Personal Stakes): {st.session_state.tags.get('Fear', 'None')}
             - Captured Verbatims / Client Metaphors: {st.session_state.tags.get('Verbatims', 'None')}
-            - Determined Transformation Strategy: {transformation_strategy}
+            - Target Strategy: {derived_strategy}
 
-            REPORT REQUIREMENTS:
-            1. PERSIST AND ACCENTUATE THE CORE ECOSYSTEM: Do not suggest replacing existing software tools (like CRM architectures) with unrelated brands (e.g., Zoho, Pipedrive). The strategic mandate is to 'BRIDGE, NOT REPLACE'. Validate that the existing stack components are structurally sound, but lacking integration or real-time visibility interfaces.
+            REPORT STRATEGIC MANDATES:
+            1. BRIDGE, DO NOT REPLACE: Validate that the existing stack components are structurally sound, but lacking visibility interfaces. Explicitly treat tools like Microsoft Access as immutable parameters: write recommendations around 'preserving the existing Microsoft Access layer while progressively reducing its operational dependency through zero-loss database integration' rather than suggesting updating or modernizing it directly.
             2. HIGH PERSONALITY ARCHITECTURE NARRATIVE: Avoid generic audit structures like 'Executive Summary'. Write using highly specific diagnostic pillars targeting the concrete pain points (e.g., 'Ecosystem Visibility Gaps', 'Pipeline and Renewal Exposure Risks', 'Targeted Revenue Acceleration Path').
-            3. WEAVE EXACT CLIENT STAKES: Directly confront corporate board visibility pressure, renewal forecasts, and internal credibility risks without using leaked implementation jargon tokens.
+            3. NO EXTERNAL SOLUTION INFERENCES: Focus on fixing the visibility bridge between the current systems. Never introduce unauthorized vendor names.
             """
             
             try:
@@ -224,8 +258,8 @@ if st.session_state.stage == 4:
                     <div class="priority-badge-high">⚠️ ADAPTIVE RISK LEVEL: HIGH</div>
                     <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
                         <b>Human & Corporate Posture Risk Assessment:</b><br>
-                        • <b>Strategic Path:</b> Determined as <b>{transformation_strategy}</b>. The current ecosystem visibility gaps expose pipeline validation.<br>
-                        • <b>Ecosystem Directive:</b> Maintain core structures. Bridge reporting data pipelines into the primary workspace natively rather than initiating unnecessary system overhauls.
+                        • <b>Strategic Path:</b> Determined as <b>{derived_strategy}</b>.<br>
+                        • <b>Ecosystem Directive:</b> Bridge reporting data pipelines into the primary workspace natively rather than initiating system overhauls. Preserve core architecture dependencies exactly as specified by organizational rules.
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -238,12 +272,12 @@ if st.session_state.stage == 4:
                     st.markdown(f"""
                     * **Prospect Role:** {st.session_state.slots['Role']}
                     * **Company Size:** {st.session_state.slots['CompanySize']}
-                    * **Decision Lens:** {st.session_state.tags.get('Lens', 'Standard')}
+                    * **Decision Lens:** {derived_lens}
                     """)
                 with col_m2:
                     st.markdown(f"""
-                    * **Technology Profile:** {st.session_state.tags.get('TechMaturity', 'Standard')}
-                    * **Transformation Strategy:** {transformation_strategy}
+                    * **Technology Profile:** {derived_tech_profile}
+                    * **Transformation Strategy:** {derived_strategy}
                     """)
             except Exception as e:
                 st.error(f"Error compiling document asset: {e}")
