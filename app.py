@@ -35,7 +35,7 @@ if 'slots' not in st.session_state:
 if 'tags' not in st.session_state:
     st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard'}
 if 'ai_guidance' not in st.session_state:
-    st.session_state.ai_guidance = "Sandbox ready for Scenario 3 evaluation."
+    st.session_state.ai_guidance = "Sandbox ready for Scenario 3 evaluation. Please input the initial discovery statement."
 if 'gate_evaluated' not in st.session_state:
     st.session_state.gate_evaluated = False
 
@@ -64,6 +64,14 @@ st.sidebar.markdown("## ⚙️ Administrative Controls")
 if st.sidebar.button("🔄 Execute Hard Reset", use_container_width=True):
     trigger_hard_reset()
     st.rerun()
+
+# Dynamic contextual prompt guidelines displayed per step to guide the user
+STEP_GUIDELINES = {
+    1: "Step 1: Focus on parsing the client's explicit role, operational mandates, and initial business boundaries.",
+    2: "Step 2: Technical Stack Review. Listen for specific, verifiable tools or architecture. Filter out strategic buzzword salads.",
+    3: "Step 3: Deep Dive into Core Bottlenecks. Identify explicit operational failures, quantitative metrics down, or friction points.",
+    4: "Step 4: Governance and Final Blueprint Gateway. Review captured boundaries before triggering final compilation assessment."
+}
 
 # =====================================================================
 # MODULE 4: INTERACTION & ANALYSIS LAYER
@@ -114,13 +122,13 @@ def execute_extraction_call(user_input):
 
 # INTERVIEW VIEWPORTS
 st.markdown(f"### 💬 Scenario Sandbox: Step {st.session_state.stage} / 4")
-input_key = f"scen3_input_turn_{st.session_state.stage}"
+st.caption(f"**Contextual Objective:** {STEP_GUIDELINES[st.session_state.stage]}")
 
 col1, col2 = st.columns([2, 1])
 
 with col1:
     st.info(f"System Message Tracker: {st.session_state.ai_guidance}")
-    current_text = st.text_area("✍️ Prospect Input:", height=120, key=input_key)
+    current_text = st.text_area("✍️ Prospect Input:", height=120, key=f"scen3_input_turn_{st.session_state.stage}")
     
     # Process turn button
     if st.button("⚡ Analyze and Validate Turn"):
@@ -135,13 +143,12 @@ with col1:
         if st.session_state.stage > 1:
             if st.button("⏮️ Previous Step"):
                 st.session_state.stage -= 1
-                st.session_state.gate_evaluated = False
+                # We do NOT reset gate_evaluated here so memory context remains alive and intact
                 st.rerun()
     with nav2:
         if st.session_state.stage < 4:
             if st.button("➡️ Next Step"):
                 st.session_state.stage += 1
-                st.session_state.gate_evaluated = False
                 st.rerun()
 
 with col2:
@@ -158,6 +165,7 @@ with col2:
 # =====================================================================
 # MODULE 5: AUDITABLE & EXPLICIT VALIDATION GATEKEEPER
 # =====================================================================
+# The logic now requires EITHER explicitly clicking the validate button OR having data in memory at stage 4
 if st.session_state.stage == 4 and st.session_state.gate_evaluated:
     st.markdown("---")
     st.header("🛡️ Gatekeeper Security Audit & Verification Logs")
