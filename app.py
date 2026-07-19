@@ -36,12 +36,15 @@ if 'tags' not in st.session_state:
     st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard'}
 if 'ai_guidance' not in st.session_state:
     st.session_state.ai_guidance = "Sandbox ready for Scenario 3 evaluation."
+if 'gate_evaluated' not in st.session_state:
+    st.session_state.gate_evaluated = False
 
 def trigger_hard_reset():
     st.session_state.stage = 1
     st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
     st.session_state.tags = {'Lens': 'Standard', 'Fear': 'Not yet confirmed', 'TechMaturity': 'Standard'}
     st.session_state.ai_guidance = "State cleared. All cached parameters purged."
+    st.session_state.gate_evaluated = False
 
 # =====================================================================
 # MODULE 3: UI LAYOUT & CLASSES
@@ -58,7 +61,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 st.sidebar.markdown("## ⚙️ Administrative Controls")
-if st.sidebar.button("🔄 Executer un Reset Étanche", use_container_width=True):
+if st.sidebar.button("🔄 Execute Hard Reset", use_container_width=True):
     trigger_hard_reset()
     st.rerun()
 
@@ -105,7 +108,7 @@ def execute_extraction_call(user_input):
             if val_tag not in ["Standard", "", "null", "Not yet confirmed"]:
                 st.session_state.tags[key] = val_tag
                 
-        st.session_state.ai_guidance = payload.get("ai_guidance", "Awaiting next turn.")
+        st.session_state.ai_guidance = payload.get("ai_guidance", "Turn processed successfully.")
     except Exception as e:
         st.error(f"Extraction Pipeline Failure: {e}")
 
@@ -117,23 +120,28 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.info(f"System Message Tracker: {st.session_state.ai_guidance}")
-    current_text = st.text_area("✍️ Saisie de l'entretien (Prospect Input):", height=120, key=input_key)
+    current_text = st.text_area("✍️ Prospect Input:", height=120, key=input_key)
     
-    if st.button("⚡ Analyser et Valider le Tour"):
+    # Process turn button
+    if st.button("⚡ Analyze and Validate Turn"):
         if current_text:
             execute_extraction_call(current_text)
+            if st.session_state.stage == 4:
+                st.session_state.gate_evaluated = True
             st.rerun()
             
     nav1, nav2 = st.columns(2)
     with nav1:
         if st.session_state.stage > 1:
-            if st.button("⏮️ Étape Précédente"):
+            if st.button("⏮️ Previous Step"):
                 st.session_state.stage -= 1
+                st.session_state.gate_evaluated = False
                 st.rerun()
     with nav2:
         if st.session_state.stage < 4:
-            if st.button("➡️ Étape Suivante"):
+            if st.button("➡️ Next Step"):
                 st.session_state.stage += 1
+                st.session_state.gate_evaluated = False
                 st.rerun()
 
 with col2:
@@ -148,9 +156,9 @@ with col2:
         st.markdown(f"<div class='{css}'><b>{k}:</b> {v}</div>", unsafe_allow_html=True)
 
 # =====================================================================
-# MODULE 5: AUDITABLE & EXPLICIT VALIDATION GATEKEEPER (HTML RENDERING FIXED)
+# MODULE 5: AUDITABLE & EXPLICIT VALIDATION GATEKEEPER
 # =====================================================================
-if st.session_state.stage == 4:
+if st.session_state.stage == 4 and st.session_state.gate_evaluated:
     st.markdown("---")
     st.header("🛡️ Gatekeeper Security Audit & Verification Logs")
     
@@ -174,7 +182,6 @@ if st.session_state.stage == 4:
             scorecard[key] = {"status": "❌ INSUFFICIENT / EMPTY", "color": "#FF8B8B", "val": "No granular business data extracted."}
 
     if filled_structural_count < 3:
-        # Native safe HTML structure injection
         html_component_content = f"""
         <div style="padding: 20px; border-radius: 8px; background-color: #2D1A1A; border: 2px solid #A63A3A; color: #FFEBEB; font-family: sans-serif;">
             <h3 style="color: #FF8B8B; margin-top: 0;">🛑 STRATEGIC GENERATION BLOCKED</h3>
