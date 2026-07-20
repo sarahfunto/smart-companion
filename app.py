@@ -16,9 +16,9 @@ Your sole objective is to parse the latest client transcript turn and populate t
 
 [CRITICAL INFERENTIAL DIRECTIVES]
 1. ZERO INFERENCE ON UNMENTIONED TOOLS: Never invent software names, brands, or platforms. If the client mentions HubSpot or PostgreSQL, map them exactly. For unmentioned tools, use strictly generic definitions like 'existing CRM tools' or 'internal databases'. Never suggest migrations to tools like Zoho or Pipedrive unless requested. Focus on 'bridging ecosystems, not replacing'.
-2. METAPHOR FILTER: If the client uses technical buzzwords as metaphors (e.g., 'Kubernetes-style workflow' for Monday.com tasks, 'vector database' for an email list, 'blockchain' for uneditable leads, or 'zero-trust' for internal skepticism), DO NOT extract these as actual technologies. Extract ONLY the functional tools explicitly mentioned (e.g., Monday.com, Mailchimp, Excel).
-3. COMPANY SIZE RULE: If the prospect provides a specific number of employees (e.g., '140 employees') or an explicit size, map it directly to 'CompanySize'. If the prospect is vague, evasive, or explicitly avoids giving a precise metric or definitive scale, leave 'CompanySize' as 'Empty'.
-4. ACCURATE VERBATIMS: Extract exact phrases or strong emotional markers used by the prospect (e.g., 'cannot explain why campaign numbers differ', 'attribution model is mostly guesswork').
+2. METAPHOR FILTER: If the client uses technical buzzwords as metaphors (e.g., 'Kubernetes-style workflow' for Monday.com tasks, 'vector database' for an email list, 'blockchain' for uneditable leads, or 'zero-trust' for internal skepticism), DO NOT extract these as actual technologies. Extract ONLY the functional tools explicitly mentioned (e.g., Monday.com, Mailchimp, Excel, Canva, WordPress, Google Analytics, AS/400, Snowflake, dbt).
+3. COMPANY SIZE RULE: If the prospect provides a specific number of employees (e.g., '12,000+ employees') or an explicit size, map it directly to 'CompanySize'. If the prospect is vague, evasive, or explicitly avoids giving a precise metric or definitive scale, leave 'CompanySize' as 'Empty'. Do not confuse sub-team size (e.g., 4 people) with total company size.
+4. ACCURATE VERBATIMS: Extract exact phrases or strong emotional markers used by the prospect (e.g., 'cannot explain why campaign numbers differ', 'driving a sports car with a boat anchor').
 
 Output strictly as a JSON object containing keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Fear, Verbatims), ai_guidance.
 """
@@ -70,10 +70,15 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Live Context Injection")
 web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", height=150, placeholder="Inject manual environment data here...", key="web_ctx_static")
 
-# DECOUPLED CLASSIFICATION LOGIC FOR METADATA
+# --- CORRECTION DES LOGIQUES DÉCOUPLÉES POUR ÉVITER LES BIAIS DE SCÉNARIOS ---
 def classify_decision_lens(slots_data, transcript_data):
     combined = (str(slots_data.get('Pain', '')) + " " + str(slots_data.get('RootCauses', '')) + " " + str(slots_data.get('Role', '')) + " " + transcript_data).lower()
-    commercial_keywords = ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'employee', 'marketing', 'campaign']
+    
+    # Si le problème tourne autour de l'infrastructure, des mainframes ou de la gouvernance IT
+    if any(kw in combined for kw in ['as/400', 'mainframe', 'throttled', 'anchor', 'architecture', 'corporate it', 'governance']):
+        return "Enterprise Architecture / IT Governance"
+        
+    commercial_keywords = ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'marketing', 'campaign', 'attribution']
     if any(kw in combined for kw in commercial_keywords):
         return "Commercial / Marketing-oriented"
     return "Standard"
@@ -81,16 +86,13 @@ def classify_decision_lens(slots_data, transcript_data):
 def classify_technology_profile(slots_data):
     tech_str = str(slots_data.get('Tech', '')).lower()
     limits_str = str(slots_data.get('Limits', '')).lower()
+    combined_tech = tech_str + " " + limits_str
     
-    # Exclude metaphorical technical words from setting a technical stack profile
-    if any(m in tech_str for m in ['kubernetes', 'blockchain', 'vector database']):
-        # Cleaned logic mapping for Scen 3
-        if 'mailchimp' in tech_str or 'wordpress' in tech_str:
-            return "Standard"
-
-    has_modern = any(m in tech_str for m in ['hubspot', 'saas', 'slack', 'sheets', 'cloud', 'mailchimp'])
-    has_legacy = any(l in tech_str or l in limits_str for l in ['postgresql', 'access', 'legacy', 'database'])
+    has_modern = any(m in combined_tech for m in ['hubspot', 'saas', 'slack', 'sheets', 'cloud', 'mailchimp', 'monday.com', 'snowflake', 'dbt', 'aws', 'python'])
+    has_legacy = any(l in combined_tech for l in ['postgresql', 'access', 'legacy', 'database', 'as/400', 'mainframe'])
     
+    if "as/400" in combined_tech or ("mainframe" in combined_tech and "snowflake" in combined_tech):
+        return "Hybrid Enterprise Stack (Legacy Mainframe + Cloud Native)"
     if has_modern and has_legacy:
         return "Hybrid Stack – Modern SaaS with Legacy Database dependency"
     elif has_modern:
@@ -103,10 +105,12 @@ def infer_transformation_strategy(slots_data):
     tech_str = str(slots_data.get('Tech', '')).lower()
     pain_str = str(slots_data.get('Pain', '')).lower()
     role_str = str(slots_data.get('Role', '')).lower()
+    combined = tech_str + " " + pain_str + " " + role_str
     
+    if any(kw in combined for kw in ['as/400', 'mainframe', 'throttled', 'anchor', 'legacy backbone']):
+        return "Incremental Enterprise Modernization"
     if 'mailchimp' in tech_str or 'marketing' in role_str or 'attribution' in pain_str or 'campaign' in pain_str:
         return "Marketing Performance Reconciliation"
-        
     filled_count = sum(1 for val in slots_data.values() if val != "Empty")
     if filled_count >= 4 and ('hubspot' in tech_str or 'postgresql' in tech_str or 'renewal' in pain_str or 'pipeline' in pain_str):
         return "Incremental Modernization & Ecosystem Bridging"
@@ -173,7 +177,6 @@ derived_tech_profile = classify_technology_profile(st.session_state.slots)
 derived_strategy = infer_transformation_strategy(st.session_state.slots)
 
 col1, col2 = st.columns([2, 1])
-
 with col1:
     st.info(f"Smart Companion Strategy Insight: {st.session_state.ai_guidance}")
     
@@ -220,10 +223,10 @@ with col2:
     st.markdown("#### 🧠 Decoupled Psychological Profiling")
     
     # Display Decoupled Metadata Fields
-    box_lens = "status-box-filled" if derived_lens != "Standard" else "status-box-empty"
+    box_lens = "status-box-filled" if derived_lens not in ["Standard", "Empty"] else "status-box-empty"
     st.markdown(f"<div class='{box_lens}'><b>Decision Filter (Lens):</b> {derived_lens}</div>", unsafe_allow_html=True)
     
-    box_tech = "status-box-filled" if derived_tech_profile != "Standard" else "status-box-empty"
+    box_tech = "status-box-filled" if derived_tech_profile not in ["Standard", "Empty"] else "status-box-empty"
     st.markdown(f"<div class='{box_tech}'><b>Tech Profile:</b> {derived_tech_profile}</div>", unsafe_allow_html=True)
     
     for tag_name, label in [("Fear", "Identified Core Fear"), ("Verbatims", "Voice/Verbatim Mirror")]:
@@ -250,10 +253,14 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
+            # --- CORRECTION DU PROMPT FINAL : TOTALEMENT AGNOSTIQUE AUX SCÉNARIOS ANTÉRIEURS ---
             prompt_final = f"""
-            Act as an elite B2B Sales Psychologist and Enterprise Management Consultant.
-            Generate a custom business architecture report matching the client's concrete metrics.
+            Act as an elite B2B Enterprise Architecture Consultant and Management Psychologist.
+            Generate a custom corporate strategic architecture report based EXCLUSIVELY on the provided metrics.
+            
+            STRICT FORBIDDEN DIRECTIVE: Do not mention 'Mailchimp', 'Google Analytics', 'spreadsheets', or 'marketing campaigns' unless they are explicitly present in the input variables below. If the focus is on heavy infrastructure or core data integration, adjust your vocabulary entirely to engineering, data virtualization, and IT governance.
 
+            ### METRICS FROM TRANSCRIPT:
             - Role: {st.session_state.slots['Role']}
             - Company Size: {st.session_state.slots['CompanySize']}
             - Technical Stack (Tech): {st.session_state.slots['Tech']}
@@ -266,14 +273,13 @@ if st.session_state.stage == 4:
             - Captured Verbatims / Client Metaphors: {st.session_state.tags.get('Verbatims', 'None')}
             - Target Strategy: {derived_strategy}
 
-            [CRITICAL GENERATION CONSTRAINTS]
-            1. NO LEAKED SCENARIOS OR Hallucinations: Do NOT mention 'Microsoft Access' or any legacy database systems unless explicitly present in the Technical Stack variable above. If it's missing, it does not exist.
-            2. NO TECHNICAL OVER-ENGINEERING: The strategy must focus strictly on simple marketing data reconciliation, spreadsheet deduplication templates, operational alignment, and tracking rules. Absolutely FORBIDDEN to mention APIs, data connectors, automated synchronization, or infrastructure overhauls. Keep suggestions process-driven.
-            3. CLIENT-READY BUSINESS HEADINGS: Write the report using clear business headers targeted to a decision maker. Use these exact titles for the strategic pillars:
+            [GENERATION STRUCTURE]
+            Write the report using clear business headers targeted to a decision maker. Use these exact titles for the strategic pillars:
                - Revenue Protection Strategy
                - Core Architectural Principles
                - Ecosystem Integration Priorities
-            4. ACCURATE STRATEGY FRAMING: Base the execution plan on reconciling discrepancies between Mailchimp, Google Analytics, and external agency spreadsheets.
+            
+            Adapt the content under 'Revenue Protection Strategy' to fit the actual objective (e.g., if the pain is architectural throttling, explain how performance bottlenecks directly impact business throughput, agility, and hidden costs).
             """
             
             try:
@@ -283,13 +289,27 @@ if st.session_state.stage == 4:
                     temperature=0.0
                 ).choices[0].message.content
 
+                # Adaptive risk badge context setup based on strategy definition
+                risk_level = "MEDIUM" if "Marketing" in derived_strategy else "MEDIUM-HIGH"
+                
+                if "Modernization" in derived_strategy or "Architecture" in derived_strategy:
+                    directive_text = (
+                        "Establish data virtualization and asynchronous processing layers to unthrottle localized stacks. "
+                        "Remediate shadow IT friction by transforming experimental setups into governed enterprise assets."
+                    )
+                else:
+                    directive_text = (
+                        "Reconcile tracking methodologies and execute strict pipeline deduplication templates. "
+                        "Eliminate infrastructure overhauls; fix human reporting alignment and analytical consistency."
+                    )
+
                 st.markdown(f"""
                 <div class="recommendation-box">
-                    <div class="priority-badge-high">⚠️ ADAPTIVE RISK LEVEL: MEDIUM</div>
+                    <div class="priority-badge-high">⚠️ ADAPTIVE RISK LEVEL: {risk_level}</div>
                     <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
                         <b>Human & Corporate Posture Risk Assessment:</b><br>
                         • <b>Strategic Path:</b> Determined as <b>{derived_strategy}</b>.<br>
-                        • <b>Ecosystem Directive:</b> Reconcile tracking methodologies and execute strict pipeline deduplication templates. Eliminate infrastructure overhauls; fix human reporting alignment and analytical consistency.
+                        • <b>Ecosystem Directive:</b> {directive_text}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
