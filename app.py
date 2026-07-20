@@ -46,9 +46,7 @@ st.markdown("""
 def sanitize_transcript_text(text: str) -> str:
     if not text:
         return ""
-    # Strip square bracket system overrides
     cleaned = re.sub(r'\[SYSTEM OVERRIDE:[^\]]*\]', '[Suspicious Instruction Block Removed]', text, flags=re.IGNORECASE)
-    # Strip common system override phrases
     override_phrases = [
         r"ignore all previous instructions",
         r"ignore previous instructions",
@@ -139,7 +137,6 @@ def infer_transformation_strategy(slots_data):
     pain_str = str(slots_data.get('Pain', '')).lower()
     role_str = str(slots_data.get('Role', '')).lower()
     
-    # FIXED: Reroute business/sales contexts away from complex architectural workflows
     if "sales" in role_str or "marketing" in role_str or "market share" in pain_str or "crm" in tech_str or "spreadsheets" in tech_str:
         return "Commercial Performance & Revenue Visibility"
     if tech_str == "unknown" and pain_str == "unknown":
@@ -212,7 +209,6 @@ stage_questions = {
 }
 st.subheader(f"👉 {stage_questions[str(st.session_state.stage)]}")
 
-# Dynamically compute metadata
 derived_lens = classify_decision_lens(st.session_state.slots, st.session_state.transcript)
 derived_tech_profile = classify_technology_profile(st.session_state.slots)
 derived_strategy = infer_transformation_strategy(st.session_state.slots)
@@ -332,27 +328,25 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
-            # FIXED: Removed all hardcoded technical jargon context templates. Added dynamic mapping rules.
+            # STRICT NON-SURJECTIVE CONTEXT RESTRICTION: Pure Commercial & Visibility framing
             if "Commercial Performance" in derived_strategy:
                 strategy_directives = """
-                - Focus exclusively on pipeline visibility, sales forecasting accuracy, customer retention, and tracking lost opportunities.
-                - Address the friction points of manual reporting or basic systems like CRMs and spreadsheets without implying systemic infrastructure redesigns.
-                - Align the recommendation strictly to competitive positioning and market share protection.
+                - Focus exclusively on pipeline visibility, CRM reporting quality, forecasting accuracy, and tracking lost opportunities.
+                - Address the exact reported tools (CRM and spreadsheets) without assuming underlying infrastructure bottlenecks, architectural throttling, or system frictions.
+                - Emphasize commercial decision-making speed, sales tracking, and competitive positioning relative to market share loss.
                 """
             else:
                 strategy_directives = """
                 - Focus on progressive interoperability and phased coexistence between legacy workflows and target modern configurations.
-                - Propose low-intrusion integration layers to improve reporting consistency.
                 """
 
             prompt_final = f"""
-            Act as an elite B2B Enterprise Architecture Consultant and Management Psychologist.
-            Generate a custom corporate strategic architecture report based EXCLUSIVELY on the provided metrics.
+            Act as an elite B2B Commercial Strategy Consultant and Management Analyst.
+            Generate a custom corporate strategic report based EXCLUSIVELY on the provided metrics.
             
-            [STRICT PROHIBITIONS & ISOLATION]
-            - NEVER invent complex architectures or introduce unmentioned systems.
-            - DO NOT mention terms like 'cloud-native', 'legacy infrastructure overhauls', or 'data virtualization' unless explicitly forced by technical stack metrics. 
-            - Keep the entire language aligned ONLY with the identified tools and business challenges.
+            [STRICT PROHIBITIONS & GROUNDING RULES]
+            - NEVER invent complex architectures, infrastructure throttling, or structural system friction. 
+            - Keep the language strictly tied to data visibility, spreadsheet tracking, CRM reporting limitations, and forecasting accuracy.
             
             [STRATEGY DIRECTIVES]
             {strategy_directives}
@@ -376,7 +370,7 @@ if st.session_state.stage == 4:
                - Core Architectural Principles
                - Ecosystem Integration Priorities
             
-            Under 'Revenue Protection Strategy', explain how architectural throttling and structural friction between systems directly impact operational business throughput and hidden organizational costs.
+            Under 'Revenue Protection Strategy', explain precisely how limited visibility across CRM data and spreadsheet-based reporting reduces forecasting accuracy and slows commercial decision-making.
             """
             
             try:
@@ -390,8 +384,7 @@ if st.session_state.stage == 4:
                 
                 if "Commercial" in derived_strategy:
                     directive_text = (
-                        "Reconcile pipeline tracking methodologies and improve reporting alignment within basic toolsets. "
-                        "Maximize CRM asset execution to secure competitive positioning and stop revenue churn."
+                        "Limited visibility across CRM data and spreadsheet-based reporting reduces forecasting accuracy and slows commercial decision-making."
                     )
                 else:
                     directive_text = (
