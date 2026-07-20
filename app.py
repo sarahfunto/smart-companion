@@ -254,37 +254,55 @@ with col2:
         b_class = "status-box-filled" if tag_val not in ["Unknown", "None"] else "status-box-empty"
         st.markdown(f"<div class='{b_class}'><b>{label}:</b> {tag_val}</div>", unsafe_allow_html=True)
 
-# HIGH SECURITY BLOCKING GATE ON STEP 4
+# HIGH SECURITY BLOCKING GATE ON STEP 4 (CONFIDENCE SCORE METRIC BASED)
 if st.session_state.stage == 4:
-    valid_slots = [v for k, v in st.session_state.slots.items() if k in ['Role', 'CompanySize', 'Tech', 'Pain']]
-    reliable_operational_count = sum(1 for val in valid_slots if val != "Unknown")
-    
     st.markdown("---")
     st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
     
-    if reliable_operational_count < 3:
+    # 1. Dynamic confidence calculations per discovery parameter
+    slot_scores = {}
+    slot_scores['Role'] = 1.0 if st.session_state.slots['Role'] != "Unknown" else 0.0
+    slot_scores['Pain'] = 1.0 if st.session_state.slots['Pain'] != "Unknown" else 0.0
+    
+    # Tech: Successfully identifying an unverified tech posture grants maximum points
+    tech_val = st.session_state.slots['Tech']
+    if "Non-Technical Persona" in derived_lens and tech_val == "Unknown":
+        slot_scores['Tech'] = 1.0  # Successfully Invalidated Jargon = High Value Strategic Discovery Insight
+    elif tech_val != "Unknown":
+        slot_scores['Tech'] = 1.0
+    else:
+        slot_scores['Tech'] = 0.0
+        
+    slot_scores['CompanySize'] = 1.0 if st.session_state.slots['CompanySize'] != "Unknown" else 0.0
+
+    # 2. Global discovery matrix confidence aggregation
+    total_confidence = sum(slot_scores.values()) / len(slot_scores)
+    st.markdown(f"**Current Discovery Confidence Score:** `{total_confidence:.2f}` / `1.00` (Minimum Gatekeeper Validation Threshold: `0.70`)")
+    
+    # 3. Validation execution gate
+    if total_confidence < 0.70:
         st.markdown(f"""
         <div class="lock-box">
             <h4>🔒 Blueprint Locked</h4>
             <p><b>Insufficient operational evidence to generate a strategic blueprint.</b></p>
-            <p>The client discovery profile contains only <b>{reliable_operational_count}/4</b> actionable parameters. To protect discovery diagnostic integrity and prevent alignment hallucinations, please collect at least explicit details for:</p>
+            <p>Confidence Score: {total_confidence:.2f} (Required: 0.70). The framework prevents generation to protect diagnostic integrity.</p>
             <ul>
-                <li>✓ Explicit Professional Role</li>
-                <li>✓ Definitive Corporate Scale / Company Size</li>
-                <li>✓ Operational Architecture Stack</li>
-                <li>✓ Measurable Functional Business Pain</li>
+                <li>Role Data Status: {"✅ Verified" if slot_scores['Role'] == 1.0 else "❌ Missing"}</li>
+                <li>Pain Data Status: {"✅ Verified" if slot_scores['Pain'] == 1.0 else "❌ Missing"}</li>
+                <li>Tech Stack Status: {"⚠️ Explicitly Invalidated (Valid Discovery Insight)" if ("Non-Technical" in derived_lens and tech_val == "Unknown") else ("✅ Verified" if slot_scores['Tech'] == 1.0 else "❌ Missing")}</li>
+                <li>Company Scale Status: {"✅ Verified" if slot_scores['CompanySize'] == 1.0 else "❌ Missing"}</li>
             </ul>
-            <i>Before generating strategic recommendations, return to preceding conversation stages to clear vague terminology.</i>
         </div>
         """, unsafe_allow_html=True)
         st.session_state.blueprint_generated = False
     else:
+        st.success("✅ Strategic Gatekeeper Validation Passed. Structural profile integrity confirmed.")
         if st.session_state.step4_validated:
             if st.button("🎯 Compile Custom Strategic Blueprint", type="primary", use_container_width=True):
                 st.session_state.blueprint_generated = True
                 st.rerun()
 
-    if st.session_state.blueprint_generated and reliable_operational_count >= 3 and st.session_state.step4_validated:
+    if st.session_state.blueprint_generated and total_confidence >= 0.70 and st.session_state.step4_validated:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
