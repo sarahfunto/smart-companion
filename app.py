@@ -108,7 +108,7 @@ def classify_decision_lens(slots_data, transcript_data):
     combined = (pain + " " + rc + " " + role + " " + transcript).lower()
     if any(kw in combined for kw in ['as/400', 'mainframe', 'throttled', 'anchor', 'architecture', 'corporate it', 'governance']):
         return "Enterprise Architecture / IT Governance"
-    if any(kw in combined for kw in ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'marketing', 'campaign', 'attribution', 'convert']):
+    if any(kw in combined for kw in ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'marketing', 'campaign', 'attribution', 'convert', 'market share', 'sales vp']):
         return "Commercial / Marketing-oriented"
     return "Standard"
 
@@ -123,7 +123,7 @@ def classify_technology_profile(slots_data):
     if "as/400" in combined_tech or ("mainframe" in combined_tech and "snowflake" in combined_tech):
         return "Hybrid Enterprise Stack (Legacy Mainframe + Cloud Native)"
     
-    has_modern = any(m in combined_tech for m in ['hubspot', 'saas', 'slack', 'sheets', 'cloud', 'mailchimp', 'monday.com', 'snowflake', 'dbt', 'aws', 'python'])
+    has_modern = any(m in combined_tech for m in ['hubspot', 'saas', 'slack', 'sheets', 'cloud', 'mailchimp', 'monday.com', 'snowflake', 'dbt', 'aws', 'python', 'crm', 'spreadsheets'])
     has_legacy = any(l in combined_tech for l in ['postgresql', 'access', 'legacy', 'database', 'as/400', 'mainframe'])
     
     if has_modern and has_legacy:
@@ -139,8 +139,9 @@ def infer_transformation_strategy(slots_data):
     pain_str = str(slots_data.get('Pain', '')).lower()
     role_str = str(slots_data.get('Role', '')).lower()
     
-    if "marketing" in role_str or "open rates" in pain_str or "convert" in pain_str:
-        return "Marketing Performance Reconciliation"
+    # FIXED: Reroute business/sales contexts away from complex architectural workflows
+    if "sales" in role_str or "marketing" in role_str or "market share" in pain_str or "crm" in tech_str or "spreadsheets" in tech_str:
+        return "Commercial Performance & Revenue Visibility"
     if tech_str == "unknown" and pain_str == "unknown":
         return "Discovery & Architecture Mapping"
         
@@ -233,12 +234,10 @@ with col1:
     
     if st.button("⚡ Analyze and Validate Input"):
         if manual_input:
-            # FIX: Sanitize input BEFORE storing it into last_analyzed to prevent propagation in the UI
             sanitized_input = sanitize_transcript_text(manual_input)
             st.session_state.transcript += "\\n" + sanitized_input
             st.session_state.last_analyzed = sanitized_input
             
-            # Pass the raw text to the LLM (which has its own safety system prompt), but pipeline variables stay clean
             st.session_state['ai_guidance'] = analyze_with_openai(manual_input, web_context_input, st.session_state.stage)
             if st.session_state.stage == 4:
                 st.session_state.step4_validated = True
@@ -333,14 +332,30 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
+            # FIXED: Removed all hardcoded technical jargon context templates. Added dynamic mapping rules.
+            if "Commercial Performance" in derived_strategy:
+                strategy_directives = """
+                - Focus exclusively on pipeline visibility, sales forecasting accuracy, customer retention, and tracking lost opportunities.
+                - Address the friction points of manual reporting or basic systems like CRMs and spreadsheets without implying systemic infrastructure redesigns.
+                - Align the recommendation strictly to competitive positioning and market share protection.
+                """
+            else:
+                strategy_directives = """
+                - Focus on progressive interoperability and phased coexistence between legacy workflows and target modern configurations.
+                - Propose low-intrusion integration layers to improve reporting consistency.
+                """
+
             prompt_final = f"""
             Act as an elite B2B Enterprise Architecture Consultant and Management Psychologist.
             Generate a custom corporate strategic architecture report based EXCLUSIVELY on the provided metrics.
             
-            [STRICT PROHIBITIONS]
-            - NEVER use the word 'migration' or imply an infrastructure replacement. Use terms like 'phased coexistence' or 'progressive interoperability'.
-            - NEVER propose 'data virtualization' or specific unmentioned infrastructure architectures. Use target terms like 'introducing integration layers between legacy and cloud-native workloads' or 'improving interoperability'.
-            - DO NOT mention marketing tools (Mailchimp, Google Analytics, spreadsheets) unless they are explicitly present in the input parameters.
+            [STRICT PROHIBITIONS & ISOLATION]
+            - NEVER invent complex architectures or introduce unmentioned systems.
+            - DO NOT mention terms like 'cloud-native', 'legacy infrastructure overhauls', or 'data virtualization' unless explicitly forced by technical stack metrics. 
+            - Keep the entire language aligned ONLY with the identified tools and business challenges.
+            
+            [STRATEGY DIRECTIVES]
+            {strategy_directives}
 
             ### METRICS FROM TRANSCRIPT:
             - Role: {st.session_state.slots['Role']}
@@ -371,17 +386,17 @@ if st.session_state.stage == 4:
                     temperature=0.0
                 ).choices[0].message.content
 
-                risk_level = "MEDIUM" if "Marketing" in derived_strategy else "MEDIUM-HIGH"
+                risk_level = "MEDIUM" if "Commercial" in derived_strategy else "MEDIUM-HIGH"
                 
-                if "Modernization" in derived_strategy or "Architecture" in derived_strategy:
+                if "Commercial" in derived_strategy:
                     directive_text = (
-                        "Introduce integrated, non-intrusive layers between legacy and cloud-native workloads to improve interoperability. "
-                        "Safeguard localized agility while establishing phased coexistence pathways acceptable to central IT governance."
+                        "Reconcile pipeline tracking methodologies and improve reporting alignment within basic toolsets. "
+                        "Maximize CRM asset execution to secure competitive positioning and stop revenue churn."
                     )
                 else:
                     directive_text = (
-                        "Reconcile tracking methodologies and execute strict pipeline deduplication templates. "
-                        "Eliminate infrastructure overhauls; fix human reporting alignment and analytical consistency."
+                        "Introduce integrated, non-intrusive layers between legacy and cloud-native workloads to improve interoperability. "
+                        "Safeguard localized agility while establishing phased coexistence pathways."
                     )
 
                 st.markdown(f"""
