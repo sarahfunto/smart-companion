@@ -9,19 +9,19 @@ else:
     st.error("⚠️ OPENAI_API_KEY is missing in Streamlit Secrets. Please configure it in your App Settings.")
     client = None
 
-# SYSTEM PROMPT FORCING ABSOLUTE INFERENTIAL DISCIPLINE & EXPLICIT EVIDENCE
+# SYSTEM PROMPT FORCING JARGON FILTERING & PSYCHOLOGICAL ALIGNMENT
 SYSTEM_PROMPT = """
 You are a cold, literal B2B sales data extractor operating with absolute inferential discipline. 
 Your sole objective is to parse the latest client transcript turn and populate the target slots and psychological tags based ONLY on explicit, concrete, verifiable facts.
 
 [CRITICAL INFERENTIAL & STRUCTURAL DIRECTIVES]
-1. ZERO INFERENCE OR GUESSTIMATING: If the client uses idiomatic phrases, vague generalities, or conversational filler (e.g., 'wear a lot of hats', 'some cloud things', 'decent-sized outfit', 'people are tired'), you MUST output "Unknown" for that slot. Do not interpret, extrapolate, or fill in the blanks.
-2. TOOL & SOLUTION ISOLATION: Never invent infrastructure solutions, migrations, or platforms. If specific architecture components (e.g., AS/400, Snowflake, dbt, AWS) are not named explicitly, the Tech slot must be "Unknown". Generic phrases like 'cloud things' or 'older systems' equal "Unknown".
-3. BUSINESS PAIN VS. SOCIAL COMMENTARY: Core business Pain must reflect a measurable operational bottleneck or financial drain. Broad emotional complaints, workplace fatigue, or general remarks like 'it's been a long year' or 'putting out fires' must be mapped to "Unknown" under Pain and RootCauses.
-4. CAUSE VS. CONSTRAINT STRUCTURE: 
-   - RootCauses must ONLY capture concrete, structural, technical frictions.
-   - Political friction or organizational resistance belongs under Fear or Limits. Do NOT map corporate pushback as a technical Root Cause.
-5. STRICT STRIPPED OUTPUT: If no explicit role title, exact employee/scale metrics, specific technical tools, or functional business bottlenecks are stated, return "Unknown" for those specific slots.
+1. TECH IMPOSTOR & JARGON FILTER: If a prospect drops technical terms (e.g., blockchain, Kubernetes, API, firewall) but explicitly admits to not understanding them, mixing them up, or lacking an engineering background, you MUST treat the technology stack as completely unverified and output "Unknown" for the Tech slot. Do not let speculative jargon pollute the data.
+2. HOLISTIC PAIN EXTRACTION: When a prospect provides quantifiable business performance degradation (e.g., 'open rates down 12%') alongside systemic business outcomes (e.g., 'campaigns aren't converting'), you must capture BOTH elements cohesively within the Pain slot. Do not truncate the business impact.
+3. ZERO INFERENCE OR GUESSTIMATING: General phrases, colloquialisms ('wear a lot of hats'), or conversational fillers mean "Unknown" for that specific slot. Do not extrapolate titles or sizes.
+4. STRATEGIC INSIGHT PRIORITY: If a prospect uses contradictory jargon while experiencing measurable performance drops, your 'ai_guidance' field must explicitly direct the sales rep to ignore the ambiguous technical terminology and focus exclusively on the measurable business/marketing performance bottleneck.
+5. CAUSE VS. CONSTRAINT STRUCTURE:
+   - RootCauses must capture technical friction. If the tech stack is unverified ("Unknown"), the Root Cause must remain "Unknown".
+   - Emotional anxiety, fear of looking incompetent to leadership, or generic competitive pressure belongs exclusively under Fear.
 
 Output strictly as a JSON object containing keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Fear, Verbatims), ai_guidance.
 """
@@ -74,18 +74,25 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Live Context Injection")
 web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", height=150, placeholder="Inject manual environment data here...", key="web_ctx_static")
 
-# DETERMINISTIC DATA MATCHING LABELS (Strictly bound to facts, no guesses)
+# DETERMINISTIC DATA MATCHING LABELS
 def classify_decision_lens(slots_data, transcript_data):
+    role = str(slots_data.get('Role', '')).lower()
+    transcript = transcript_data.lower()
+    
+    # Explicit detection of a technical impostor / business-only persona masquerading with jargon
+    if "marketing" in role and ("not an engineer" in transcript or "mix those up" in transcript or "supposed to be leading" in transcript):
+        return "Marketing Operations Leader (Non-Technical Persona)"
+        
     pain = str(slots_data.get('Pain', '')).lower()
     rc = str(slots_data.get('RootCauses', '')).lower()
     
     if "unknown" in pain and "unknown" in rc:
         return "Unknown"
         
-    combined = (pain + " " + rc + " " + str(slots_data.get('Role', '')) + " " + transcript_data).lower()
+    combined = (pain + " " + rc + " " + role + " " + transcript).lower()
     if any(kw in combined for kw in ['as/400', 'mainframe', 'throttled', 'anchor', 'architecture', 'corporate it', 'governance']):
         return "Enterprise Architecture / IT Governance"
-    if any(kw in combined for kw in ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'marketing', 'attribution']):
+    if any(kw in combined for kw in ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'marketing', 'campaign', 'attribution', 'convert']):
         return "Commercial / Marketing-oriented"
     return "Standard"
 
@@ -114,15 +121,16 @@ def classify_technology_profile(slots_data):
 def infer_transformation_strategy(slots_data):
     tech_str = str(slots_data.get('Tech', '')).lower()
     pain_str = str(slots_data.get('Pain', '')).lower()
+    role_str = str(slots_data.get('Role', '')).lower()
     
+    if "marketing" in role_str or "open rates" in pain_str or "convert" in pain_str:
+        return "Marketing Performance Reconciliation"
     if tech_str == "unknown" and pain_str == "unknown":
         return "Discovery & Architecture Mapping"
         
-    combined = tech_str + " " + pain_str + " " + str(slots_data.get('Role', '')).lower()
+    combined = tech_str + " " + pain_str + " " + role_str
     if any(kw in combined for kw in ['as/400', 'mainframe', 'throttled', 'anchor', 'legacy backbone']):
         return "Incremental Enterprise Modernization"
-    if 'mailchimp' in tech_str or 'marketing' in slots_data.get('Role', '').lower() or 'attribution' in pain_str:
-        return "Marketing Performance Reconciliation"
     return "Discovery & Architecture Mapping"
 
 def analyze_with_openai(user_text, context_web, current_stage):
@@ -137,6 +145,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Psychological Tags: {json.dumps(st.session_state.tags)}\n\n"
         "TASK:\n"
         "Extract raw factual metrics matching keys. If parameters are vague or structural information is absent, write 'Unknown' explicitly.\n"
+        "If technical jargon is present but unverified or accompanied by explicitly admitted confusion, flag it as 'Unknown' under Tech.\n"
         "Format response as a JSON object with keys: slots, tags, ai_guidance."
     )
 
@@ -247,7 +256,6 @@ with col2:
 
 # HIGH SECURITY BLOCKING GATE ON STEP 4
 if st.session_state.stage == 4:
-    # Count valid parameters that are NOT marked as 'Unknown'
     valid_slots = [v for k, v in st.session_state.slots.items() if k in ['Role', 'CompanySize', 'Tech', 'Pain']]
     reliable_operational_count = sum(1 for val in valid_slots if val != "Unknown")
     
