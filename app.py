@@ -9,19 +9,19 @@ else:
     st.error("⚠️ OPENAI_API_KEY is missing in Streamlit Secrets. Please configure it in your App Settings.")
     client = None
 
-# SYSTEM PROMPT FOCUSING EXCLUSIVELY ON RAW DATA EXTRACTION WITH NO SCENARIO BIAS
+# SYSTEM PROMPT FORCING ABSOLUTE INFERENTIAL DISCIPLINE & EXPLICIT EVIDENCE
 SYSTEM_PROMPT = """
-You are a rigorous, literal B2B sales data extractor operating with strict inferential discipline. 
-Your sole objective is to parse the latest client transcript turn and populate the target slots and psychological tags based ONLY on explicit facts provided.
+You are a cold, literal B2B sales data extractor operating with absolute inferential discipline. 
+Your sole objective is to parse the latest client transcript turn and populate the target slots and psychological tags based ONLY on explicit, concrete, verifiable facts.
 
 [CRITICAL INFERENTIAL & STRUCTURAL DIRECTIVES]
-1. ZERO INFERENCE ON UNMENTIONED TOOLS & SOLUTIONS: Never invent software names, brands, or architectural solutions (e.g., do NOT mention 'data virtualization', 'data lakes', or migrations). Stick strictly to generic integration or interoperability terms unless specific tools like AS/400, Snowflake, dbt, or AWS are explicitly named.
-2. COEXISTENCE OVER MIGRATION: Assume the client's objective is system coexistence and interoperability rather than wholesale migration, unless a total replacement is explicitly requested.
-3. CAUSE VS. CONSTRAINT STRUCTURE: 
-   - RootCauses must ONLY capture the structural, technical friction (e.g., 'Legacy AS/400 backbone constrains modern cloud-native workloads').
-   - Corporate IT resistance, disapproval, or lack of baseline approval belongs strictly under Fear or Limits/Constraints. Do NOT map political friction as a technical Root Cause.
-4. METAPHOR FILTER: Clean metaphoric jargon out of the Tech slot.
-5. COMPANY SIZE RULE: Map direct employee counts (e.g., 12,000+) to CompanySize. Never confuse sub-team size (e.g., 4 people) with total enterprise scale.
+1. ZERO INFERENCE OR GUESSTIMATING: If the client uses idiomatic phrases, vague generalities, or conversational filler (e.g., 'wear a lot of hats', 'some cloud things', 'decent-sized outfit', 'people are tired'), you MUST output "Unknown" for that slot. Do not interpret, extrapolate, or fill in the blanks.
+2. TOOL & SOLUTION ISOLATION: Never invent infrastructure solutions, migrations, or platforms. If specific architecture components (e.g., AS/400, Snowflake, dbt, AWS) are not named explicitly, the Tech slot must be "Unknown". Generic phrases like 'cloud things' or 'older systems' equal "Unknown".
+3. BUSINESS PAIN VS. SOCIAL COMMENTARY: Core business Pain must reflect a measurable operational bottleneck or financial drain. Broad emotional complaints, workplace fatigue, or general remarks like 'it's been a long year' or 'putting out fires' must be mapped to "Unknown" under Pain and RootCauses.
+4. CAUSE VS. CONSTRAINT STRUCTURE: 
+   - RootCauses must ONLY capture concrete, structural, technical frictions.
+   - Political friction or organizational resistance belongs under Fear or Limits. Do NOT map corporate pushback as a technical Root Cause.
+5. STRICT STRIPPED OUTPUT: If no explicit role title, exact employee/scale metrics, specific technical tools, or functional business bottlenecks are stated, return "Unknown" for those specific slots.
 
 Output strictly as a JSON object containing keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Fear, Verbatims), ai_guidance.
 """
@@ -33,11 +33,12 @@ st.markdown("""
     <style>
     .main { background-color: #0E1117; color: white; }
     .stButton>button { width: 100%; border-radius: 50px; height: 3em; background-color: #2E6BFF; color: white; }
-    .status-box-empty { padding: 12px; border-radius: 10px; background-color: #1E2329; border: 1px solid #3E444B; margin-bottom: 8px; color: #6C757D; }
+    .status-box-empty { padding: 12px; border-radius: 10px; background-color: #1E2329; border: 1px solid #3E444B; margin-bottom: 8px; color: #E2E8F0; font-style: italic; }
     .status-box-filled { padding: 12px; border-radius: 10px; background-color: #155724; border: 2px solid #28a745; margin-bottom: 8px; color: #D4EDDA; font-weight: bold; }
     .recommendation-box { padding: 25px; border-radius: 15px; background-color: #0B2545; border: 2px solid #134074; color: #EEF4F8; margin-top: 15px; margin-bottom: 20px; line-height: 1.6; }
     .priority-badge-high { display: inline-block; background-color: #E63946; color: white; padding: 6px 14px; font-size: 0.85em; font-weight: bold; border-radius: 4px; letter-spacing: 1px; margin-bottom: 15px; }
     .last-input-box { background-color: #1E2530; border-left: 4px solid #2E6BFF; padding: 12px; border-radius: 4px; margin-top: 15px; color: #A0AEC0; font-style: italic; font-size: 0.95em; }
+    .lock-box { padding: 20px; background-color: #2A1215; border: 2px dashed #E63946; border-radius: 10px; color: #FFD2D2; margin-top: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -46,20 +47,20 @@ def execute_hard_reset():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.session_state.stage = 1
-    st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
-    st.session_state.tags = {'Fear': 'Not yet confirmed', 'Verbatims': 'None'}
+    st.session_state.slots = {'Role': 'Unknown', 'CompanySize': 'Unknown', 'Tech': 'Unknown', 'Pain': 'Unknown', 'RootCauses': 'Unknown', 'Limits': 'Unknown'}
+    st.session_state.tags = {'Fear': 'Unknown', 'Verbatims': 'None'}
     st.session_state.transcript = ''
     st.session_state.last_analyzed = ''
-    st.session_state.ai_guidance = "Simulation state completely reset. All parameter blocks cleared."
+    st.session_state.ai_guidance = "Simulation state completely reset. Awaiting verified factual parameters."
     st.session_state.blueprint_generated = False
     st.session_state.step4_validated = False
 
 if 'stage' not in st.session_state: st.session_state.stage = 1
-if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Empty', 'CompanySize': 'Empty', 'Tech': 'Empty', 'Pain': 'Empty', 'RootCauses': 'Empty', 'Limits': 'Empty'}
-if 'tags' not in st.session_state: st.session_state.tags = {'Fear': 'Not yet confirmed', 'Verbatims': 'None'}
+if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Unknown', 'CompanySize': 'Unknown', 'Tech': 'Unknown', 'Pain': 'Unknown', 'RootCauses': 'Unknown', 'Limits': 'Unknown'}
+if 'tags' not in st.session_state: st.session_state.tags = {'Fear': 'Unknown', 'Verbatims': 'None'}
 if 'transcript' not in st.session_state: st.session_state.transcript = ''
 if 'last_analyzed' not in st.session_state: st.session_state.last_analyzed = ''
-if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input the initial statement."
+if 'ai_guidance' not in st.session_state: st.session_state.ai_guidance = "Welcome to the simulation. Input explicit statement metrics."
 if 'blueprint_generated' not in st.session_state: st.session_state.blueprint_generated = False
 if 'step4_validated' not in st.session_state: st.session_state.step4_validated = False
 
@@ -73,49 +74,55 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Live Context Injection")
 web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", height=150, placeholder="Inject manual environment data here...", key="web_ctx_static")
 
-# DECOUPLED CLASSIFICATION LOGIC FOR METADATA
+# DETERMINISTIC DATA MATCHING LABELS (Strictly bound to facts, no guesses)
 def classify_decision_lens(slots_data, transcript_data):
-    combined = (str(slots_data.get('Pain', '')) + " " + str(slots_data.get('RootCauses', '')) + " " + str(slots_data.get('Role', '')) + " " + transcript_data).lower()
+    pain = str(slots_data.get('Pain', '')).lower()
+    rc = str(slots_data.get('RootCauses', '')).lower()
     
+    if "unknown" in pain and "unknown" in rc:
+        return "Unknown"
+        
+    combined = (pain + " " + rc + " " + str(slots_data.get('Role', '')) + " " + transcript_data).lower()
     if any(kw in combined for kw in ['as/400', 'mainframe', 'throttled', 'anchor', 'architecture', 'corporate it', 'governance']):
         return "Enterprise Architecture / IT Governance"
-        
-    commercial_keywords = ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'marketing', 'campaign', 'attribution']
-    if any(kw in combined for kw in commercial_keywords):
+    if any(kw in combined for kw in ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'marketing', 'attribution']):
         return "Commercial / Marketing-oriented"
     return "Standard"
 
 def classify_technology_profile(slots_data):
     tech_str = str(slots_data.get('Tech', '')).lower()
+    if tech_str == "unknown" or not tech_str.strip():
+        return "Unknown"
+        
     limits_str = str(slots_data.get('Limits', '')).lower()
     combined_tech = tech_str + " " + limits_str
+    
+    if "as/400" in combined_tech or ("mainframe" in combined_tech and "snowflake" in combined_tech):
+        return "Hybrid Enterprise Stack (Legacy Mainframe + Cloud Native)"
     
     has_modern = any(m in combined_tech for m in ['hubspot', 'saas', 'slack', 'sheets', 'cloud', 'mailchimp', 'monday.com', 'snowflake', 'dbt', 'aws', 'python'])
     has_legacy = any(l in combined_tech for l in ['postgresql', 'access', 'legacy', 'database', 'as/400', 'mainframe'])
     
-    if "as/400" in combined_tech or ("mainframe" in combined_tech and "snowflake" in combined_tech):
-        return "Hybrid Enterprise Stack (Legacy Mainframe + Cloud Native)"
     if has_modern and has_legacy:
         return "Hybrid Stack – Modern SaaS with Legacy Database dependency"
     elif has_modern:
         return "Modern SaaS Stack"
     elif has_legacy:
         return "Legacy Infrastructure Stack"
-    return "Standard"
+    return "Unknown"
 
 def infer_transformation_strategy(slots_data):
     tech_str = str(slots_data.get('Tech', '')).lower()
     pain_str = str(slots_data.get('Pain', '')).lower()
-    role_str = str(slots_data.get('Role', '')).lower()
-    combined = tech_str + " " + pain_str + " " + role_str
     
+    if tech_str == "unknown" and pain_str == "unknown":
+        return "Discovery & Architecture Mapping"
+        
+    combined = tech_str + " " + pain_str + " " + str(slots_data.get('Role', '')).lower()
     if any(kw in combined for kw in ['as/400', 'mainframe', 'throttled', 'anchor', 'legacy backbone']):
         return "Incremental Enterprise Modernization"
-    if 'mailchimp' in tech_str or 'marketing' in role_str or 'attribution' in pain_str or 'campaign' in pain_str:
+    if 'mailchimp' in tech_str or 'marketing' in slots_data.get('Role', '').lower() or 'attribution' in pain_str:
         return "Marketing Performance Reconciliation"
-    filled_count = sum(1 for val in slots_data.values() if val != "Empty")
-    if filled_count >= 4 and ('hubspot' in tech_str or 'postgresql' in tech_str or 'renewal' in pain_str or 'pipeline' in pain_str):
-        return "Incremental Modernization & Ecosystem Bridging"
     return "Discovery & Architecture Mapping"
 
 def analyze_with_openai(user_text, context_web, current_stage):
@@ -129,7 +136,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State: {json.dumps(st.session_state.slots)}\n"
         f"Current Psychological Tags: {json.dumps(st.session_state.tags)}\n\n"
         "TASK:\n"
-        "Extract raw factual metrics matching keys. Clean metaphoric technical jargon out of the Tech slot.\n"
+        "Extract raw factual metrics matching keys. If parameters are vague or structural information is absent, write 'Unknown' explicitly.\n"
         "Format response as a JSON object with keys: slots, tags, ai_guidance."
     )
 
@@ -149,14 +156,18 @@ def analyze_with_openai(user_text, context_web, current_stage):
         for key in st.session_state.slots:
             if key in incoming_slots:
                 val = str(incoming_slots[key]).strip()
-                if val not in ["", "None", "null", "undefined"]:
+                if val in ["", "None", "null", "undefined", "vague", "empty"]:
+                    st.session_state.slots[key] = "Unknown"
+                else:
                     st.session_state.slots[key] = val
                     
         incoming_tags = result.get("tags", {})
         for key in st.session_state.tags:
             if key in incoming_tags:
                 val_tag = str(incoming_tags[key]).strip()
-                if val_tag not in ["", "null", "undefined"]:
+                if val_tag in ["", "null", "undefined", "none"]:
+                    st.session_state.tags[key] = "Unknown"
+                else:
                     st.session_state.tags[key] = val_tag
 
         return result.get("ai_guidance", "Turn parsed successfully.")
@@ -173,7 +184,7 @@ stage_questions = {
 }
 st.subheader(f"👉 {stage_questions[str(st.session_state.stage)]}")
 
-# Dynamically compute decoupled metadata on the fly
+# Dynamically compute metadata
 derived_lens = classify_decision_lens(st.session_state.slots, st.session_state.transcript)
 derived_tech_profile = classify_technology_profile(st.session_state.slots)
 derived_strategy = infer_transformation_strategy(st.session_state.slots)
@@ -195,7 +206,6 @@ with col1:
         else:
             st.warning("Please type the prospect input before running analysis pipelines.")
             
-    # Last Analyzed Input UI Layer
     if st.session_state.last_analyzed:
         st.markdown(f"<div class='last-input-box'><b>Last Analyzed Input:</b> {st.session_state.last_analyzed}</div>", unsafe_allow_html=True)
 
@@ -206,52 +216,67 @@ with col1:
             if st.button("⏮️ Previous Stage"):
                 st.session_state.stage -= 1
                 st.session_state.blueprint_generated = False
-                st.session_state.step4_validated = False  # Reset gate state on navigation
+                st.session_state.step4_validated = False
                 st.rerun()
     with nav_col2:
         if st.session_state.stage < 4:
             if st.button("➡️ Next Stage"):
                 st.session_state.stage += 1
                 st.session_state.blueprint_generated = False
-                st.session_state.step4_validated = False  # Reset gate state on navigation
+                st.session_state.step4_validated = False
                 st.rerun()
 
 with col2:
     st.markdown("### 📊 Extracted Parameters (Slots)")
     for key, val in st.session_state.slots.items():
-        box_class = "status-box-filled" if val != "Empty" else "status-box-empty"
+        box_class = "status-box-filled" if val != "Unknown" else "status-box-empty"
         st.markdown(f"<div class='{box_class}'><b>{key}:</b> {val}</div>", unsafe_allow_html=True)
         
     st.markdown("#### 🧠 Decoupled Psychological Profiling")
     
-    # Display Decoupled Metadata Fields
-    box_lens = "status-box-filled" if derived_lens not in ["Standard", "Empty"] else "status-box-empty"
+    box_lens = "status-box-filled" if derived_lens != "Unknown" else "status-box-empty"
     st.markdown(f"<div class='{box_lens}'><b>Decision Filter (Lens):</b> {derived_lens}</div>", unsafe_allow_html=True)
     
-    box_tech = "status-box-filled" if derived_tech_profile not in ["Standard", "Empty"] else "status-box-empty"
+    box_tech = "status-box-filled" if derived_tech_profile != "Unknown" else "status-box-empty"
     st.markdown(f"<div class='{box_tech}'><b>Tech Profile:</b> {derived_tech_profile}</div>", unsafe_allow_html=True)
     
     for tag_name, label in [("Fear", "Identified Core Fear"), ("Verbatims", "Voice/Verbatim Mirror")]:
-        tag_val = st.session_state.tags.get(tag_name, 'Standard')
-        b_class = "status-box-filled" if tag_val not in ["Standard", "None", "Not yet confirmed"] else "status-box-empty"
+        tag_val = st.session_state.tags.get(tag_name, 'Unknown')
+        b_class = "status-box-filled" if tag_val not in ["Unknown", "None"] else "status-box-empty"
         st.markdown(f"<div class='{b_class}'><b>{label}:</b> {tag_val}</div>", unsafe_allow_html=True)
 
-# STRATEGIC GATEKEEPER BLUEPRINT COMPILATION
+# HIGH SECURITY BLOCKING GATE ON STEP 4
 if st.session_state.stage == 4:
-    filled_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
+    # Count valid parameters that are NOT marked as 'Unknown'
+    valid_slots = [v for k, v in st.session_state.slots.items() if k in ['Role', 'CompanySize', 'Tech', 'Pain']]
+    reliable_operational_count = sum(1 for val in valid_slots if val != "Unknown")
     
-    if st.session_state.step4_validated:
-        st.markdown("---")
-        st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
-        
-        if filled_count >= 3:
+    st.markdown("---")
+    st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
+    
+    if reliable_operational_count < 3:
+        st.markdown(f"""
+        <div class="lock-box">
+            <h4>🔒 Blueprint Locked</h4>
+            <p><b>Insufficient operational evidence to generate a strategic blueprint.</b></p>
+            <p>The client discovery profile contains only <b>{reliable_operational_count}/4</b> actionable parameters. To protect discovery diagnostic integrity and prevent alignment hallucinations, please collect at least explicit details for:</p>
+            <ul>
+                <li>✓ Explicit Professional Role</li>
+                <li>✓ Definitive Corporate Scale / Company Size</li>
+                <li>✓ Operational Architecture Stack</li>
+                <li>✓ Measurable Functional Business Pain</li>
+            </ul>
+            <i>Before generating strategic recommendations, return to preceding conversation stages to clear vague terminology.</i>
+        </div>
+        """, unsafe_allow_html=True)
+        st.session_state.blueprint_generated = False
+    else:
+        if st.session_state.step4_validated:
             if st.button("🎯 Compile Custom Strategic Blueprint", type="primary", use_container_width=True):
                 st.session_state.blueprint_generated = True
                 st.rerun()
-        else:
-            st.warning("🛑 Blueprint locked: The slots matrix requires at least 3 valid operational parameters in memory to pass the security gate.")
 
-    if st.session_state.blueprint_generated and filled_count >= 3 and st.session_state.step4_validated:
+    if st.session_state.blueprint_generated and reliable_operational_count >= 3 and st.session_state.step4_validated:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
@@ -293,7 +318,6 @@ if st.session_state.stage == 4:
                     temperature=0.0
                 ).choices[0].message.content
 
-                # Adaptive risk badge context setup
                 risk_level = "MEDIUM" if "Marketing" in derived_strategy else "MEDIUM-HIGH"
                 
                 if "Modernization" in derived_strategy or "Architecture" in derived_strategy:
@@ -319,19 +343,5 @@ if st.session_state.stage == 4:
                 """, unsafe_allow_html=True)
                 
                 st.markdown(final_diag)
-                
-                st.subheader("Final Summary Matrix")
-                col_m1, col_m2 = st.columns(2)
-                with col_m1:
-                    st.markdown(f"""
-                    * **Prospect Role:** {st.session_state.slots['Role']}
-                    * **Company Size:** {st.session_state.slots['CompanySize']}
-                    * **Decision Lens:** {derived_lens}
-                    """)
-                with col_m2:
-                    st.markdown(f"""
-                    * **Technology Profile:** {derived_tech_profile}
-                    * **Transformation Strategy:** {derived_strategy}
-                    """)
             except Exception as e:
                 st.error(f"Error compiling document asset: {e}")
