@@ -16,8 +16,9 @@ Your sole objective is to parse the latest client transcript turn and populate t
 
 [CRITICAL INFERENTIAL DIRECTIVES]
 1. ZERO INFERENCE ON UNMENTIONED TOOLS: Never invent software names, brands, or platforms. If the client mentions HubSpot or PostgreSQL, map them exactly. For unmentioned tools, use strictly generic definitions like 'existing CRM tools' or 'internal databases'. Never suggest migrations to tools like Zoho or Pipedrive unless requested. Focus on 'bridging ecosystems, not replacing'.
-2. COMPANY SIZE RULE: If the prospect provides a specific number of employees (e.g., '11 employees') or an explicit size, map it directly to 'CompanySize'. If the prospect is vague, evasive, or explicitly avoids giving a precise metric or definitive scale (e.g., saying 'not huge, not small, in-between'), leave 'CompanySize' as 'Empty'.
-3. ACCURATE VERBATIMS: Extract exact phrases or strong emotional markers used by the prospect (e.g., 'wearing many hats', 'people are tired', 'founder refuses to abandon Access').
+2. METAPHOR FILTER: If the client uses technical buzzwords as metaphors (e.g., 'Kubernetes-style workflow' for Monday.com tasks, 'vector database' for an email list, 'blockchain' for uneditable leads, or 'zero-trust' for internal skepticism), DO NOT extract these as actual technologies. Extract ONLY the functional tools explicitly mentioned (e.g., Monday.com, Mailchimp, Excel).
+3. COMPANY SIZE RULE: If the prospect provides a specific number of employees (e.g., '140 employees') or an explicit size, map it directly to 'CompanySize'. If the prospect is vague, evasive, or explicitly avoids giving a precise metric or definitive scale, leave 'CompanySize' as 'Empty'.
+4. ACCURATE VERBATIMS: Extract exact phrases or strong emotional markers used by the prospect (e.g., 'cannot explain why campaign numbers differ', 'attribution model is mostly guesswork').
 
 Output strictly as a JSON object containing keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Fear, Verbatims), ai_guidance.
 """
@@ -71,17 +72,23 @@ web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", he
 
 # DECOUPLED CLASSIFICATION LOGIC FOR METADATA
 def classify_decision_lens(slots_data, transcript_data):
-    combined = (str(slots_data.get('Pain', '')) + " " + str(slots_data.get('RootCauses', '')) + " " + transcript_data).lower()
-    commercial_keywords = ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'employee']
+    combined = (str(slots_data.get('Pain', '')) + " " + str(slots_data.get('RootCauses', '')) + " " + str(slots_data.get('Role', '')) + " " + transcript_data).lower()
+    commercial_keywords = ['renewal', 'revenue', 'board', 'forecast', 'pipeline', 'churn', 'sales', 'budget', 'employee', 'marketing', 'campaign']
     if any(kw in combined for kw in commercial_keywords):
-        return "Commercial / Revenue-Driven"
+        return "Commercial / Marketing-oriented"
     return "Standard"
 
 def classify_technology_profile(slots_data):
     tech_str = str(slots_data.get('Tech', '')).lower()
     limits_str = str(slots_data.get('Limits', '')).lower()
     
-    has_modern = any(m in tech_str for m in ['hubspot', 'saas', 'slack', 'sheets', 'cloud'])
+    # Exclude metaphorical technical words from setting a technical stack profile
+    if any(m in tech_str for m in ['kubernetes', 'blockchain', 'vector database']):
+        # Cleaned logic mapping for Scen 3
+        if 'mailchimp' in tech_str or 'wordpress' in tech_str:
+            return "Standard"
+
+    has_modern = any(m in tech_str for m in ['hubspot', 'saas', 'slack', 'sheets', 'cloud', 'mailchimp'])
     has_legacy = any(l in tech_str or l in limits_str for l in ['postgresql', 'access', 'legacy', 'database'])
     
     if has_modern and has_legacy:
@@ -93,10 +100,14 @@ def classify_technology_profile(slots_data):
     return "Standard"
 
 def infer_transformation_strategy(slots_data):
-    filled_count = sum(1 for val in slots_data.values() if val != "Empty")
     tech_str = str(slots_data.get('Tech', '')).lower()
     pain_str = str(slots_data.get('Pain', '')).lower()
+    role_str = str(slots_data.get('Role', '')).lower()
     
+    if 'mailchimp' in tech_str or 'marketing' in role_str or 'attribution' in pain_str or 'campaign' in pain_str:
+        return "Marketing Performance Reconciliation"
+        
+    filled_count = sum(1 for val in slots_data.values() if val != "Empty")
     if filled_count >= 4 and ('hubspot' in tech_str or 'postgresql' in tech_str or 'renewal' in pain_str or 'pipeline' in pain_str):
         return "Incremental Modernization & Ecosystem Bridging"
     return "Discovery & Architecture Mapping"
@@ -112,7 +123,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Slot State: {json.dumps(st.session_state.slots)}\n"
         f"Current Psychological Tags: {json.dumps(st.session_state.tags)}\n\n"
         "TASK:\n"
-        "Extract raw factual metrics matching keys. Pay close attention to numbers for CompanySize.\n"
+        "Extract raw factual metrics matching keys. Clean metaphoric technical jargon out of the Tech slot.\n"
         "Format response as a JSON object with keys: slots, tags, ai_guidance."
     )
 
@@ -224,7 +235,6 @@ with col2:
 if st.session_state.stage == 4:
     filled_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
-    # CRITICAL SECURITY FIX: Strict check for step4_validated flag inside the rendering scope
     if st.session_state.step4_validated:
         st.markdown("---")
         st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
@@ -256,13 +266,14 @@ if st.session_state.stage == 4:
             - Captured Verbatims / Client Metaphors: {st.session_state.tags.get('Verbatims', 'None')}
             - Target Strategy: {derived_strategy}
 
-            REPORT STRATEGIC MANDATES:
-            1. BRIDGE, DO NOT REPLACE: Validate that the existing stack components are structurally sound, but lacking visibility interfaces. Explicitly treat tools like Microsoft Access as immutable business rules: write recommendations around 'preserving the existing Microsoft Access layer as a required legacy dependency while minimizing its operational friction through zero-loss database integration' rather than suggesting updating or modernizing it directly.
-            2. CLIENT-READY BUSINESS HEADINGS: Write the report using clear business headers targeted to a decision maker. Use these exact titles for the strategic pillars:
+            [CRITICAL GENERATION CONSTRAINTS]
+            1. NO LEAKED SCENARIOS OR Hallucinations: Do NOT mention 'Microsoft Access' or any legacy database systems unless explicitly present in the Technical Stack variable above. If it's missing, it does not exist.
+            2. NO TECHNICAL OVER-ENGINEERING: The strategy must focus strictly on simple marketing data reconciliation, spreadsheet deduplication templates, operational alignment, and tracking rules. Absolutely FORBIDDEN to mention APIs, data connectors, automated synchronization, or infrastructure overhauls. Keep suggestions process-driven.
+            3. CLIENT-READY BUSINESS HEADINGS: Write the report using clear business headers targeted to a decision maker. Use these exact titles for the strategic pillars:
                - Revenue Protection Strategy
                - Core Architectural Principles
                - Ecosystem Integration Priorities
-            3. NO EXTERNAL SOLUTION INFERENCES: Focus on fixing the visibility bridge between the current systems. Never introduce unauthorized vendor names.
+            4. ACCURATE STRATEGY FRAMING: Base the execution plan on reconciling discrepancies between Mailchimp, Google Analytics, and external agency spreadsheets.
             """
             
             try:
@@ -274,11 +285,11 @@ if st.session_state.stage == 4:
 
                 st.markdown(f"""
                 <div class="recommendation-box">
-                    <div class="priority-badge-high">⚠️ ADAPTIVE RISK LEVEL: HIGH</div>
+                    <div class="priority-badge-high">⚠️ ADAPTIVE RISK LEVEL: MEDIUM</div>
                     <div style="font-size: 0.9em; margin-top: -10px; color: #FFD2D2;">
                         <b>Human & Corporate Posture Risk Assessment:</b><br>
                         • <b>Strategic Path:</b> Determined as <b>{derived_strategy}</b>.<br>
-                        • <b>Ecosystem Directive:</b> Bridge reporting data pipelines into the primary workspace natively rather than initiating system overhauls. Preserve core architecture dependencies exactly as specified by organizational rules.
+                        • <b>Ecosystem Directive:</b> Reconcile tracking methodologies and execute strict pipeline deduplication templates. Eliminate infrastructure overhauls; fix human reporting alignment and analytical consistency.
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
