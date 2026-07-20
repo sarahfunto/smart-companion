@@ -14,11 +14,14 @@ SYSTEM_PROMPT = """
 You are a rigorous, literal B2B sales data extractor operating with strict inferential discipline. 
 Your sole objective is to parse the latest client transcript turn and populate the target slots and psychological tags based ONLY on explicit facts provided.
 
-[CRITICAL INFERENTIAL DIRECTIVES]
-1. ZERO INFERENCE ON UNMENTIONED TOOLS: Never invent software names, brands, or platforms. If the client mentions HubSpot or PostgreSQL, map them exactly. For unmentioned tools, use strictly generic definitions like 'existing CRM tools' or 'internal databases'. Never suggest migrations to tools like Zoho or Pipedrive unless requested. Focus on 'bridging ecosystems, not replacing'.
-2. METAPHOR FILTER: If the client uses technical buzzwords as metaphors (e.g., 'Kubernetes-style workflow' for Monday.com tasks, 'vector database' for an email list, 'blockchain' for uneditable leads, or 'zero-trust' for internal skepticism), DO NOT extract these as actual technologies. Extract ONLY the functional tools explicitly mentioned (e.g., Monday.com, Mailchimp, Excel, Canva, WordPress, Google Analytics, AS/400, Snowflake, dbt).
-3. COMPANY SIZE RULE: If the prospect provides a specific number of employees (e.g., '12,000+ employees') or an explicit size, map it directly to 'CompanySize'. If the prospect is vague, evasive, or explicitly avoids giving a precise metric or definitive scale, leave 'CompanySize' as 'Empty'. Do not confuse sub-team size (e.g., 4 people) with total company size.
-4. ACCURATE VERBATIMS: Extract exact phrases or strong emotional markers used by the prospect (e.g., 'cannot explain why campaign numbers differ', 'driving a sports car with a boat anchor').
+[CRITICAL INFERENTIAL & STRUCTURAL DIRECTIVES]
+1. ZERO INFERENCE ON UNMENTIONED TOOLS & SOLUTIONS: Never invent software names, brands, or architectural solutions (e.g., do NOT mention 'data virtualization', 'data lakes', or migrations). Stick strictly to generic integration or interoperability terms unless specific tools like AS/400, Snowflake, dbt, or AWS are explicitly named.
+2. COEXISTENCE OVER MIGRATION: Assume the client's objective is system coexistence and interoperability rather than wholesale migration, unless a total replacement is explicitly requested.
+3. CAUSE VS. CONSTRAINT STRUCTURE: 
+   - RootCauses must ONLY capture the structural, technical friction (e.g., 'Legacy AS/400 backbone constrains modern cloud-native workloads').
+   - Corporate IT resistance, disapproval, or lack of baseline approval belongs strictly under Fear or Limits/Constraints. Do NOT map political friction as a technical Root Cause.
+4. METAPHOR FILTER: Clean metaphoric jargon out of the Tech slot.
+5. COMPANY SIZE RULE: Map direct employee counts (e.g., 12,000+) to CompanySize. Never confuse sub-team size (e.g., 4 people) with total enterprise scale.
 
 Output strictly as a JSON object containing keys: slots (Role, CompanySize, Tech, Pain, RootCauses, Limits), tags (Fear, Verbatims), ai_guidance.
 """
@@ -70,11 +73,10 @@ st.sidebar.markdown("---")
 st.sidebar.markdown("## 🔍 Live Context Injection")
 web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", height=150, placeholder="Inject manual environment data here...", key="web_ctx_static")
 
-# --- CORRECTION DES LOGIQUES DÉCOUPLÉES POUR ÉVITER LES BIAIS DE SCÉNARIOS ---
+# DECOUPLED CLASSIFICATION LOGIC FOR METADATA
 def classify_decision_lens(slots_data, transcript_data):
     combined = (str(slots_data.get('Pain', '')) + " " + str(slots_data.get('RootCauses', '')) + " " + str(slots_data.get('Role', '')) + " " + transcript_data).lower()
     
-    # Si le problème tourne autour de l'infrastructure, des mainframes ou de la gouvernance IT
     if any(kw in combined for kw in ['as/400', 'mainframe', 'throttled', 'anchor', 'architecture', 'corporate it', 'governance']):
         return "Enterprise Architecture / IT Governance"
         
@@ -234,7 +236,7 @@ with col2:
         b_class = "status-box-filled" if tag_val not in ["Standard", "None", "Not yet confirmed"] else "status-box-empty"
         st.markdown(f"<div class='{b_class}'><b>{label}:</b> {tag_val}</div>", unsafe_allow_html=True)
 
-# STRATEGIC GATEKEEPER COMPLIANCE BLUEPRINT COMPILATION
+# STRATEGIC GATEKEEPER BLUEPRINT COMPILATION
 if st.session_state.stage == 4:
     filled_count = sum(1 for val in st.session_state.slots.values() if val != "Empty")
     
@@ -253,12 +255,14 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling mirrored architecture diagnostic documentation..."):
-            # --- CORRECTION DU PROMPT FINAL : TOTALEMENT AGNOSTIQUE AUX SCÉNARIOS ANTÉRIEURS ---
             prompt_final = f"""
             Act as an elite B2B Enterprise Architecture Consultant and Management Psychologist.
             Generate a custom corporate strategic architecture report based EXCLUSIVELY on the provided metrics.
             
-            STRICT FORBIDDEN DIRECTIVE: Do not mention 'Mailchimp', 'Google Analytics', 'spreadsheets', or 'marketing campaigns' unless they are explicitly present in the input variables below. If the focus is on heavy infrastructure or core data integration, adjust your vocabulary entirely to engineering, data virtualization, and IT governance.
+            [STRICT PROHIBITIONS]
+            - NEVER use the word 'migration' or imply an infrastructure replacement. Use terms like 'phased coexistence' or 'progressive interoperability'.
+            - NEVER propose 'data virtualization' or specific unmentioned infrastructure architectures. Use target terms like 'introducing integration layers between legacy and cloud-native workloads' or 'improving interoperability'.
+            - DO NOT mention marketing tools (Mailchimp, Google Analytics, spreadsheets) unless they are explicitly present in the input parameters.
 
             ### METRICS FROM TRANSCRIPT:
             - Role: {st.session_state.slots['Role']}
@@ -279,7 +283,7 @@ if st.session_state.stage == 4:
                - Core Architectural Principles
                - Ecosystem Integration Priorities
             
-            Adapt the content under 'Revenue Protection Strategy' to fit the actual objective (e.g., if the pain is architectural throttling, explain how performance bottlenecks directly impact business throughput, agility, and hidden costs).
+            Under 'Revenue Protection Strategy', explain how architectural throttling and structural friction between systems directly impact operational business throughput and hidden organizational costs.
             """
             
             try:
@@ -289,13 +293,13 @@ if st.session_state.stage == 4:
                     temperature=0.0
                 ).choices[0].message.content
 
-                # Adaptive risk badge context setup based on strategy definition
+                # Adaptive risk badge context setup
                 risk_level = "MEDIUM" if "Marketing" in derived_strategy else "MEDIUM-HIGH"
                 
                 if "Modernization" in derived_strategy or "Architecture" in derived_strategy:
                     directive_text = (
-                        "Establish data virtualization and asynchronous processing layers to unthrottle localized stacks. "
-                        "Remediate shadow IT friction by transforming experimental setups into governed enterprise assets."
+                        "Introduce integrated, non-intrusive layers between legacy and cloud-native workloads to improve interoperability. "
+                        "Safeguard localized agility while establishing phased coexistence pathways acceptable to central IT governance."
                     )
                 else:
                     directive_text = (
