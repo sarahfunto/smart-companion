@@ -342,8 +342,25 @@ if st.session_state.stage == 4:
             if "Federation & Identity Sync" in derived_strategy:
                 strategy_directives = """
                 - Focus entirely on cross-platform calendar sharing (Microsoft 365 calendar sharing), cloud file sync breaks (Google Drive synchronization), external consultant visibility, and booking conflicts.
-                - MANDATORY PHRASE FOR INFERENCES: Under 'Reasonable Inferences', if a contradiction or correction is present, you MUST use exactly the phrase: "The discrepancy between the initially reported and corrected infrastructure may indicate incomplete technical visibility or documentation." Do NOT talk about 'employees adjusting' or user adoption.
-                - MANDATORY PHRASE FOR HYPOTHESES: Under 'Strategic Hypotheses', you MUST use phrases like "Further investigation of Microsoft 365 / Google interoperability" or "Review of calendar federation architecture". Do NOT mention 'training sessions' or skill gaps.
+                
+                - MANDATORY PHRASE FOR FACTS MAPPING: Under 'Observed Facts', when mentioning the environment correction, you MUST use exactly one of these phrases: 
+                  "The latest validated information identifies Microsoft 365 as the active calendar infrastructure, replacing the previously reported Google Workspace environment." OR 
+                  "The user corrected the previously reported technology stack. Microsoft 365 is now treated as the validated active infrastructure."
+                  CRITICAL PROHIBITION: Do NOT write or imply that the company "transitioned" or "migrated" from one environment to the other.
+                
+                - MANDATORY PHRASE FOR FACTS MAPPING (PAIN): Under 'Observed Facts', you MUST describe the scheduling challenge exactly as:
+                  "There is a documented issue of calendar fragmentation affecting the Microsoft 365 environment and external synchronization." OR 
+                  "Calendar fragmentation affects the current Microsoft 365-based scheduling workflow."
+                  CRITICAL PROHIBITION: Do NOT write that the fragmentation is isolated entirely "within Microsoft 365".
+                
+                - MANDATORY PHRASE FOR INFERENCES: Under 'Reasonable Inferences', you MUST use exactly the phrase: 
+                  "The discrepancy between the initially reported and corrected infrastructure may indicate incomplete technical visibility or documentation." 
+                  CRITICAL PROHIBITION: Do NOT talk about 'employees adjusting to a new system' or user adoption.
+                
+                - MANDATORY PHRASE FOR HYPOTHESES: Under 'Strategic Hypotheses', you MUST use phrases like:
+                  "Further investigation of Microsoft 365 / Google interoperability." OR "Review of calendar federation architecture."
+                  CRITICAL PROHIBITION: Do NOT mention 'training sessions', skill gaps, or user training.
+                
                 - ABSOLUTE PROHIBITION: Do not use the words 'Azure Active Directory', 'Azure AD', 'Entra ID', 'Identity Management', 'Security Protocols', 'Compliance', 'CRM', 'spreadsheets', or 'forecasting'.
                 """
             elif "Commercial Performance" in derived_strategy:
@@ -377,10 +394,10 @@ if st.session_state.stage == 4:
             You MUST organize the report using exactly these three structural business categories to isolate inferences from factual metrics:
             
             ### 1. Observed Facts
-            (List only concrete, verifiable tools and explicit struggles stated directly by the user, including any acknowledged profile updates).
+            (List only concrete, verifiable tools and explicit struggles stated directly by the user, including any acknowledged profile updates. Adhere strictly to the required factual wording rules).
             
             ### 2. Reasonable Inferences
-            (Deduce only the immediate operational frictions caused directly by the interaction of the observed facts. Apply the mandatory documentation phrasing if applicable).
+            (Deduce only the immediate operational frictions caused directly by the interaction of the observed facts. Apply the mandatory documentation phrasing strictly).
             
             ### 3. Strategic Hypotheses (Requires Validation)
             (Note potential underlying technical ecosystem constraints or alignment vectors that need separate future confirmation—clearly labeled as unverified assumptions using the mandatory interoperability formulations).
