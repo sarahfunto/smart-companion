@@ -338,10 +338,12 @@ if st.session_state.stage == 4:
         
         with st.spinner("Compiling fact-grounded operational report..."):
             
-            # STRICT DISCOVERY ISOLATION ENVELOPE
+            # STRICT DISCOVERY ISOLATION ENVELOPE WITH MANDATORY WORDINGS
             if "Federation & Identity Sync" in derived_strategy:
                 strategy_directives = """
                 - Focus entirely on cross-platform calendar sharing (Microsoft 365 calendar sharing), cloud file sync breaks (Google Drive synchronization), external consultant visibility, and booking conflicts.
+                - MANDATORY PHRASE FOR INFERENCES: Under 'Reasonable Inferences', if a contradiction or correction is present, you MUST use exactly the phrase: "The discrepancy between the initially reported and corrected infrastructure may indicate incomplete technical visibility or documentation." Do NOT talk about 'employees adjusting' or user adoption.
+                - MANDATORY PHRASE FOR HYPOTHESES: Under 'Strategic Hypotheses', you MUST use phrases like "Further investigation of Microsoft 365 / Google interoperability" or "Review of calendar federation architecture". Do NOT mention 'training sessions' or skill gaps.
                 - ABSOLUTE PROHIBITION: Do not use the words 'Azure Active Directory', 'Azure AD', 'Entra ID', 'Identity Management', 'Security Protocols', 'Compliance', 'CRM', 'spreadsheets', or 'forecasting'.
                 """
             elif "Commercial Performance" in derived_strategy:
@@ -357,8 +359,8 @@ if st.session_state.stage == 4:
             Generate a custom deployment assessment report based EXCLUSIVELY on the verified metrics below.
             
             [STRICT RIGOROUS TRUTH FRAMEWORK]
-            - DO NOT extrapolate unmentioned enterprise platforms or compliance layers.
-            - If a topic (like security protocols, Entra ID, CRMs) is not mentioned in the metrics, it is an absolute hallucination to include it.
+            - DO NOT extrapolate unmentioned enterprise platforms or corporate layers.
+            - If a topic is not explicitly mentioned in the metrics, it is an absolute hallucination to include it.
             
             [STRATEGY DIRECTIVES]
             {strategy_directives}
@@ -378,10 +380,10 @@ if st.session_state.stage == 4:
             (List only concrete, verifiable tools and explicit struggles stated directly by the user, including any acknowledged profile updates).
             
             ### 2. Reasonable Inferences
-            (Deduce only the immediate operational frictions caused directly by the interaction of the observed facts).
+            (Deduce only the immediate operational frictions caused directly by the interaction of the observed facts. Apply the mandatory documentation phrasing if applicable).
             
             ### 3. Strategic Hypotheses (Requires Validation)
-            (Note potential underlying technical ecosystem constraints or alignment vectors that need separate future confirmation—clearly labeled as unverified assumptions).
+            (Note potential underlying technical ecosystem constraints or alignment vectors that need separate future confirmation—clearly labeled as unverified assumptions using the mandatory interoperability formulations).
             """
             
             try:
