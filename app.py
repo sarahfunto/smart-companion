@@ -124,7 +124,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         f"Current Psychological Tags: {json.dumps(st.session_state.tags)}\n\n"
         "TASK:\n"
         "Extract raw factual metrics matching keys. If parameters are updated or corrected, replace the previous value entirely (do not average or add them).\n"
-        "VOICE MIRROR RULE: Ensure the 'Verbatims' tag mirrors the most critical explicit pain or final confirmation statement from the user (e.g., 'Our biggest pain point is that data pipelines fail...' or 'We are actually 500 people globally, not 50').\n"
+        "VOICE MIRROR RULE: Ensure the 'Verbatims' tag mirrors the most critical explicit pain or final confirmation statement from the user.\n"
         "Format response as a JSON object with keys: slots, tags, ai_guidance."
     )
 
@@ -273,12 +273,12 @@ if st.session_state.stage == 4:
                 - Focus exclusively on lead attribution clarity, tracking systems efficiency, and documented marketing spend risks.
                 
                 - MANDATORY REVISED SIZE PHRASE: Under 'Observed Facts', you MUST explicitly write exactly:
-                  "The corrected company size (500 employees) suggests the organization operates at a larger scale than initially described, which may increase the complexity of lead attribution and marketing operations."
+                  "The corrected company size (500 employees, matching Mid-Market segment criteria) suggests the organization operates at a larger scale than initially described, which may increase the complexity of lead attribution and marketing operations."
                   CRITICAL PROHIBITION: Do NOT say or infer that the company 'grew rapidly', 'scaled up from 50', or experienced an historical increase in staff. Frame it strictly as a counting correction as written above.
                 
-                - EVIDENCE-BASED INFERENCE RULE: Under 'Reasonable Inferences', you MUST limit deductions to the absolute factual perimeter. Write exactly or closely:
-                  "Operating with a larger global workforce and field/retail agents increases the structural complexity of lead management, making manual or basic attribution flows highly prone to data gaps."
-                  CRITICAL PROHIBITION: Do NOT extrapolate, invent, or mention unverified technical root causes. Do NOT use the words 'misconfiguration', 'bad setup', 'underutilization', or 'flawed deployment'. Instead, use neutral terms like: "HubSpot configuration should be reviewed to verify alignment with a 500-person scope".
+                - EVIDENCE-BASED INFERENCE RULE: Under 'Reasonable Inferences', you MUST limit deductions to the absolute factual perimeter. Write exactly:
+                  "Review the current HubSpot configuration to determine whether lead attribution rules remain aligned with the organization's global operating model."
+                  CRITICAL PROHIBITION: Do NOT extrapolate, invent, or mention unverified technical root causes. Do NOT use the words 'misconfiguration', 'bad setup', 'underutilization', or 'flawed deployment'. Do NOT imply the system cannot handle the load volume or structural scale.
                 
                 - EVIDENCE-BASED STRATEGIC HYPOTHESES: Under 'Strategic Hypotheses (Requires Validation)', you MUST limit entry points to:
                   1. Evaluate how lead source data is captured and passed into HubSpot across regional operations.
@@ -313,7 +313,7 @@ if st.session_state.stage == 4:
             (List only concrete, verifiable tools and explicit parameters, adhering strictly to the revised size phrase framework).
             
             ### 2. Reasonable Inferences
-            (Deduce only immediate workflow frictions caused directly by the interaction of observed facts. Frame strictly via the database/HubSpot review guidelines, with zero mention of 'misconfiguration').
+            (Deduce only immediate workflow frictions caused directly by the interaction of observed facts. Frame strictly via the alignment audit guidelines, with zero mention of 'misconfiguration' or system load capabilities).
             
             ### 3. Strategic Hypotheses (Requires Validation)
             (Note potential capability checks needing separate future confirmation—incorporating exclusively the specified tracking and alignment evaluation entry points).
