@@ -150,7 +150,7 @@ def analyze_with_openai(user_text, context_web, current_stage):
         "Extract raw factual metrics matching keys. If parameters are vague, write 'Unknown' explicitly.\n"
         "CLARIFICATION RULE: If the user provides high-specificity fields late in the conversation, update the field immediately. Treat this strictly as a clarification of active profile parameters, never as an evolution or career transition.\n"
         "PAIN ISOLATION RULE: Focus purely on objective workflow and time/money metrics. Do not invent technical causes.\n"
-        "VOICE MIRROR RULE: Ensure the 'Verbatims' tag mirrors the most revealing or latest explicit pain statement from the user (e.g., 'Our biggest pain point is that data pipelines fail during midnight ETL batches, costing us $15,000 weekly') rather than legacy generic placeholders.\n"
+        "VOICE MIRROR RULE: Ensure the 'Verbatims' tag mirrors the most revealing or latest explicit pain statement from the user.\n"
         "Format response as a JSON object with keys: slots, tags, ai_guidance."
     )
 
@@ -336,9 +336,9 @@ if st.session_state.stage == 4:
                 strategy_directives = """
                 - Focus exclusively on pipeline architecture reliability, financial implications of data batch downtimes ($15,000/week), and infrastructure-focused constraints.
                 
-                - MANDATORY PROFILE CLARIFICATION PHRASE: Under 'Observed Facts', you MUST explicitly write:
-                  "The final validated role is CTO. The user clarified that the relevant executive role is CTO, providing specific target operational scope to complete previous high-level placeholders."
-                  CRITICAL PROHIBITION: Do NOT say the user 'transitioned' from management to CTO. Frame it strictly as an informational precision.
+                - MANDATORY PROFILE CLARIFICATION PHRASE: Under 'Observed Facts', you MUST explicitly write exactly:
+                  "The final validated executive profile is CTO of a 400-person fintech company. The user clarified that the relevant executive role is CTO, replacing the previous high-level management description."
+                  CRITICAL PROHIBITION: Do NOT say the user 'transitioned' or changed careers. Frame it strictly as an informational precision using this exact structure.
                 
                 - EVIDENCE-BASED INFERENCE RULE: Under 'Reasonable Inferences', you MUST limit deductions to the absolute factual perimeter. Write exactly or closely:
                   "Repeated ETL failures suggest that the current data pipeline is not reliably supporting production workloads, causing quantifiable financial losses."
