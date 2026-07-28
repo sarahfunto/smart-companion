@@ -11,7 +11,7 @@ else:
     st.error("⚠️ OPENAI_API_KEY is missing in Streamlit Secrets. Please configure it in your App Settings.")
     client = None
 
-# SYSTEM PROMPT WITH FRENCH TAXONOMY & STRICT ANCHORING MANDATES
+# SYSTEM PROMPT WITH ENGLISH TAXONOMY & STRICT ANCHORING MANDATES
 SYSTEM_PROMPT = """
 You are an expert Enterprise AI Transformation Architect and Corporate Behavioral Analyst.
 Your objective is to parse the latest client transcript turn and populate an anchored, dynamic JSON structure.
@@ -25,20 +25,20 @@ Analyze emotional undercurrents, defense mechanisms, and resistance.
 - 'Not enough signal' is the expected and default state for psychological tags. Never force a classification.
 - CRITICAL: Every fear or metadata change MUST be accompanied by a literal, meaningful verbatim quote as evidence. If no substantial evidence exists, do not populate the item.
 
-STRICT FEAR TAXONOMY ENFORCEMENT (FRENCH DISCIPLINE):
-For elements in the 'Fears' array, the 'value' field MUST be selected EXCLUSIVELY from the following closed list of standard architectural categories. You must respect the French accents and characters exactly as written:
+STRICT FEAR TAXONOMY ENFORCEMENT:
+For elements in the 'Fears' array, the 'value' field MUST be selected EXCLUSIVELY from the following closed list of standard architectural categories:
 [
-  "Perte de contrôle",
-  "Coût caché",
-  "Réticence des équipes",
-  "Image / réputation",
-  "Perte du lien humain",
-  "Dépendance technologique",
-  "Autre (voir citation)"
+  "Loss of control",
+  "Hidden cost",
+  "Team resistance",
+  "Image / reputation",
+  "Loss of human connection",
+  "Technological dependency",
+  "Other (see quote)"
 ]
 
 SAFETY VALVE RULE:
-If the user expresses a clear, grounded fear or operational constraint that does not fit into the first 6 specific French categories (e.g., legal/regulatory risks, competitive disadvantage, stakeholder pressure), you MUST select "Autre (voir citation)" as the 'value'. Never force an inaccurate category.
+If the user expresses a clear, grounded fear or operational constraint that does not fit into the first 6 specific architectural categories (e.g., legal/regulatory risks, competitive disadvantage, stakeholder pressure), you MUST select "Other (see quote)" as the 'value'. Never force an inaccurate category.
 
 Structure the JSON precisely as follows:
 {
@@ -78,8 +78,8 @@ st.markdown("""
 # Confidence level weight mapping
 confidence_map = {"Low": 1, "Medium": 2, "High": 3}
 
-# French stop words list to secure deduplication ratios
-FRENCH_STOPWORDS = {"le", "la", "les", "de", "des", "du", "un", "une", "on", "a", "et", "que", "qui", "pour", "dans", "ce", "ca", "ça", "est", "au", "aux", "en", "se", "ne", "pas", "il", "elle"}
+# Standard English stop words list for context deduplication processing
+STOPWORDS = {"the", "a", "an", "and", "or", "but", "if", "then", "of", "to", "in", "on", "at", "for", "with", "is", "was", "were", "it", "this", "that"}
 
 # TEXT NORMALIZATION UTILITY
 def normalize(text):
@@ -130,8 +130,8 @@ def quotes_refer_to_same_fear(quote_a, quote_b, threshold=0.70):
     if not quote_a or not quote_b:
         return False
         
-    a_set = set(normalize(quote_a).split()) - FRENCH_STOPWORDS
-    b_set = set(normalize(quote_b).split()) - FRENCH_STOPWORDS
+    a_set = set(normalize(quote_a).split()) - STOPWORDS
+    b_set = set(normalize(quote_b).split()) - STOPWORDS
     
     if not a_set or not b_set:
         return False
@@ -281,11 +281,11 @@ def verify_and_merge_tags(incoming_tags, incoming_meta, full_raw_text):
                 if inc_val != DEFAULTS[key]:
                     if not inc_quote or not is_grounded(inc_quote, full_raw_text):
                         continue
-                    # On accepte la nouvelle classification spécifique groundée
+                    # Accept grounded specific classification
                     st.session_state.calculated_meta[key] = {"value": inc_val, "evidence_quote": inc_quote}
                 elif old_val == DEFAULTS[key]:
-                    # N'écrase par "Standard" que si la valeur actuelle était déjà la valeur par défaut.
-                    # Empêche tout retour en arrière ou clignotement induit par le silence d'un tour.
+                    # Overwrites "Standard" only if current value is already default
+                    # Prevents regression caused by silent turns
                     st.session_state.calculated_meta[key] = {"value": inc_val, "evidence_quote": inc_quote}
 
 def analyze_with_openai(user_text, context_web, current_stage):
@@ -394,7 +394,7 @@ with col2:
     box_tech = "status-box-filled" if derived_tech_profile != "Standard" else "status-box-empty"
     st.markdown(f"<div class='{box_tech}'><b>Tech Profile:</b> {derived_tech_profile}</div>", unsafe_allow_html=True)
     
-    # Render Dynamic Fears Array Iteration with French Taxonomy Strings (Sorted by Confidence Level)
+    # Render Dynamic Fears Array (Sorted by Confidence Level)
     st.markdown("<b>Accumulated Operational Fears:</b>", unsafe_allow_html=True)
     if st.session_state.tags.get('Fears'):
         # Sort fears by confidence mapping score in descending order (High > Medium > Low)
@@ -405,11 +405,11 @@ with col2:
         )
         for idx, fear in enumerate(sorted_fears):
             st.markdown(f"""<div class='status-box-filled' style='border-left: 4px solid #E63946;'>
-                🔴 <b>Peur #{idx+1}:</b> {fear['value']} ({fear['confidence']} Conf.)<br>
+                🔴 <b>Fear #{idx+1}:</b> {fear['value']} ({fear['confidence']} Conf.)<br>
                 <span style='font-size:0.85em; font-weight:normal; font-style:italic;'>Verbatim: "{fear['evidence_quote']}"</span>
             </div>""", unsafe_allow_html=True)
     else:
-        st.markdown("<div class='status-box-empty'>Aucune peur opérationnelle spécifique détectée pour l'instant.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='status-box-empty'>No specific operational fears logged yet.</div>", unsafe_allow_html=True)
 
     # Render Hedging Markers
     hm_current = st.session_state.tags['Hedging_markers']
@@ -461,7 +461,7 @@ if st.session_state.stage == 4:
             prompt_final = f"""
             Act as an elite Human-Centric AI Adoption Architect. Generate a report built strictly on these targets:
             - Factual Matrix: {json.dumps(st.session_state.slots)}
-            - Dynamic Fears List (French Taxonomy): {json.dumps(st.session_state.tags['Fears'])}
+            - Dynamic Fears List: {json.dumps(st.session_state.tags['Fears'])}
             - Persistent Contradiction History: {json.dumps(st.session_state.contradiction_ever_detected)}
             - Calculated Technology Profile: {derived_tech_profile}
             - Strategic Transformation Path: {derived_strategy}
@@ -485,7 +485,7 @@ if st.session_state.stage == 4:
                 badge_color = "#E63946" if st.session_state.contradiction_ever_detected['detected'] else "#0B2545"
 
                 # Map list representation to final risk box string values
-                fears_summary = "".join([f"<br>• <b>Ancre de Peur:</b> {f['value']} (Verbatim: \"{f['evidence_quote']}\")" for f in st.session_state.tags['Fears']]) if st.session_state.tags['Fears'] else "<br>• Aucune peur spécifique détectée."
+                fears_summary = "".join([f"<br>• <b>Fear Anchor:</b> {f['value']} (Verbatim: \"{f['evidence_quote']}\")" for f in st.session_state.tags['Fears']]) if st.session_state.tags['Fears'] else "<br>• No specific fear anchors detected."
 
                 st.markdown(f"""
                 <div class="recommendation-box" style="border-color: {badge_color};">
