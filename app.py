@@ -265,7 +265,7 @@ def verify_and_merge_tags(incoming_tags, incoming_meta, full_raw_text):
                     "confidence": conf
                 })
 
-    # 4. Calculated Metadata
+    # 4. Calculated Metadata (Non-Regression Persistence Layer)
     DEFAULTS = {
         "Decision_Lens": "Standard",
         "Tech_Profile": "Standard",
@@ -276,12 +276,17 @@ def verify_and_merge_tags(incoming_tags, incoming_meta, full_raw_text):
             if key in incoming_meta and isinstance(incoming_meta[key], dict):
                 inc_val = incoming_meta[key].get("value", DEFAULTS[key])
                 inc_quote = incoming_meta[key].get("evidence_quote", "")
+                old_val = st.session_state.calculated_meta[key].get("value", DEFAULTS[key])
                 
                 if inc_val != DEFAULTS[key]:
                     if not inc_quote or not is_grounded(inc_quote, full_raw_text):
                         continue
-                
-                st.session_state.calculated_meta[key] = {"value": inc_val, "evidence_quote": inc_quote}
+                    # On accepte la nouvelle classification spécifique groundée
+                    st.session_state.calculated_meta[key] = {"value": inc_val, "evidence_quote": inc_quote}
+                elif old_val == DEFAULTS[key]:
+                    # N'écrase par "Standard" que si la valeur actuelle était déjà la valeur par défaut.
+                    # Empêche tout retour en arrière ou clignotement induit par le silence d'un tour.
+                    st.session_state.calculated_meta[key] = {"value": inc_val, "evidence_quote": inc_quote}
 
 def analyze_with_openai(user_text, context_web, current_stage):
     if not user_text or client is None:
@@ -389,16 +394,22 @@ with col2:
     box_tech = "status-box-filled" if derived_tech_profile != "Standard" else "status-box-empty"
     st.markdown(f"<div class='{box_tech}'><b>Tech Profile:</b> {derived_tech_profile}</div>", unsafe_allow_html=True)
     
-    # Render Dynamic Fears Array Iteration with French Taxonomy Strings
+    # Render Dynamic Fears Array Iteration with French Taxonomy Strings (Sorted by Confidence Level)
     st.markdown("<b>Accumulated Operational Fears:</b>", unsafe_allow_html=True)
     if st.session_state.tags.get('Fears'):
-        for idx, fear in enumerate(st.session_state.tags['Fears']):
+        # Sort fears by confidence mapping score in descending order (High > Medium > Low)
+        sorted_fears = sorted(
+            st.session_state.tags['Fears'], 
+            key=lambda x: confidence_map.get(x.get('confidence', 'Low'), 1), 
+            reverse=True
+        )
+        for idx, fear in enumerate(sorted_fears):
             st.markdown(f"""<div class='status-box-filled' style='border-left: 4px solid #E63946;'>
                 🔴 <b>Peur #{idx+1}:</b> {fear['value']} ({fear['confidence']} Conf.)<br>
                 <span style='font-size:0.85em; font-weight:normal; font-style:italic;'>Verbatim: "{fear['evidence_quote']}"</span>
             </div>""", unsafe_allow_html=True)
     else:
-        st.markdown("<div class='status-box-empty'>No specific operational fears logged yet.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='status-box-empty'>Aucune peur opérationnelle spécifique détectée pour l'instant.</div>", unsafe_allow_html=True)
 
     # Render Hedging Markers
     hm_current = st.session_state.tags['Hedging_markers']
