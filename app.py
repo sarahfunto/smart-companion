@@ -103,13 +103,11 @@ def quotes_refer_to_same_fear(quote_a, quote_b, threshold=0.70):
     return len(a_set.intersection(b_set)) / len(a_set.union(b_set)) >= threshold
 
 def execute_hard_reset():
-    # Stratégie anti-cache agressive : on incrémente le compteur pour forcer de nouvelles clés DOM
+    # Stratégie de purge absolue
     current_counter = st.session_state.get('reset_counter', 0) + 1
+    st.session_state.clear()
     
-    # Nettoyage explicite de tout le dictionnaire session_state
-    for key in list(st.session_state.keys()): 
-        del st.session_state[key]
-        
+    # Réinitialisation propre des variables clés
     st.session_state.reset_counter = current_counter
     st.session_state.stage = 1
     st.session_state.slots = {'Role': 'Unknown', 'CompanySize': 'Unknown', 'Tech': 'Unknown', 'Pain': 'Unknown', 'RootCauses': 'Unknown', 'Limits': 'Unknown'}
@@ -148,7 +146,6 @@ if st.sidebar.button("🔄 Reset Simulation State", use_container_width=True):
     execute_hard_reset()
     st.rerun()
 
-# Zone de texte du profil avec clé dynamique dépendante du reset_counter
 web_context_input = st.sidebar.text_area(
     "Public Corporate Profile Context:", 
     height=150, 
@@ -264,7 +261,6 @@ with col1:
     else:
         st.info(f"💡 Active Coaching Guidance:\n{st.session_state.ai_guidance}")
         
-    # Clé dynamique unique absolue qui dépend STRICTEMENT de l'étape en cours ET du compteur de reset global
     input_key = f"textarea_stage_{st.session_state.stage}_run_{st.session_state.reset_counter}"
     manual_input = st.text_area("✍️ Executive Input:", height=120, key=input_key)
     
@@ -284,7 +280,9 @@ with col2:
     st.markdown("#### 🧠 Grounded Psychological Subtext")
     derived_lens = st.session_state.calculated_meta['Decision_Lens']['value']
 
-    st.markdown(f"<div class='status-box-filled' if derived_lens != 'Standard' else 'status-box-empty'><b>Decision Filter (Lens):</b> {derived_lens}</div>", unsafe_allow_html=True)
+    # RESOLUTION DU BUG DE CLASSE HTML/CSS ICI
+    lens_box_class = "status-box-filled" if derived_lens != "Standard" else "status-box-empty"
+    st.markdown(f"<div class='{lens_box_class}'><b>Decision Filter (Lens):</b> {derived_lens}</div>", unsafe_allow_html=True)
     
     st.markdown("<b>Accumulated Operational Fears:</b>", unsafe_allow_html=True)
     if st.session_state.tags.get('Fears'):
