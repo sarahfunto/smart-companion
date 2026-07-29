@@ -269,6 +269,15 @@ with col1:
             if st.session_state.stage == 4: st.session_state.step4_validated = True
             st.rerun()
 
+    # 👁️ VISUAL RE-INTEGRATION: LAST ANALYZED INPUT COMPONENT
+    if st.session_state.last_analyzed:
+        st.markdown(f"""
+        <div class="last-input-box">
+            <b>🔍 Last Analyzed Input:</b><br>
+            "{st.session_state.last_analyzed}"
+        </div>
+        """, unsafe_allow_html=True)
+
     # INTER-STAGE NAVIGATION BUTTONS
     st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
     nav_col1, nav_col2 = st.columns(2)
