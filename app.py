@@ -333,25 +333,40 @@ with col2:
     else:
         st.markdown("<div class='status-box-empty'><b>Chronological Alignment:</b> Consistent</div>", unsafe_allow_html=True)
 
-# BLUEPRINT COMPILATION GATE WITH ANTI-BUZZWORD AUDIT SYSTEM
+# 🛡️ HOLISTIC STRATEGIC GATEKEEPER COMPILATION CONTROL
 if st.session_state.stage == 4:
-    filled_count = sum(1 for val in st.session_state.slots.values() if val not in ["Unknown", "Empty"])
+    # Calculation of reasoning primitives in memory (Factual Slots + Validated Psychological Signals)
+    reasoning_primitives_count = 0
+    
+    # 1. Count valid legacy factual slots
+    reasoning_primitives_count += sum(1 for val in st.session_state.slots.values() if val not in ["Unknown", "Empty", ""])
+    
+    # 2. Count psychological filters if they provided distinct insight
+    if derived_lens != "Standard": reasoning_primitives_count += 1
+    if derived_tech_profile != "Standard": reasoning_primitives_count += 1
+    
+    # 3. Count deep human factors layers
+    if st.session_state.tags.get('Fears'): reasoning_primitives_count += len(st.session_state.tags['Fears'])
+    if st.session_state.hedging_ever_detected.get('detected', False): reasoning_primitives_count += 1
+    if st.session_state.contradiction_ever_detected.get('detected', False): reasoning_primitives_count += 1
     
     if st.session_state.step4_validated:
         st.markdown("---")
         st.subheader("🛡️ Strategic Gatekeeper Blueprint Compilation Control")
-        if filled_count >= 3:
+        
+        # Check against holistic primitives score rather than legacy subset
+        if reasoning_primitives_count >= 3:
             if st.button("🎯 Compile Custom Strategic Blueprint", type="primary", use_container_width=True):
                 st.session_state.blueprint_generated = True
                 st.rerun()
         else:
-            st.warning("🛑 Blueprint locked: The slots matrix requires at least 3 valid parameters in memory.")
+            st.warning(f"🛑 Blueprint locked: Insufficient reasoning profile primitives in memory ({reasoning_primitives_count}/3). Please validate more contextual data.")
 
-    if st.session_state.blueprint_generated and filled_count >= 3 and st.session_state.step4_validated:
+    if st.session_state.blueprint_generated and reasoning_primitives_count >= 3 and st.session_state.step4_validated:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling anchored architecture blueprint documentation..."):
-            # CRITICAL FIXED PROMPT FORCING DEFLATIONARY MARKETING PRINCIPLES OVER BUZZWORDS
+            # PROMPT FORCING DEFLATIONARY MARKETING PRINCIPLES OVER BUZZWORDS
             prompt_final = f"""
             Act as an elite Human-Centric AI Adoption Architect. Generate a report built strictly on these targets:
             - CONFIRMED FACTS: {json.dumps(st.session_state.slots)}
