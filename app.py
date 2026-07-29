@@ -103,11 +103,9 @@ def quotes_refer_to_same_fear(quote_a, quote_b, threshold=0.70):
     return len(a_set.intersection(b_set)) / len(a_set.union(b_set)) >= threshold
 
 def execute_hard_reset():
-    # Stratégie de purge absolue
     current_counter = st.session_state.get('reset_counter', 0) + 1
     st.session_state.clear()
     
-    # Réinitialisation propre des variables clés
     st.session_state.reset_counter = current_counter
     st.session_state.stage = 1
     st.session_state.slots = {'Role': 'Unknown', 'CompanySize': 'Unknown', 'Tech': 'Unknown', 'Pain': 'Unknown', 'RootCauses': 'Unknown', 'Limits': 'Unknown'}
@@ -271,6 +269,22 @@ with col1:
             if st.session_state.stage == 4: st.session_state.step4_validated = True
             st.rerun()
 
+    # AJOUT DES BOUTONS DE NAVIGATION INTER-ÉTAPES (PREVIOUS / NEXT)
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+    nav_col1, nav_col2 = st.columns(2)
+    
+    with nav_col1:
+        if st.session_state.stage > 1:
+            if st.button("⬅️ Previous Step"):
+                st.session_state.stage -= 1
+                st.rerun()
+                
+    with nav_col2:
+        if st.session_state.stage < 4:
+            if st.button("Next Step ➡️"):
+                st.session_state.stage += 1
+                st.rerun()
+
 with col2:
     st.markdown("### 📊 Extracted Factual Parameters")
     for key, val in st.session_state.slots.items():
@@ -280,7 +294,6 @@ with col2:
     st.markdown("#### 🧠 Grounded Psychological Subtext")
     derived_lens = st.session_state.calculated_meta['Decision_Lens']['value']
 
-    # RESOLUTION DU BUG DE CLASSE HTML/CSS ICI
     lens_box_class = "status-box-filled" if derived_lens != "Standard" else "status-box-empty"
     st.markdown(f"<div class='{lens_box_class}'><b>Decision Filter (Lens):</b> {derived_lens}</div>", unsafe_allow_html=True)
     
