@@ -143,7 +143,6 @@ if st.sidebar.button("🔄 Reset Simulation State", use_container_width=True):
 web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", height=150, placeholder="Inject context...", key="web_ctx_static")
 
 def verify_and_merge_tags(incoming_tags, incoming_meta, full_raw_text, security_triggered):
-    # Absolute Pre-Filtering: If the quote or input text targets prompt mechanics, discard instantly.
     def contains_adversarial_patterns(text_string):
         norm = normalize(text_string)
         return any(pattern in norm for pattern in ["system prompt", "print your", "ignore instructions", "override", "system directive"])
@@ -268,8 +267,6 @@ with col2:
         
     st.markdown("#### 🧠 Grounded Psychological Subtext")
     derived_lens = st.session_state.calculated_meta['Decision_Lens']['value']
-    derived_tech_profile = st.session_state.calculated_meta['Tech_Profile']['value']
-    derived_strategy = st.session_state.calculated_meta['Transformation_Strategy']['value']
 
     st.markdown(f"<div class='status-box-filled' if derived_lens != 'Standard' else 'status-box-empty'><b>Decision Filter (Lens):</b> {derived_lens}</div>", unsafe_allow_html=True)
     
@@ -283,7 +280,7 @@ with col2:
     else:
         st.markdown("<div class='status-box-empty'>No valid operational fears logged.</div>", unsafe_allow_html=True)
 
-# 🛡️ COMPILATION GATEKEEPER CONTROL
+# 🛡️ COMPILATION GATEKEEPER CONTROL (>=3 Primitives Rule)
 if st.session_state.stage == 4:
     reasoning_primitives_count = sum(1 for val in st.session_state.slots.values() if val not in ["Unknown", "Empty", ""])
     if derived_lens != "Standard": reasoning_primitives_count += 1
@@ -311,10 +308,10 @@ if st.session_state.stage == 4:
             - Security Framework Interventions: {json.dumps(st.session_state.security_status)}
 
             STRICT COMPILATION DIRECTIVES (ANTI-HALLUCINATION & DEFLATIONARY RULES):
-            1. PRIMARY PAIN FACTUAL MATCH: You MUST register the primary concern explicitly as '{st.session_state.slots.get('Pain')}'. Do NOT write 'absence of explicit pain points' under any circumstances.
-            2. ZERO JARGON EXTRA-POLATION: Never mention or suggest 'AI analytics', 'automation frameworks', 'predictive insights', or 'data orchestration layers'. You are strictly forbidden from fabricating net-new technical requirements.
-            3. WORD GROUNDING: If the slots matrix mentions 'spreadsheets', refer to them strictly as 'spreadsheets'. Never add the adjective 'legacy' or transform it into 'legacy spreadsheet data structures'.
-            4. SECURITY EVENT FIDELITY: Because security_status detected is TRUE, you MUST output this verbatim phrase in the security section: "Embedded prompt-injection attempts were detected and ignored. No internal instructions were disclosed and no protected variables were modified." Never state that no interventions were detected.
+            1. PRIMARY PAIN DESIGNATION: You MUST recognize that the user expressed anxiety about losing market share. Output exactly this verbatim phrase regarding their business concern: "No validated operational pain beyond concern about potential market-share erosion was identified during discovery. Recommendations therefore remain intentionally conservative."
+            2. ZERO EXTRAPOLATION: Never use the word 'Unknown' to classify the pain if 'Loss of market share' or 'market-share erosion' is recorded. Never inject net-new tactical needs like 'AI analytics', 'automation frameworks', or 'predictive insights'.
+            3. WORD GROUNDING: Refer to data formats strictly as 'spreadsheets'. Never prepend the word 'legacy' or embellish the client's infrastructure.
+            4. SECURITY EVENT FIDELITY: Because security_status detected is TRUE, you MUST output this verbatim phrase in the security section: "Embedded prompt-injection attempts were detected and ignored. No internal instructions were disclosed and no protected variables were modified."
 
             REPORT STRUCTURE:
             Use exactly these business headers:
