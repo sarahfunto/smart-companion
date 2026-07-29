@@ -103,9 +103,10 @@ def quotes_refer_to_same_fear(quote_a, quote_b, threshold=0.70):
     return len(a_set.intersection(b_set)) / len(a_set.union(b_set)) >= threshold
 
 def execute_hard_reset():
-    # Cache clearing strategy: bump the counter to isolate subsequent UI inputs
+    # Stratégie anti-cache agressive : on incrémente le compteur pour forcer de nouvelles clés DOM
     current_counter = st.session_state.get('reset_counter', 0) + 1
     
+    # Nettoyage explicite de tout le dictionnaire session_state
     for key in list(st.session_state.keys()): 
         del st.session_state[key]
         
@@ -123,7 +124,7 @@ def execute_hard_reset():
     }
     st.session_state.history_by_stage = {'Stage 1': '', 'Stage 2': '', 'Stage 3': '', 'Stage 4': ''}
     st.session_state.last_analyzed = ''
-    st.session_state.ai_guidance = "Simulation state completely reset. Ready for a new scenario."
+    st.session_state.ai_guidance = "System operational. Input transcripts."
     st.session_state.blueprint_generated = False
     st.session_state.step4_validated = False
 
@@ -147,7 +148,7 @@ if st.sidebar.button("🔄 Reset Simulation State", use_container_width=True):
     execute_hard_reset()
     st.rerun()
 
-# Context text area tied to the current reset sequence
+# Zone de texte du profil avec clé dynamique dépendante du reset_counter
 web_context_input = st.sidebar.text_area(
     "Public Corporate Profile Context:", 
     height=150, 
@@ -263,12 +264,9 @@ with col1:
     else:
         st.info(f"💡 Active Coaching Guidance:\n{st.session_state.ai_guidance}")
         
-    # Input field text area tied to the current stage and current reset index
-    manual_input = st.text_area(
-        "✍️ Executive Input:", 
-        height=120, 
-        key=f"input_stage_{st.session_state.stage}_reset_{st.session_state.reset_counter}"
-    )
+    # Clé dynamique unique absolue qui dépend STRICTEMENT de l'étape en cours ET du compteur de reset global
+    input_key = f"textarea_stage_{st.session_state.stage}_run_{st.session_state.reset_counter}"
+    manual_input = st.text_area("✍️ Executive Input:", height=120, key=input_key)
     
     if st.button("⚡ Analyze and Validate Input"):
         if manual_input:
