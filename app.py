@@ -103,7 +103,13 @@ def quotes_refer_to_same_fear(quote_a, quote_b, threshold=0.70):
     return len(a_set.intersection(b_set)) / len(a_set.union(b_set)) >= threshold
 
 def execute_hard_reset():
-    for key in list(st.session_state.keys()): del st.session_state[key]
+    # Cache clearing strategy: bump the counter to isolate subsequent UI inputs
+    current_counter = st.session_state.get('reset_counter', 0) + 1
+    
+    for key in list(st.session_state.keys()): 
+        del st.session_state[key]
+        
+    st.session_state.reset_counter = current_counter
     st.session_state.stage = 1
     st.session_state.slots = {'Role': 'Unknown', 'CompanySize': 'Unknown', 'Tech': 'Unknown', 'Pain': 'Unknown', 'RootCauses': 'Unknown', 'Limits': 'Unknown'}
     st.session_state.tags = {'Fears': [], 'Hedging_markers': {'detected': False, 'evidence_quote': ''}, 'Contradiction_flag': {'detected': False, 'old_quote': '', 'new_quote': ''}}
@@ -117,11 +123,12 @@ def execute_hard_reset():
     }
     st.session_state.history_by_stage = {'Stage 1': '', 'Stage 2': '', 'Stage 3': '', 'Stage 4': ''}
     st.session_state.last_analyzed = ''
-    st.session_state.ai_guidance = "Simulation state completely reset."
+    st.session_state.ai_guidance = "Simulation state completely reset. Ready for a new scenario."
     st.session_state.blueprint_generated = False
     st.session_state.step4_validated = False
 
 # Initialization
+if 'reset_counter' not in st.session_state: st.session_state.reset_counter = 0
 if 'stage' not in st.session_state: st.session_state.stage = 1
 if 'slots' not in st.session_state: st.session_state.slots = {'Role': 'Unknown', 'CompanySize': 'Unknown', 'Tech': 'Unknown', 'Pain': 'Unknown', 'RootCauses': 'Unknown', 'Limits': 'Unknown'}
 if 'tags' not in st.session_state: st.session_state.tags = {'Fears': [], 'Hedging_markers': {'detected': False, 'evidence_quote': ''}, 'Contradiction_flag': {'detected': False, 'old_quote': '', 'new_quote': ''}}
@@ -140,7 +147,13 @@ if st.sidebar.button("🔄 Reset Simulation State", use_container_width=True):
     execute_hard_reset()
     st.rerun()
 
-web_context_input = st.sidebar.text_area("Public Corporate Profile Context:", height=150, placeholder="Inject context...", key="web_ctx_static")
+# Context text area tied to the current reset sequence
+web_context_input = st.sidebar.text_area(
+    "Public Corporate Profile Context:", 
+    height=150, 
+    placeholder="Inject context...", 
+    key=f"web_ctx_static_{st.session_state.reset_counter}"
+)
 
 def verify_and_merge_tags(incoming_tags, incoming_meta, full_raw_text, security_triggered):
     def contains_adversarial_patterns(text_string):
@@ -250,7 +263,12 @@ with col1:
     else:
         st.info(f"💡 Active Coaching Guidance:\n{st.session_state.ai_guidance}")
         
-    manual_input = st.text_area("✍️ Executive Input:", height=120, key=f"input_stage_{st.session_state.stage}")
+    # Input field text area tied to the current stage and current reset index
+    manual_input = st.text_area(
+        "✍️ Executive Input:", 
+        height=120, 
+        key=f"input_stage_{st.session_state.stage}_reset_{st.session_state.reset_counter}"
+    )
     
     if st.button("⚡ Analyze and Validate Input"):
         if manual_input:
