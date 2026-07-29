@@ -269,7 +269,7 @@ with col1:
             if st.session_state.stage == 4: st.session_state.step4_validated = True
             st.rerun()
 
-    # 👁️ VISUAL RE-INTEGRATION: LAST ANALYZED INPUT COMPONENT
+    # VISUAL RE-INTEGRATION: LAST ANALYZED INPUT COMPONENT
     if st.session_state.last_analyzed:
         st.markdown(f"""
         <div class="last-input-box">
@@ -338,9 +338,10 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint")
         
         with st.spinner("Compiling security-filtered blueprint documentation..."):
-            # IMMUNIZED ARCHITECTURAL BLANKET WITH STRICT EXECUTABILITY CHECKS
+            # FULLY AGNOSTIC & DEFLATIONARY BLUEPRINT ENGINE
+            # Stripped of hardcoded assumptions. Driven solely by explicit slots data.
             prompt_final = f"""
-            Act as an elite Human-Centric AI Transformation Architect. Generate a formal, highly specific executive business report based strictly and exclusively on the factual information collected during the interview.
+            Act as an elite Enterprise Transformation Architect. Generate a formal, highly specific tactical executive business report based strictly and exclusively on the factual information provided in the Data Matrix below.
 
             EXECUTION DATA MATRIX:
             - Client Role: {st.session_state.slots.get('Role')}
@@ -351,19 +352,18 @@ if st.session_state.stage == 4:
             - Psychological Decision Lens: {derived_lens}
             - Security Alert Active: {st.session_state.security_status.get('detected')} (Type: {st.session_state.security_status.get('type')})
 
-            CRITICAL ARCHITECTURAL CONSTRAINT ENFORCEMENT:
-            1. GOVERNANCE VS TECHNOLOGY TRAP: You must explicitly recognize if the primary constraint is a lack of administrative/execution authority over the core operational backend (e.g., ring-fenced third-party vendor, zero direct API/database access, ticketing delays).
-            2. ZERO-EXECUTION POWER RULE: If the client has no execution power over the backend systems, DO NOT recommend technical solutions they cannot deploy (e.g., building middleware, refactoring internal microservices, implementing advanced internal inventory databases). 
-            3. PRAGMATIC ESCALATION PATHWAYS: Instead of internal code changes, frame recommendations around contract negotiations, strict SLAs, legal integration rights, escalation procedures, demanding read-only data replicas, or automated shared CSV/mirror data exports.
-            4. ANTI-HALLUCINATION RULE: Under no circumstances mention unrelated generic scenarios (such as market-share erosion, spreadsheets compatibility, or marketing metrics) unless explicitly passed in the Data Matrix above.
-            5. HIGHLIGHT THE TRAP VERBATIM: You MUST state clearly under the first header that "The primary transformation constraint is governance rather than technology. The limiting factor is not the internal technology stack but the organization's lack of execution authority over the operational backend."
+            STRICT GENERATION DIRECTIVES (ANTI-EXTRAPOLATION):
+            1. Never assume external third-party dependencies, sub-contractors, or vendor contract negotiations unless explicitly stated in the Data Matrix.
+            2. If the problem explicitly targets internal auditing failures, lack of event logging, or unlogged workflow 'overrides' and 'exceptions', focus exclusively on data traceability, immutable logging workflows, centralized registers, and validation controls (e.g., SOX-style alignment, compliance trails, dashboard visibility).
+            3. Do not invent technical architectures (like middleware or microservices) if the limits indicate lack of implementation stack access. Map recommendations directly to the software tools specified in the stack (e.g., Jira workflows, Salesforce audit configurations).
+            4. Absolute Anchor: Base every single sentence on the extracted operational realities. Zero fluff, zero recycling of unrelated case studies.
 
             REPORT STRUCTURE:
             Use exactly these business headers:
-            - Strategic Constraint & Governance Analysis
-            - Operational Risk Mitigation Framework
-            - Vendor Integration & Data Escalation Rights
-            - Structural Security Analysis
+            - Primary Operational Risk Analysis
+            - Core Architectural Transformation Principles
+            - Tactical System & Workflow Recommendations
+            - Compliance Governance & Control Matrix
             """
             
             try:
