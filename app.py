@@ -317,12 +317,24 @@ def analyze_with_openai(user_text, context_web, current_stage):
         )
         result = json.loads(response.choices[0].message.content)
         
-        # Merge Slots
+        # FIXED: Non-Destructive Memory Update Engine
         incoming_slots = result.get("slots", {})
         for key in st.session_state.slots:
             if key in incoming_slots:
                 val = str(incoming_slots[key]).strip()
-                if val not in ["", "None", "null", "undefined"]:
+                
+                # Check if incoming data has actual factual substance
+                is_valid_incoming = val not in ["", "None", "null", "undefined", "Unknown", "Empty"]
+                
+                # Check if current memory is empty/unknown
+                current_is_empty = st.session_state.slots[key] in ["Unknown", "Empty", ""]
+                
+                # Strategic update condition: 
+                # Overwrite if we have new valid data, OR if current state is empty and incoming is valid
+                if is_valid_incoming or current_is_empty:
+                    # Guard: If incoming is "Unknown" but we already have data, skip execution to prevent regression
+                    if val in ["Unknown", "Empty"] and not current_is_empty:
+                        continue
                     st.session_state.slots[key] = val
                     
         # Verify, Ground, and Merge Tags & Meta Parameters
