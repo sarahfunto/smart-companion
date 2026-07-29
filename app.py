@@ -21,9 +21,18 @@ For the 'slots' object, operate with zero inference. Extract only explicit facts
 - Role / CompanySize / Tech / Pain / RootCauses / Limits: If vague or unmentioned, leave strictly as 'Unknown'. 
 
 [REGIME 2: ANCHORED PSYCHOLOGICAL INFERENCE (HUMAN FACTOR & TAGS)]
-Analyze emotional undercurrents, defense mechanisms, and resistance.
+Analyze emotional undercurrents, defense mechanisms, and operational priorities.
 - 'Not enough signal' is the expected and default state for psychological tags. Never force a classification.
 - CRITICAL: Every fear or metadata change MUST be accompanied by a literal, meaningful verbatim quote as evidence. If no substantial evidence exists, do not populate the item.
+
+STRICT DECISION LENS TAXONOMY ENFORCEMENT:
+The 'Decision_Lens' object value MUST be selected EXCLUSIVELY from this closed strategic set based on the executive's core corporate mandate:
+[
+  "Marketing-oriented",
+  "Commercial / Revenue-focused",
+  "Operational / Technical",
+  "Standard"
+]
 
 STRICT FEAR TAXONOMY ENFORCEMENT:
 For elements in the 'Fears' array, the 'value' field MUST be selected EXCLUSIVELY from the following closed list of standard architectural categories:
@@ -51,7 +60,7 @@ Structure the JSON precisely as follows:
     "Contradiction_flag": {"detected": true|false, "old_quote": "Past quote", "new_quote": "Current conflicting quote"}
   },
   "calculated_meta": {
-    "Decision_Lens": {"value": "...", "evidence_quote": "Verbatim quote"},
+    "Decision_Lens": {"value": "Marketing-oriented|Commercial / Revenue-focused|Operational / Technical|Standard", "evidence_quote": "Verbatim quote"},
     "Tech_Profile": {"value": "...", "evidence_quote": "Verbatim quote"},
     "Transformation_Strategy": {"value": "...", "evidence_quote": "Verbatim quote"}
   },
@@ -68,9 +77,9 @@ st.markdown("""
     .stButton>button { width: 100%; border-radius: 50px; height: 3em; background-color: #2E6BFF; color: white; }
     .status-box-empty { padding: 12px; border-radius: 10px; background-color: #1E2329; border: 1px solid #3E444B; margin-bottom: 8px; color: #6C757D; }
     .status-box-filled { padding: 12px; border-radius: 10px; background-color: #155724; border: 2px solid #28a745; margin-bottom: 8px; color: #D4EDDA; font-weight: bold; }
-    .status-box-alert { padding: 12px; border-radius: 10px; background-color: #721C24; border: 2px solid #F5C6CB; margin-bottom: 8px; color: #F8D7DA; font-weight: bold; }
+    .status-box-alert { padding: 12px; border-radius: 10px; background-color: #B7791F; border: 2px solid #F6E05E; margin-bottom: 8px; color: #FEFCBF; font-weight: bold; }
     .recommendation-box { padding: 25px; border-radius: 15px; background-color: #0B2545; border: 2px solid #134074; color: #EEF4F8; margin-top: 15px; margin-bottom: 20px; }
-    .priority-badge-high { display: inline-block; background-color: #E63946; color: white; padding: 6px 14px; font-size: 0.85em; font-weight: bold; border-radius: 4px; margin-bottom: 15px; }
+    .priority-badge-high { display: inline-block; background-color: #D69E2E; color: white; padding: 6px 14px; font-size: 0.85em; font-weight: bold; border-radius: 4px; margin-bottom: 15px; }
     .last-input-box { background-color: #1E2530; border-left: 4px solid #2E6BFF; padding: 12px; border-radius: 4px; margin-top: 15px; color: #A0AEC0; font-style: italic; }
     </style>
     """, unsafe_allow_html=True)
@@ -285,7 +294,6 @@ def verify_and_merge_tags(incoming_tags, incoming_meta, full_raw_text):
                     st.session_state.calculated_meta[key] = {"value": inc_val, "evidence_quote": inc_quote}
                 elif old_val == DEFAULTS[key]:
                     # Overwrites "Standard" only if current value is already default
-                    # Prevents regression caused by silent turns
                     st.session_state.calculated_meta[key] = {"value": inc_val, "evidence_quote": inc_quote}
 
 def analyze_with_openai(user_text, context_web, current_stage):
@@ -323,16 +331,10 @@ def analyze_with_openai(user_text, context_web, current_stage):
             if key in incoming_slots:
                 val = str(incoming_slots[key]).strip()
                 
-                # Check if incoming data has actual factual substance
                 is_valid_incoming = val not in ["", "None", "null", "undefined", "Unknown", "Empty"]
-                
-                # Check if current memory is empty/unknown
                 current_is_empty = st.session_state.slots[key] in ["Unknown", "Empty", ""]
                 
-                # Strategic update condition: 
-                # Overwrite if we have new valid data, OR if current state is empty and incoming is valid
                 if is_valid_incoming or current_is_empty:
-                    # Guard: If incoming is "Unknown" but we already have data, skip execution to prevent regression
                     if val in ["Unknown", "Empty"] and not current_is_empty:
                         continue
                     st.session_state.slots[key] = val
@@ -409,14 +411,13 @@ with col2:
     # Render Dynamic Fears Array (Sorted by Confidence Level)
     st.markdown("<b>Accumulated Operational Fears:</b>", unsafe_allow_html=True)
     if st.session_state.tags.get('Fears'):
-        # Sort fears by confidence mapping score in descending order (High > Medium > Low)
         sorted_fears = sorted(
             st.session_state.tags['Fears'], 
             key=lambda x: confidence_map.get(x.get('confidence', 'Low'), 1), 
             reverse=True
         )
         for idx, fear in enumerate(sorted_fears):
-            st.markdown(f"""<div class='status-box-filled' style='border-left: 4px solid #E63946;'>
+            st.markdown(f"""<div class='status-box-filled' style='border-left: 4px solid #D69E2E;'>
                 🔴 <b>Fear #{idx+1}:</b> {fear['value']} ({fear['confidence']} Conf.)<br>
                 <span style='font-size:0.85em; font-weight:normal; font-style:italic;'>Verbatim: "{fear['evidence_quote']}"</span>
             </div>""", unsafe_allow_html=True)
@@ -440,13 +441,13 @@ with col2:
     else:
         st.markdown("<div class='status-box-empty'><b>Hesitation Markers:</b> None</div>", unsafe_allow_html=True)
 
-    # Render Anchored Contradiction Banner
+    # Render Anchored Contradiction Banner (Damped severity from Alert to Warning color mapping)
     ct = st.session_state.contradiction_ever_detected
     if ct['detected']:
         st.markdown(f"""<div class='status-box-alert'>
-            🚨 HISTORICAL MISALIGNMENT RETAINED<br>
-            <span style='font-size:0.8em; font-weight:normal; display:block; margin-top:4px;'>• <b>Past Statement:</b> "{ct['old_quote']}"</span>
-            <span style='font-size:0.8em; font-weight:normal; display:block;'>• <b>Contradiction:</b> "{ct['new_quote']}"</span>
+            ℹ️ CHRONOLOGICAL DRIFT DETECTED (MODERATE / GUARDED)<br>
+            <span style='font-size:0.8em; font-weight:normal; display:block; margin-top:4px;'>• <b>Past Context:</b> "{ct['old_quote']}"</span>
+            <span style='font-size:0.8em; font-weight:normal; display:block;'>• <b>Adjustment / Shift:</b> "{ct['new_quote']}"</span>
         </div>""", unsafe_allow_html=True)
     else:
         st.markdown("<div class='status-box-empty'><b>Chronological Alignment:</b> Consistent</div>", unsafe_allow_html=True)
@@ -477,14 +478,15 @@ if st.session_state.stage == 4:
             - Persistent Contradiction History: {json.dumps(st.session_state.contradiction_ever_detected)}
             - Calculated Technology Profile: {derived_tech_profile}
             - Strategic Transformation Path: {derived_strategy}
+            - Decision Filter Alignment Lens: {derived_lens}
 
             PSYCHOLOGICAL EVIDENCE ONLY (fears with illustrative verbatim quotes — these describe the executive's ANXIETY, NOT a technical request, infrastructure choice, or capability to build toward):
             {json.dumps(st.session_state.tags['Fears'])}
 
-            CRITICAL ANTI-HALLUCINATION MANDATE:
+            CRITICAL ANTI-HALLUCINATION & CONFLATION MANDATE:
             - Any technology, protocol, or architecture term (e.g., blockchain, Kubernetes, vector database, zero-trust) that appears ONLY inside a Fears evidence_quote and NOT in the Confirmed Factual Tech Stack above MUST NEVER be proposed, recommended, or referenced as a real system, feature, or implementation target.
-            - These quotes exist solely to explain WHY the executive feels a given fear (e.g., loss of control). Address the underlying fear using ONLY the confirmed tech stack — never adopt, validate, or build upon a technology the executive merely mentioned, questioned, or misunderstood.
-            - If a fear's quote references an ungrounded or fictional technology, resolve that fear by proposing a solution using the confirmed stack instead — do not import the term into your recommendation.
+            - If an unconfirmed buzzword or metaphor (e.g., blockchain) appears in the Fears list, treat it solely as an indicator of corporate technical confusion. Acknowledge the underlying anxiety (e.g., trust, tracking, control) but do NOT use the word or build it into the solution strategy.
+            - Resolve the underlying fears using ONLY the confirmed tech stack.
 
             REPORT STRATEGIC MANDATES:
             1. BRIDGE, DO NOT REPLACE: Respect corporate human constraints by explicitly formulating workflows around legacy dependencies from the confirmed stack only.
@@ -501,10 +503,10 @@ if st.session_state.stage == 4:
                     temperature=0.0
                 ).choices[0].message.content
 
-                risk_level = "CRITICAL / MISALIGNED" if st.session_state.contradiction_ever_detected['detected'] else "ADAPTIVE / GUARDED"
-                badge_color = "#E63946" if st.session_state.contradiction_ever_detected['detected'] else "#0B2545"
+                # Damped severity evaluation logic
+                risk_level = "MODERATE / GUARDED" if st.session_state.contradiction_ever_detected['detected'] else "ADAPTIVE / OPEN"
+                badge_color = "#B7791F" if st.session_state.contradiction_ever_detected['detected'] else "#0B2545"
 
-                # Map list representation to final risk box string values
                 fears_summary = "".join([f"<br>• <b>Fear Anchor:</b> {f['value']} (Verbatim: \"{f['evidence_quote']}\")" for f in st.session_state.tags['Fears']]) if st.session_state.tags['Fears'] else "<br>• No specific fear anchors detected."
 
                 st.markdown(f"""
@@ -512,7 +514,7 @@ if st.session_state.stage == 4:
                     <div class="priority-badge-high" style="background-color: {badge_color};">⚠️ HUMAN FACTOR RISK STATUS: {risk_level}</div>
                     <div style="font-size: 0.9em; margin-top: -10px; color: #EEF4F8;">
                         <b>Human & Corporate Posture Risk Assessment:</b>{fears_summary}<br><br>
-                        • <b>Ecosystem Directive:</b> Build seamless workflow bridges into existing workspaces natively.
+                        • <b>Ecosystem Directive:</b> Build seamless workflow bridges into existing workspaces natively based on a <b>{derived_lens}</b> structural layout.
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
