@@ -458,16 +458,24 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint — [Strategy: {derived_strategy}]")
         
         with st.spinner("Compiling anchored architecture blueprint documentation..."):
+            # FIXED: Explicit segregation between confirmed stack and psychological anchors to prevent technical conflation
             prompt_final = f"""
             Act as an elite Human-Centric AI Adoption Architect. Generate a report built strictly on these targets:
-            - Factual Matrix: {json.dumps(st.session_state.slots)}
-            - Dynamic Fears List: {json.dumps(st.session_state.tags['Fears'])}
+            - CONFIRMED FACTUAL TECH STACK (the ONLY technologies that may be referenced as real infrastructure): {json.dumps(st.session_state.slots.get('Tech', 'Unknown'))}
             - Persistent Contradiction History: {json.dumps(st.session_state.contradiction_ever_detected)}
             - Calculated Technology Profile: {derived_tech_profile}
             - Strategic Transformation Path: {derived_strategy}
 
+            PSYCHOLOGICAL EVIDENCE ONLY (fears with illustrative verbatim quotes — these describe the executive's ANXIETY, NOT a technical request, infrastructure choice, or capability to build toward):
+            {json.dumps(st.session_state.tags['Fears'])}
+
+            CRITICAL ANTI-HALLUCINATION MANDATE:
+            - Any technology, protocol, or architecture term (e.g., blockchain, Kubernetes, vector database, zero-trust) that appears ONLY inside a Fears evidence_quote and NOT in the Confirmed Factual Tech Stack above MUST NEVER be proposed, recommended, or referenced as a real system, feature, or implementation target.
+            - These quotes exist solely to explain WHY the executive feels a given fear (e.g., loss of control). Address the underlying fear using ONLY the confirmed tech stack — never adopt, validate, or build upon a technology the executive merely mentioned, questioned, or misunderstood.
+            - If a fear's quote references an ungrounded or fictional technology, resolve that fear by proposing a solution using the confirmed stack instead — do not import the term into your recommendation.
+
             REPORT STRATEGIC MANDATES:
-            1. BRIDGE, DO NOT REPLACE: Respect corporate human constraints by explicitly formulating workflows around legacy dependencies.
+            1. BRIDGE, DO NOT REPLACE: Respect corporate human constraints by explicitly formulating workflows around legacy dependencies from the confirmed stack only.
             2. EXECUTIVE BLUEPRINT SYNTAX: Use precise business architecture headers:
                - Revenue Protection Strategy
                - Core Architectural Principles
