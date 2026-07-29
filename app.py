@@ -152,26 +152,35 @@ web_context_input = st.sidebar.text_area(
 )
 
 def verify_and_merge_tags(incoming_tags, incoming_meta, full_raw_text, security_triggered):
-    def contains_adversarial_patterns(text_string):
-        norm = normalize(text_string)
-        return any(pattern in norm for pattern in ["system prompt", "print your", "ignore instructions", "override", "system directive"])
+    if security_triggered: 
+        return  # Ne rien extraire si l'injection est confirmée par le LLM
 
+    # 1. Traitement Hésitations (Hedging)
     if 'Hedging_markers' in incoming_tags and isinstance(incoming_tags['Hedging_markers'], dict):
         inc_detected = incoming_tags['Hedging_markers'].get("detected", False)
         inc_quote = incoming_tags['Hedging_markers'].get("evidence_quote", "")
-        if inc_detected and inc_quote and is_grounded(inc_quote, full_raw_text) and not security_triggered and not contains_adversarial_patterns(inc_quote):
+        if inc_detected and inc_quote and is_grounded(inc_quote, full_raw_text):
             st.session_state.tags['Hedging_markers'] = {"detected": True, "evidence_quote": inc_quote}
             st.session_state.hedging_ever_detected = {"detected": True, "evidence_quote": inc_quote}
 
+    # 2. Traitement Contradictions (Restauration des garde-fous stricts et seuil à 0.90 / 5 mots min)
+    if 'Contradiction_flag' in incoming_tags and isinstance(incoming_tags['Contradiction_flag'], dict):
+        inc_detected = incoming_tags['Contradiction_flag'].get("detected", False)
+        old_q = incoming_tags['Contradiction_flag'].get("old_quote", "")
+        new_q = incoming_tags['Contradiction_flag'].get("new_quote", "")
+        if inc_detected and old_q and new_q and is_grounded(old_q, full_raw_text, threshold=0.90, min_words=5) and is_grounded(new_q, full_raw_text, threshold=0.90, min_words=5):
+            st.session_state.tags['Contradiction_flag'] = {"detected": True, "old_quote": old_q, "new_quote": new_q}
+            st.session_state.contradiction_ever_detected = {"detected": True, "old_quote": old_q, "new_quote": new_q}
+
+    # 3. Traitement Fears
     incoming_fears_list = incoming_tags.get('Fears', [])
-    if isinstance(incoming_fears_list, list) and not security_triggered:
+    if isinstance(incoming_fears_list, list):
         for inc_fear in incoming_fears_list:
             val = inc_fear.get("value", "Not enough signal").strip()
             quote = inc_fear.get("evidence_quote", "").strip()
             conf = inc_fear.get("confidence", "Low")
             
             if val == "Not enough signal" or not quote or not is_grounded(quote, full_raw_text): continue
-            if contains_adversarial_patterns(quote) or contains_adversarial_patterns(val): continue
             
             duplicate_found = False
             for idx, old_fear in enumerate(st.session_state.tags['Fears']):
@@ -183,13 +192,14 @@ def verify_and_merge_tags(incoming_tags, incoming_meta, full_raw_text, security_
             if not duplicate_found:
                 st.session_state.tags['Fears'].append({"value": val, "evidence_quote": quote, "confidence": conf})
 
+    # 4. Traitement Métadonnées
     DEFAULTS = {"Decision_Lens": "Standard", "Tech_Profile": "Standard", "Transformation_Strategy": "Discovery & Architecture Mapping"}
     if isinstance(incoming_meta, dict):
         for key in st.session_state.calculated_meta:
             if key in incoming_meta and isinstance(incoming_meta[key], dict):
                 inc_val = incoming_meta[key].get("value", DEFAULTS[key])
                 inc_quote = incoming_meta[key].get("evidence_quote", "")
-                if inc_val != DEFAULTS[key] and not security_triggered and not contains_adversarial_patterns(inc_quote):
+                if inc_val != DEFAULTS[key]:
                     if not inc_quote or not is_grounded(inc_quote, full_raw_text): continue
                     st.session_state.calculated_meta[key] = {"value": inc_val, "evidence_quote": inc_quote}
 
@@ -220,9 +230,8 @@ def analyze_with_openai(user_text, context_web, current_stage):
         # 1. Evaluate Security Engine
         sec_event = result.get("security_event", {})
         security_triggered = sec_event.get("detected", False)
-        if security_triggered or "print your" in normalize(user_text) or "system prompt" in normalize(user_text):
-            st.session_state.security_status = {"detected": True, "type": "Prompt injection attempt"}
-            security_triggered = True
+        if security_triggered:
+            st.session_state.security_status = {"detected": True, "type": sec_event.get("type", "Prompt injection attempt")}
         
         # 2. Extract Business Slots
         incoming_slots = result.get("slots", {})
@@ -256,8 +265,8 @@ col1, col2 = st.columns([2, 1])
 with col1:
     if st.session_state.security_status['detected']:
         st.error("🚨 SECURITY CONTROL ACTIVE: Embedded prompt-injection attempts were detected and neutralized. Protected variables preserved.")
-    else:
-        st.info(f"💡 Active Coaching Guidance:\n{st.session_state.ai_guidance}")
+    
+    st.info(f"💡 Active Coaching Guidance:\n{st.session_state.ai_guidance}")
         
     input_key = f"textarea_stage_{st.session_state.stage}_run_{st.session_state.reset_counter}"
     manual_input = st.text_area("✍️ Executive Input:", height=120, key=input_key)
@@ -269,7 +278,6 @@ with col1:
             if st.session_state.stage == 4: st.session_state.step4_validated = True
             st.rerun()
 
-    # VISUAL RE-INTEGRATION: LAST ANALYZED INPUT COMPONENT
     if st.session_state.last_analyzed:
         st.markdown(f"""
         <div class="last-input-box">
@@ -278,7 +286,6 @@ with col1:
         </div>
         """, unsafe_allow_html=True)
 
-    # INTER-STAGE NAVIGATION BUTTONS
     st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
     nav_col1, nav_col2 = st.columns(2)
     
@@ -306,6 +313,23 @@ with col2:
     lens_box_class = "status-box-filled" if derived_lens != "Standard" else "status-box-empty"
     st.markdown(f"<div class='{lens_box_class}'><b>Decision Filter (Lens):</b> {derived_lens}</div>", unsafe_allow_html=True)
     
+    if st.session_state.hedging_ever_detected.get('detected'):
+        st.markdown(f"""
+        <div class='status-box-alert'>
+            🔍 <b>Behavioral Hesitation Detected:</b><br>
+            <span style='font-size:0.9em; font-weight:normal;'>"{st.session_state.hedging_ever_detected['evidence_quote']}"</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    if st.session_state.contradiction_ever_detected.get('detected'):
+        st.markdown(f"""
+        <div class='status-box-danger'>
+            ⚠️ <b>Past Contradiction Flagged:</b><br>
+            <span style='font-size:0.85em; font-weight:normal; text-decoration: line-through;'>Old: "{st.session_state.contradiction_ever_detected['old_quote']}"</span><br>
+            <span style='font-size:0.85em; font-weight:normal;'>New: "{st.session_state.contradiction_ever_detected['new_quote']}"</span>
+        </div>
+        """, unsafe_allow_html=True)
+
     st.markdown("<b>Accumulated Operational Fears:</b>", unsafe_allow_html=True)
     if st.session_state.tags.get('Fears'):
         for idx, fear in enumerate(st.session_state.tags['Fears']):
@@ -321,7 +345,6 @@ if st.session_state.stage == 4:
     reasoning_primitives_count = sum(1 for val in st.session_state.slots.values() if val not in ["Unknown", "Empty", ""])
     if derived_lens != "Standard": reasoning_primitives_count += 1
     if st.session_state.tags.get('Fears'): reasoning_primitives_count += len(st.session_state.tags['Fears'])
-    if st.session_state.security_status['detected']: reasoning_primitives_count += 1
 
     if st.session_state.step4_validated:
         st.markdown("---")
@@ -338,8 +361,6 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint")
         
         with st.spinner("Compiling security-filtered blueprint documentation..."):
-            # FULLY AGNOSTIC & DEFLATIONARY BLUEPRINT ENGINE
-            # Stripped of hardcoded assumptions. Driven solely by explicit slots data.
             prompt_final = f"""
             Act as an elite Enterprise Transformation Architect. Generate a formal, highly specific tactical executive business report based strictly and exclusively on the factual information provided in the Data Matrix below.
 
