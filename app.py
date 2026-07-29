@@ -329,9 +329,9 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint")
         
         with st.spinner("Compiling security-filtered blueprint documentation..."):
-            # DYNAMIC & CLEAN PROMPT DEVOID OF SCENARIO 7 HARDCODING
+            # IMMUNIZED ARCHITECTURAL BLANKET WITH STRICT EXECUTABILITY CHECKS
             prompt_final = f"""
-            Act as an elite Human-Centric AI Adoption Architect. Generate a formal, highly specific executive business report based strictly and exclusively on the factual information collected during the interview.
+            Act as an elite Human-Centric AI Transformation Architect. Generate a formal, highly specific executive business report based strictly and exclusively on the factual information collected during the interview.
 
             EXECUTION DATA MATRIX:
             - Client Role: {st.session_state.slots.get('Role')}
@@ -342,17 +342,18 @@ if st.session_state.stage == 4:
             - Psychological Decision Lens: {derived_lens}
             - Security Alert Active: {st.session_state.security_status.get('detected')} (Type: {st.session_state.security_status.get('type')})
 
-            ANTI-CONTAMINATION DIRECTIVES:
-            1. DO NOT mention market share, spreadsheets, or generic marketing terms unless explicitly stated in the Data Matrix above.
-            2. If a specific technical stack (e.g., Kafka, asynchronous processing, modern event-driven engines, accounting latency) or distinct pain (e.g., latency spikes, transaction drop-offs, throughput targets) is recorded, center the architectural blueprints precisely around those components.
-            3. Adjust tone dynamically: A technical profile (like a CTO) facing clear structural bottlenecks must receive highly technical, deep architectural alignment recommendations, NOT generalized conservative boilerplate.
-            4. Security section directive: Only state that a malicious prompt-injection override occurred if 'Security Alert Active' is TRUE. Otherwise, validate the session as a legitimate enterprise mapping turn.
+            CRITICAL ARCHITECTURAL CONSTRAINT ENFORCEMENT:
+            1. GOVERNANCE VS TECHNOLOGY TRAP: You must explicitly recognize if the primary constraint is a lack of administrative/execution authority over the core operational backend (e.g., ring-fenced third-party vendor, zero direct API/database access, ticketing delays).
+            2. ZERO-EXECUTION POWER RULE: If the client has no execution power over the backend systems, DO NOT recommend technical solutions they cannot deploy (e.g., building middleware, refactoring internal microservices, implementing advanced internal inventory databases). 
+            3. PRAGMATIC ESCALATION PATHWAYS: Instead of internal code changes, frame recommendations around contract negotiations, strict SLAs, legal integration rights, escalation procedures, demanding read-only data replicas, or automated shared CSV/mirror data exports.
+            4. ANTI-HALLUCINATION RULE: Under no circumstances mention unrelated generic scenarios (such as market-share erosion, spreadsheets compatibility, or marketing metrics) unless explicitly passed in the Data Matrix above.
+            5. HIGHLIGHT THE TRAP VERBATIM: You MUST state clearly under the first header that "The primary transformation constraint is governance rather than technology. The limiting factor is not the internal technology stack but the organization's lack of execution authority over the operational backend."
 
             REPORT STRUCTURE:
             Use exactly these business headers:
-            - Primary Operational Risk Analysis
-            - Core Architectural Principles
-            - Ecosystem Integration Priorities
+            - Strategic Constraint & Governance Analysis
+            - Operational Risk Mitigation Framework
+            - Vendor Integration & Data Escalation Rights
             - Structural Security Analysis
             """
             
