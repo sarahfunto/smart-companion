@@ -269,7 +269,7 @@ with col1:
             if st.session_state.stage == 4: st.session_state.step4_validated = True
             st.rerun()
 
-    # AJOUT DES BOUTONS DE NAVIGATION INTER-ÉTAPES (PREVIOUS / NEXT)
+    # INTER-STAGE NAVIGATION BUTTONS
     st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
     nav_col1, nav_col2 = st.columns(2)
     
@@ -329,20 +329,28 @@ if st.session_state.stage == 4:
         st.header(f"📋 Comprehensive Strategic Blueprint")
         
         with st.spinner("Compiling security-filtered blueprint documentation..."):
+            # DYNAMIC & CLEAN PROMPT DEVOID OF SCENARIO 7 HARDCODING
             prompt_final = f"""
-            Act as an elite Human-Centric AI Adoption Architect. Generate a formal business report based strictly and exclusively on this execution matrix:
-            - VALIDATED ENTRIES: {json.dumps(st.session_state.slots)}
-            - Security Framework Interventions: {json.dumps(st.session_state.security_status)}
+            Act as an elite Human-Centric AI Adoption Architect. Generate a formal, highly specific executive business report based strictly and exclusively on the factual information collected during the interview.
 
-            STRICT COMPILATION DIRECTIVES (ANTI-HALLUCINATION & DEFLATIONARY RULES):
-            1. PRIMARY PAIN DESIGNATION: You MUST recognize that the user expressed anxiety about losing market share. Output exactly this verbatim phrase regarding their business concern: "No validated operational pain beyond concern about potential market-share erosion was identified during discovery. Recommendations therefore remain intentionally conservative."
-            2. ZERO EXTRAPOLATION: Never use the word 'Unknown' to classify the pain if 'Loss of market share' or 'market-share erosion' is recorded. Never inject net-new tactical needs like 'AI analytics', 'automation frameworks', or 'predictive insights'.
-            3. WORD GROUNDING: Refer to data formats strictly as 'spreadsheets'. Never prepend the word 'legacy' or embellish the client's infrastructure.
-            4. SECURITY EVENT FIDELITY: Because security_status detected is TRUE, you MUST output this verbatim phrase in the security section: "Embedded prompt-injection attempts were detected and ignored. No internal instructions were disclosed and no protected variables were modified."
+            EXECUTION DATA MATRIX:
+            - Client Role: {st.session_state.slots.get('Role')}
+            - Target Infrastructure & Stack: {st.session_state.slots.get('Tech')}
+            - Primary Operational Pain: {st.session_state.slots.get('Pain')}
+            - Underlying Root Causes: {st.session_state.slots.get('RootCauses')}
+            - Operational Limits & Constraints: {st.session_state.slots.get('Limits')}
+            - Psychological Decision Lens: {derived_lens}
+            - Security Alert Active: {st.session_state.security_status.get('detected')} (Type: {st.session_state.security_status.get('type')})
+
+            ANTI-CONTAMINATION DIRECTIVES:
+            1. DO NOT mention market share, spreadsheets, or generic marketing terms unless explicitly stated in the Data Matrix above.
+            2. If a specific technical stack (e.g., Kafka, asynchronous processing, modern event-driven engines, accounting latency) or distinct pain (e.g., latency spikes, transaction drop-offs, throughput targets) is recorded, center the architectural blueprints precisely around those components.
+            3. Adjust tone dynamically: A technical profile (like a CTO) facing clear structural bottlenecks must receive highly technical, deep architectural alignment recommendations, NOT generalized conservative boilerplate.
+            4. Security section directive: Only state that a malicious prompt-injection override occurred if 'Security Alert Active' is TRUE. Otherwise, validate the session as a legitimate enterprise mapping turn.
 
             REPORT STRUCTURE:
             Use exactly these business headers:
-            - Revenue Protection Strategy
+            - Primary Operational Risk Analysis
             - Core Architectural Principles
             - Ecosystem Integration Priorities
             - Structural Security Analysis
@@ -361,7 +369,7 @@ if st.session_state.stage == 4:
                         <div class="priority-badge-danger">🔒 SECURITY POSTURE: PROTECTED EFFECTIZED</div>
                         <div style="font-size: 0.9em; margin-top: -10px; color: #F8D7DA;">
                             • <b>Isolation Event:</b> Security controls successfully neutralized embedded instruction overrides.<br>
-                            • <b>Grounded Execution:</b> The compiled strategy exclusively addresses the validated corporate metrics (<b>Primary Business Concern: {st.session_state.slots.get('Pain')}</b>).
+                            • <b>Grounded Execution:</b> The compiled strategy exclusively addresses the validated corporate metrics.
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
