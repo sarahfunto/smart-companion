@@ -92,12 +92,13 @@ def call_a_chat(user_message: str) -> str:
         temperature=0.7
     )
     return response.choices[0].message.content
+
 # CALL B: Strict JSON Schema Extraction
 EXTRACTION_PROMPT = """
 You are a precision structural extractor. Your sole task is to analyze the latest CEO response turn and update the structured CEO JSON profile table.
 
 STRICT EXTRACTION RULES:
-1. MERGE PRINCIPLE: Keep existing field values from the Current Profile State UNLESS the user explicitly provides updated information or contradicts previous statements.
+1. MERGE PRINCIPLE: Retain existing field values from the Current Profile State UNLESS the user explicitly provides updated information or contradicts previous statements.
 2. For EVERY extracted field under Group A and Group B, populate:
    - "value": Enforced enum or explicit extracted text.
    - "confidence": Floating numerical score from 0.0 to 1.0 (Set >= 0.8 if stated directly).
@@ -116,6 +117,19 @@ REQUIRED ENUMS:
 
 Respond EXCLUSIVELY with a valid JSON matching the profile schema.
 """
+
+def call_b_extraction(user_message: str):
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": EXTRACTION_PROMPT},
+            {"role": "user", "content": f"CEO turn input: '{user_message}'\nCurrent Profile State: {json.dumps(st.session_state.profile)}"}
+        ],
+        temperature=0.0
+    )
+    extracted = json.loads(response.choices[0].message.content)
+    merge_extraction_into_profile(extracted, user_message)
 
 def merge_extraction_into_profile(extracted: dict, raw_user_text: str):
     current = st.session_state.profile
@@ -160,15 +174,13 @@ def merge_extraction_into_profile(extracted: dict, raw_user_text: str):
             current["absence"]["gaps"] = extracted["absence"]["gaps"]
 
 # ---------------------------------------------------------
-# 5. CODE-BASED GATEKEEPER (Threshold Checks)
+# 5. CODE-BASED GATEKEEPER & DIAGNOSIS GENERATOR
 # ---------------------------------------------------------
 def check_gate_thresholds(profile: dict):
     facts = profile["facts"]
     interp = profile["interpretation"]
 
     missing_basic = []
-    
-    # On vérifie simplement la présence des 5 champs clés de base
     if not facts["industry"].get("value"): 
         missing_basic.append("industry")
     if not facts["company_size"].get("value"): 
@@ -186,6 +198,33 @@ def check_gate_thresholds(profile: dict):
         "basic": {"unlocked": unlocked_basic, "missing": missing_basic},
         "deep": {"unlocked": unlocked_basic, "missing": missing_basic}
     }
+
+def generate_basic_diagnosis(profile: dict) -> str:
+    prompt = f"""
+    You are an AI Strategy Director. Generate a concise, high-value Basic AI Diagnosis report for the CEO based on this extracted profile:
+    
+    FACTS:
+    - Industry: {profile['facts']['industry'].get('value')}
+    - Company Size: {profile['facts']['company_size'].get('value')}
+    
+    INTERPRETATION:
+    - Primary Pain: {profile['interpretation']['primary_pain'].get('value')}
+    - Trigger: {profile['interpretation']['trigger'].get('value')}
+    - Lens: {profile['interpretation']['lens'].get('value')}
+    
+    Format the response clearly with 3 short bullet points:
+    1. 🎯 Strategic Core Diagnosis
+    2. ⚠️ Operational Bottleneck & Risk
+    3. 🚀 Recommended Immediate AI Quick-Win
+    Keep it executive-level, precise, and actionable.
+    """
+    
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "system", "content": prompt}],
+        temperature=0.3
+    )
+    return response.choices[0].message.content
 
 # ---------------------------------------------------------
 # 6. SPLIT-SCREEN DASHBOARD (Part 3)
@@ -252,12 +291,20 @@ with col_brain:
         st.error(f"🔴 Basic Diagnosis: LOCKED")
         st.caption(f"Missing criteria: {', '.join(gate_status['basic']['missing'])}")
 
-    # Dry Refusal Diagnostic Trigger
-    if st.button("🧪 Request Basic Diagnosis"):
+    # Dry Refusal / Live Generation Diagnostic Trigger
+    if st.button("🧪 Request Basic Diagnosis", use_container_width=True):
         if not gate_status["basic"]["unlocked"]:
-            st.code(f"HARD GATEKEEPER REFUSAL (PROGRAMMATIC GATEWAY):\nDiagnosis generation blocked. Insufficient parameters:\n- " + "\n- ".join(gate_status['basic']['missing']), language="text")
+            st.code(
+                f"HARD GATEKEEPER REFUSAL (PROGRAMMATIC GATEWAY):\n"
+                f"Diagnosis generation blocked. Insufficient parameters:\n- " + 
+                "\n- ".join(gate_status['basic']['missing']), 
+                language="text"
+            )
         else:
-            st.success("Basic Diagnosis generation authorized by Gateway rules!")
+            with st.spinner("Generating Strategic Basic Diagnosis..."):
+                diag_result = generate_basic_diagnosis(st.session_state.profile)
+                st.markdown("### 📄 Basic AI Diagnosis Report")
+                st.info(diag_result)
 
     st.markdown("---")
     
