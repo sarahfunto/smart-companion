@@ -1,345 +1,206 @@
 import streamlit as st
 import json
-import unicodedata
-import difflib
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
 from openai import OpenAI
+from pydantic import BaseModel, Field
+from typing import Optional
 
-# ---------------------------------------------------------
-# 1. OPENAI INITIALIZATION & CONFIG
-# ---------------------------------------------------------
-st.set_page_config(page_title="Smart Companion - CEO Interview", layout="wide")
+# -----------------------------------------------------------------------------
+# 1. PAGE CONFIGURATION & STYLES
+# -----------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Smart Companion - Executive Profiler",
+    page_icon="🎙️",
+    layout="wide"
+)
 
-if "OPENAI_API_KEY" in st.secrets:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-else:
-    st.error("⚠️ OPENAI_API_KEY missing in Streamlit Secrets.")
-    client = None
+st.title("🎙️ Smart Companion")
+st.caption("AI-Powered Executive Profiling & Diagnostic Assistant")
 
-# ---------------------------------------------------------
-# 2. STRICT PYDANTIC SCHEMA (Part 1 - Smart Companion Scheme)
-# ---------------------------------------------------------
-class FieldAttribute(BaseModel):
-    value: Optional[Any] = None
-    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    source: str = Field(default="inferred", description="stated | inferred | manual | external")
-    evidence: Optional[str] = Field(default=None, description="Verbatim text quote")
-    conflict_flag: bool = False
-    old_value: Optional[Any] = None
-    manual_locked: bool = False
+# OpenAI Client Setup
+api_key = st.secrets.get("OPENAI_API_KEY")
+if not api_key:
+    st.error("Please configure your OPENAI_API_KEY in .streamlit/secrets.toml")
+    st.stop()
 
-class GroupAFacts(BaseModel):
-    industry: FieldAttribute = Field(default_factory=FieldAttribute)
-    company_size: FieldAttribute = Field(default_factory=FieldAttribute)
-    speaker_role: FieldAttribute = Field(default_factory=FieldAttribute)
-    tools: FieldAttribute = Field(default_factory=FieldAttribute)
-    org_context: FieldAttribute = Field(default_factory=FieldAttribute)
+client = OpenAI(api_key=api_key)
 
-class GroupBInterpretation(BaseModel):
-    trigger: FieldAttribute = Field(default_factory=FieldAttribute)
-    lens: FieldAttribute = Field(default_factory=FieldAttribute)
-    primary_pain: FieldAttribute = Field(default_factory=FieldAttribute)
-    fear: FieldAttribute = Field(default_factory=FieldAttribute)
-    strategic_posture: FieldAttribute = Field(default_factory=FieldAttribute)
-    value_discipline: FieldAttribute = Field(default_factory=FieldAttribute)
-    surface_anchor: FieldAttribute = Field(default_factory=FieldAttribute)
-    ai_maturity: FieldAttribute = Field(default_factory=FieldAttribute)
-    objective: FieldAttribute = Field(default_factory=FieldAttribute)
+# -----------------------------------------------------------------------------
+# 2. PYDANTIC SCHEMAS (FOR CALL B EXTRACTION)
+# -----------------------------------------------------------------------------
+class ProfileAttribute(BaseModel):
+    value: Optional[str] = Field(default=None, description="Extracted attribute value")
+    confidence: float = Field(default=0.0, description="Confidence score between 0.0 and 1.0")
+    source: str = Field(default="stated", description="Source: 'stated', 'inferred', or 'manual'")
+    evidence: Optional[str] = Field(default=None, description="Exact verbatim quote supporting this extraction")
+    conflict_flag: bool = Field(default=False, description="True if a contradiction with previous data is detected")
+    old_value: Optional[str] = Field(default=None, description="Previous value if a conflict exists")
 
-class GroupCAbsence(BaseModel):
-    inferred_insights: List[str] = []
-    gaps: List[str] = []
+class FactsGroup(BaseModel):
+    industry: ProfileAttribute = Field(default_factory=ProfileAttribute)
+    company_size: ProfileAttribute = Field(default_factory=ProfileAttribute)
+    tools: ProfileAttribute = Field(default_factory=ProfileAttribute)
+    org_context: ProfileAttribute = Field(default_factory=ProfileAttribute)
 
-class CEOProfile(BaseModel):
-    facts: GroupAFacts = Field(default_factory=GroupAFacts)
-    interpretation: GroupBInterpretation = Field(default_factory=GroupBInterpretation)
-    absence: GroupCAbsence = Field(default_factory=GroupCAbsence)
+class InterpretationGroup(BaseModel):
+    primary_pain: ProfileAttribute = Field(default_factory=ProfileAttribute)
+    trigger: ProfileAttribute = Field(default_factory=ProfileAttribute)
+    lens: ProfileAttribute = Field(default_factory=ProfileAttribute)
+    fear: ProfileAttribute = Field(default_factory=ProfileAttribute)
 
-# ---------------------------------------------------------
-# 3. SESSION INITIALIZATION & RESET
-# ---------------------------------------------------------
-def init_session():
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "profile" not in st.session_state:
-        st.session_state.profile = CEOProfile().model_dump()
-    if "last_changes" not in st.session_state:
-        st.session_state.last_changes = []
+class ExecutiveProfile(BaseModel):
+    facts: FactsGroup = Field(default_factory=FactsGroup)
+    interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
-def reset_session():
-    st.session_state.messages = []
-    st.session_state.profile = CEOProfile().model_dump()
-    st.session_state.last_changes = []
-    st.rerun()
+# -----------------------------------------------------------------------------
+# 3. SYSTEM PROMPTS
+# -----------------------------------------------------------------------------
+CALL_A_SYSTEM_PROMPT = """
+You are a senior executive AI strategy consultant. You are warm, empathetic, and highly perceptive.
 
-init_session()
+YOUR OBJECTIVE:
+Conduct a step-by-step diagnostic interview with a business leader (CEO / Executive) to understand their operational context, pain points, and digital readiness.
 
-# ---------------------------------------------------------
-# 4. EXECUTION LOOP ENGINE (Part 2 - Call A & Call B)
-# ---------------------------------------------------------
+STRICT CONVERSATIONAL RULES:
+1. EMPATHY & VALIDATION: Always acknowledge and validate the emotional weight or operational challenge expressed by the executive before moving forward.
+2. ONE QUESTION AT A TIME: Never ask more than one question per turn. Keep it focused and digestible.
+3. CONCRETE CHOICES: Executives don't always know technical AI jargon. Give simple, everyday examples or options (e.g., "Are you mostly using specialized software, heavy Excel sheets, or manual processes?").
+4. STEP-BY-STEP GUIDANCE: Take control of the interview flow in this logical sequence:
+   - Step 1: Confirm their role and industry.
+   - Step 2: Ask about company/team size.
+   - Step 3: Discover current toolings and operational workflows.
+   - Step 4: Identify the primary pain point or bottleneck.
+   - Step 5: Understand strategic goals and priorities.
 
-# CALL A: Pure Conversational AI
-def call_a_chat(user_message: str) -> str:
-    conversation_history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-    conversation_history.append({"role": "user", "content": user_message})
-    
-    sys_prompt = "You are an expert AI Transformation Consultant. Conduct a fluid, highly professional, and empathetic interview with an executive CEO."
-    
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "system", "content": sys_prompt}] + conversation_history,
-        temperature=0.7
-    )
-    return response.choices[0].message.content
-
-# CALL B: Strict JSON Schema Extraction
-EXTRACTION_PROMPT = """
-You are a precision structural extractor. Your sole task is to analyze the latest CEO response turn and update the structured CEO JSON profile table.
-
-STRICT EXTRACTION RULES:
-1. MERGE PRINCIPLE: Retain existing field values from the Current Profile State UNLESS the user explicitly provides updated information or contradicts previous statements.
-2. For EVERY extracted field under Group A and Group B, populate:
-   - "value": Enforced enum or explicit extracted text.
-   - "confidence": Floating numerical score from 0.0 to 1.0 (Set >= 0.8 if stated directly).
-   - "source": Exactly "stated" (if explicitly declared) or "inferred" (if subtextual/deduced).
-   - "evidence": Exact verbatim text anchor quoted from the user input. IF NO DIRECT QUOTE JUSTIFIES THE CLAIM, LEAVE FIELD EMPTY.
-3. Group C:
-   - "inferred_insights": Unstated insights supported by profile data (at least 1 insight required).
-   - "gaps": List unstated elements (e.g. undisclosed maturity, fear, operational blockers).
-
-REQUIRED ENUMS:
-- industry: One of [Manufacturing, Logistics & Distribution, Retail & E-commerce, Professional Services, Healthcare, Construction & Real Estate, Food & Agriculture, SaaS/Software, Financial Services]
-- trigger: One of [Competitive, Internal, External, Personal, Seasonal]
-- lens: One of [Performance, People, Market, Control]
-- fear: One of [wasted investment, loss of control, employee resistance, vendor distrust, looking foolish, exposure (unspoken), personal irrelevance (unspoken)]
-- strategic_posture: One of [Prospector, Defender, Analyzer, Reactor]
-
-Respond EXCLUSIVELY with a valid JSON matching the profile schema.
+Do not pitch technical solutions immediately. Your priority is to ask the next natural question to fill in the diagnostic profile seamlessly.
 """
 
-def call_b_extraction(user_message: str):
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": EXTRACTION_PROMPT},
-            {"role": "user", "content": f"CEO turn input: '{user_message}'\nCurrent Profile State: {json.dumps(st.session_state.profile)}"}
-        ],
-        temperature=0.0
-    )
-    extracted = json.loads(response.choices[0].message.content)
-    merge_extraction_into_profile(extracted, user_message)
+CALL_B_SYSTEM_PROMPT = """
+You are a structured parallel data extractor. Your job is to analyze the ongoing conversation between an executive and an AI consultant and populate the JSON profile schema.
 
-def merge_extraction_into_profile(extracted: dict, raw_user_text: str):
-    current = st.session_state.profile
-    st.session_state.last_changes = []
+CRITICAL RULES:
+1. Extract facts (industry, size, tools) and interpretations (pain points, triggers, cognitive lenses, fears).
+2. For every field, provide:
+   - value: extracted string or null
+   - confidence: score from 0.0 to 1.0
+   - source: "stated" (explicitly said), "inferred" (deduced), or "manual"
+   - evidence: exact verbatim quote from the dialogue
+3. CONFLICT DETECTION: If the user explicitly contradicts a previously established value (e.g., changing primary pain from 'turnover' to 'margin pressure'), set 'conflict_flag' to true, save the previous value in 'old_value', and update 'value' to the new statement.
+4. Output strict JSON matching the requested schema without conversational text.
+"""
 
-    for group in ["facts", "interpretation"]:
-        if group in extracted:
-            for field, incoming_data in extracted[group].items():
-                if field in current[group] and isinstance(incoming_data, dict):
-                    target = current[group][field]
-                    
-                    # 1. Manual Lock Rule Enforcement
-                    if target.get("manual_locked", False):
-                        continue
-                    
-                    new_val = incoming_data.get("value")
-                    new_conf = incoming_data.get("confidence", 0.0)
-                    new_source = incoming_data.get("source", "inferred")
-                    new_ev = incoming_data.get("evidence")
+# -----------------------------------------------------------------------------
+# 4. SESSION STATE INITIALIZATION
+# -----------------------------------------------------------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "assistant",
+            "content": "Welcome! I am your AI Strategy Assistant. To help tailor our conversation to your exact situation: **what is your executive role and which industry are you in?**"
+        }
+    ]
 
-                    # Update if new information is provided
-                    if new_val:
-                        # 2. Conflict Rule Enforcement
-                        if target.get("value") and str(target.get("value")).lower() != str(new_val).lower() and target.get("source") == "stated" and new_source == "stated":
-                            target["conflict_flag"] = True
-                            target["old_value"] = target.get("value")
-                            target["value"] = new_val
-                            target["evidence"] = new_ev or target.get("evidence")
-                            st.session_state.last_changes.append(f"⚠️ CONFLICT ON {field}: '{target['old_value']}' vs '{new_val}'")
-                        else:
-                            target["value"] = new_val
-                            target["confidence"] = max(new_conf, target.get("confidence", 0.0))
-                            target["source"] = new_source
-                            if new_ev:
-                                target["evidence"] = new_ev
-                            st.session_state.last_changes.append(f"✅ UPDATED {field} -> {new_val}")
+if "profile" not in st.session_state:
+    st.session_state.profile = ExecutiveProfile().model_dump()
 
-    if "absence" in extracted:
-        if extracted["absence"].get("inferred_insights"):
-            current["absence"]["inferred_insights"] = extracted["absence"]["inferred_insights"]
-        if extracted["absence"].get("gaps"):
-            current["absence"]["gaps"] = extracted["absence"]["gaps"]
+# -----------------------------------------------------------------------------
+# 5. LAYOUT: TWO COLUMNS (CHAT & LIVE PROFILE)
+# -----------------------------------------------------------------------------
+col_chat, col_profile = st.columns([3, 2])
 
-# ---------------------------------------------------------
-# 5. CODE-BASED GATEKEEPER & DIAGNOSIS GENERATOR
-# ---------------------------------------------------------
-def check_gate_thresholds(profile: dict):
-    facts = profile["facts"]
-    interp = profile["interpretation"]
-
-    missing_basic = []
-    if not facts["industry"].get("value"): 
-        missing_basic.append("industry")
-    if not facts["company_size"].get("value"): 
-        missing_basic.append("company_size")
-    if not interp["primary_pain"].get("value"): 
-        missing_basic.append("primary_pain")
-    if not interp["trigger"].get("value"): 
-        missing_basic.append("trigger")
-    if not interp["lens"].get("value"): 
-        missing_basic.append("lens")
-
-    unlocked_basic = len(missing_basic) == 0
-
-    return {
-        "basic": {"unlocked": unlocked_basic, "missing": missing_basic},
-        "deep": {"unlocked": unlocked_basic, "missing": missing_basic}
-    }
-
-def generate_basic_diagnosis(profile: dict) -> str:
-    prompt = f"""
-    You are an AI Strategy Director. Generate a concise, high-value Basic AI Diagnosis report for the CEO based on this extracted profile:
-    
-    FACTS:
-    - Industry: {profile['facts']['industry'].get('value')}
-    - Company Size: {profile['facts']['company_size'].get('value')}
-    
-    INTERPRETATION:
-    - Primary Pain: {profile['interpretation']['primary_pain'].get('value')}
-    - Trigger: {profile['interpretation']['trigger'].get('value')}
-    - Lens: {profile['interpretation']['lens'].get('value')}
-    
-    Format the response clearly with 3 short bullet points:
-    1. 🎯 Strategic Core Diagnosis
-    2. ⚠️ Operational Bottleneck & Risk
-    3. 🚀 Recommended Immediate AI Quick-Win
-    Keep it executive-level, precise, and actionable.
-    """
-    
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "system", "content": prompt}],
-        temperature=0.3
-    )
-    return response.choices[0].message.content
-
-# ---------------------------------------------------------
-# 6. SPLIT-SCREEN DASHBOARD (Part 3)
-# ---------------------------------------------------------
-st.sidebar.title("⚙️ Simulation Commands")
-if st.sidebar.button("🔄 Fresh Start (Reset Profile)", use_container_width=True):
-    reset_session()
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("✍️ Manual Override")
-with st.sidebar.form("override_form"):
-    field_to_override = st.selectbox("Field", ["industry", "company_size", "primary_pain", "fear", "trigger", "lens"])
-    override_val = st.text_input("New Manual Value")
-    submit_override = st.form_submit_button("Apply Manual Lock")
-    
-    if submit_override and override_val:
-        for grp in ["facts", "interpretation"]:
-            if field_to_override in st.session_state.profile[grp]:
-                st.session_state.profile[grp][field_to_override] = {
-                    "value": override_val,
-                    "confidence": 1.0,
-                    "source": "manual",
-                    "evidence": "Manually overridden by operator",
-                    "manual_locked": True,
-                    "conflict_flag": False
-                }
-                st.session_state.last_changes.append(f"🔒 MANUAL LOCK ON {field_to_override} -> {override_val}")
-                st.rerun()
-
-# Layout: Left (Chat Pane) | Right (Thinking Pane)
-col_chat, col_brain = st.columns([1, 1])
-
-# --- LEFT COLUMN: EXECUTIVE CHAT ---
+# --- LEFT COLUMN: CONVERSATIONAL AGENT (CALL A) ---
 with col_chat:
-    st.subheader("💬 Executive Conversation")
+    st.subheader("💬 Executive Consultation")
     
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.write(msg["content"])
-            
-    if prompt := st.chat_input("CEO input response..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # User Input
+    if user_input := st.chat_input("Type your answer here..."):
+        # 1. Show user message
+        st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
-            st.write(prompt)
+            st.markdown(user_input)
+
+        # 2. Call A: Generate Assistant Response
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing response..."):
+                response_A = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": CALL_A_SYSTEM_PROMPT},
+                        *st.session_state.messages
+                    ],
+                    temperature=0.7
+                )
+                assistant_reply = response_A.choices[0].message.content
+                st.markdown(assistant_reply)
+                st.session_state.messages.append({"role": "assistant", "content": assistant_reply})
+
+        # 3. Call B: Structured JSON Extraction in Parallel
+        try:
+            conversation_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
             
-        with st.spinner("Executing Call A (Chat) & Call B (Extraction)..."):
-            ai_response = call_a_chat(prompt)
-            call_b_extraction(prompt)
+            response_B = client.beta.chat.completions.parse(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": CALL_B_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Current Profile JSON:\n{json.dumps(st.session_state.profile)}\n\nFull Conversation:\n{conversation_text}"}
+                ],
+                response_format=ExecutiveProfile,
+                temperature=0.0
+            )
             
-            st.session_state.messages.append({"role": "assistant", "content": ai_response})
+            extracted_profile = response_B.choices[0].message.parsed
+            st.session_state.profile = extracted_profile.model_dump()
             st.rerun()
 
-# --- RIGHT COLUMN: BRAIN / THINKING PANE ---
-with col_brain:
-    st.subheader("🧠 System Thinking Pane (Live Profile)")
-    
-    # 1. Gatekeeper Status
-    gate_status = check_gate_thresholds(st.session_state.profile)
-    st.markdown("#### 🚪 Gatekeeper Status")
-    
-    if gate_status["basic"]["unlocked"]:
-        st.success("🟢 Basic Diagnosis: UNLOCKED")
+        except Exception as e:
+            st.error(f"Extraction Error (Call B): {e}")
+
+# --- RIGHT COLUMN: LIVE PROFILE & GATEKEEPER ---
+with col_profile:
+    st.subheader("📊 Live Strategic Profile")
+
+    profile_data = st.session_state.profile
+    facts = profile_data.get("facts", {})
+    interp = profile_data.get("interpretation", {})
+
+    # Visual Badges for Conflicts
+    has_conflict = any(
+        field.get("conflict_flag")
+        for group in [facts, interp]
+        for field in group.values()
+        if isinstance(field, dict)
+    )
+
+    if has_conflict:
+        st.warning("⚠️ CONFLICT DETECTED: Contradictory statements identified in conversation.")
+
+    # Gatekeeper Evaluation
+    has_size = bool(facts.get("company_size", {}).get("value"))
+    has_pain = bool(interp.get("primary_pain", {}).get("value"))
+    has_tools = bool(facts.get("tools", {}).get("value"))
+
+    gatekeeper_unlocked = has_size and has_pain and has_tools
+
+    if gatekeeper_unlocked:
+        st.success("🟢 Diagnostic Gatekeeper: UNLOCKED")
     else:
-        st.error(f"🔴 Basic Diagnosis: LOCKED")
-        st.caption(f"Missing criteria: {', '.join(gate_status['basic']['missing'])}")
+        st.error("🔴 Diagnostic Gatekeeper: LOCKED (Insufficient context)")
 
-    # Dry Refusal / Live Generation Diagnostic Trigger
-    if st.button("🧪 Request Basic Diagnosis", use_container_width=True):
-        if not gate_status["basic"]["unlocked"]:
-            st.code(
-                f"HARD GATEKEEPER REFUSAL (PROGRAMMATIC GATEWAY):\n"
-                f"Diagnosis generation blocked. Insufficient parameters:\n- " + 
-                "\n- ".join(gate_status['basic']['missing']), 
-                language="text"
+    # Display Profile JSON Tree
+    with st.expander("🔍 Detailed JSON Profile", expanded=True):
+        st.json(profile_data)
+
+    # Basic Diagnosis Trigger
+    st.divider()
+    if st.button("🧪 Request Strategic Diagnosis", disabled=not gatekeeper_unlocked):
+        with st.spinner("Generating Strategic Report..."):
+            diag_prompt = f"Based on this executive profile, generate a concise 3-bullet strategic AI diagnosis:\n{json.dumps(profile_data)}"
+            diag_res = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": diag_prompt}]
             )
-        else:
-            with st.spinner("Generating Strategic Basic Diagnosis..."):
-                diag_result = generate_basic_diagnosis(st.session_state.profile)
-                st.markdown("### 📄 Basic AI Diagnosis Report")
-                st.info(diag_result)
-
-    st.markdown("---")
-    
-    # 2. Current Turn Changes
-    if st.session_state.last_changes:
-        st.markdown("#### ⚡ Turn Updates")
-        for change in st.session_state.last_changes:
-            st.info(change)
-
-    # 3. Profile Table Rendering
-    st.markdown("#### 📋 Profile Table")
-    
-    def render_group(group_name: str, group_dict: dict):
-        st.markdown(f"**{group_name}**")
-        for field, attr in group_dict.items():
-            if isinstance(attr, dict) and "value" in attr:
-                val = attr.get("value") or "---"
-                conf = attr.get("confidence", 0.0)
-                src = attr.get("source", "n/a")
-                ev = attr.get("evidence") or "No evidence anchor"
-                lock = "🔒 LOCKED" if attr.get("manual_locked") else ""
-                conflict = "⚠️ CONFLICT" if attr.get("conflict_flag") else ""
-                
-                color = "#d4edda" if attr.get("value") else "#f8d7da"
-                
-                st.markdown(f"""
-                <div style="background-color: {color}; padding: 8px; border-radius: 5px; margin-bottom: 5px; color: black;">
-                    <b>{field}</b>: {val} {lock} {conflict}<br>
-                    <small>Conf: {conf} | Source: {src} | Anchor: <i>"{ev}"</i></small>
-                </div>
-                """, unsafe_allow_html=True)
-
-    render_group("Group A - Facts", st.session_state.profile["facts"])
-    render_group("Group B - Interpretation", st.session_state.profile["interpretation"])
-    
-    st.markdown("**Group C - Absence & Gaps**")
-    st.write("💡 **Inferred Insights:**", st.session_state.profile["absence"]["inferred_insights"])
-    st.write("🧩 **Noticed Gaps:**", st.session_state.profile["absence"]["gaps"])
+            st.info(diag_res.choices[0].message.content)
