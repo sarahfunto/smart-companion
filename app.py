@@ -92,19 +92,19 @@ def call_a_chat(user_message: str) -> str:
         temperature=0.7
     )
     return response.choices[0].message.content
-
 # CALL B: Strict JSON Schema Extraction
 EXTRACTION_PROMPT = """
 You are a precision structural extractor. Your sole task is to analyze the latest CEO response turn and update the structured CEO JSON profile table.
 
 STRICT EXTRACTION RULES:
-1. For EVERY extracted field under Group A and Group B, populate:
+1. MERGE PRINCIPLE: Keep existing field values from the Current Profile State UNLESS the user explicitly provides updated information or contradicts previous statements.
+2. For EVERY extracted field under Group A and Group B, populate:
    - "value": Enforced enum or explicit extracted text.
-   - "confidence": Floating numerical score from 0.0 to 1.0.
+   - "confidence": Floating numerical score from 0.0 to 1.0 (Set >= 0.8 if stated directly).
    - "source": Exactly "stated" (if explicitly declared) or "inferred" (if subtextual/deduced).
    - "evidence": Exact verbatim text anchor quoted from the user input. IF NO DIRECT QUOTE JUSTIFIES THE CLAIM, LEAVE FIELD EMPTY.
-2. Group C:
-   - "inferred_insights": Unstated insights supported by profile data.
+3. Group C:
+   - "inferred_insights": Unstated insights supported by profile data (at least 1 insight required).
    - "gaps": List unstated elements (e.g. undisclosed maturity, fear, operational blockers).
 
 REQUIRED ENUMS:
@@ -116,19 +116,6 @@ REQUIRED ENUMS:
 
 Respond EXCLUSIVELY with a valid JSON matching the profile schema.
 """
-
-def call_b_extraction(user_message: str):
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": EXTRACTION_PROMPT},
-            {"role": "user", "content": f"CEO turn input: '{user_message}'\nCurrent Profile State: {json.dumps(st.session_state.profile)}"}
-        ],
-        temperature=0.0
-    )
-    extracted = json.loads(response.choices[0].message.content)
-    merge_extraction_into_profile(extracted, user_message)
 
 def merge_extraction_into_profile(extracted: dict, raw_user_text: str):
     current = st.session_state.profile
@@ -149,24 +136,28 @@ def merge_extraction_into_profile(extracted: dict, raw_user_text: str):
                     new_source = incoming_data.get("source", "inferred")
                     new_ev = incoming_data.get("evidence")
 
-                    if new_val and new_ev:
+                    # Update if new information is provided
+                    if new_val:
                         # 2. Conflict Rule Enforcement
-                        if target.get("value") and target.get("value") != new_val and target.get("source") == "stated" and new_source == "stated":
+                        if target.get("value") and str(target.get("value")).lower() != str(new_val).lower() and target.get("source") == "stated" and new_source == "stated":
                             target["conflict_flag"] = True
                             target["old_value"] = target.get("value")
                             target["value"] = new_val
-                            target["evidence"] = new_ev
+                            target["evidence"] = new_ev or target.get("evidence")
                             st.session_state.last_changes.append(f"⚠️ CONFLICT ON {field}: '{target['old_value']}' vs '{new_val}'")
                         else:
                             target["value"] = new_val
-                            target["confidence"] = new_conf
+                            target["confidence"] = max(new_conf, target.get("confidence", 0.0))
                             target["source"] = new_source
-                            target["evidence"] = new_ev
+                            if new_ev:
+                                target["evidence"] = new_ev
                             st.session_state.last_changes.append(f"✅ UPDATED {field} -> {new_val}")
 
     if "absence" in extracted:
-        current["absence"]["inferred_insights"] = extracted["absence"].get("inferred_insights", [])
-        current["absence"]["gaps"] = extracted["absence"].get("gaps", [])
+        if extracted["absence"].get("inferred_insights"):
+            current["absence"]["inferred_insights"] = extracted["absence"]["inferred_insights"]
+        if extracted["absence"].get("gaps"):
+            current["absence"]["gaps"] = extracted["absence"]["gaps"]
 
 # ---------------------------------------------------------
 # 5. CODE-BASED GATEKEEPER (Threshold Checks)
