@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 # -----------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION
+# 1. PAGE CONFIGURATION & STYLES
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Smart Companion - Executive Profiler",
@@ -24,7 +24,7 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 # -----------------------------------------------------------------------------
-# 2. PYDANTIC SCHEMAS (CALL B)
+# 2. PYDANTIC SCHEMAS (FOR CALL B EXTRACTION)
 # -----------------------------------------------------------------------------
 class ProfileAttribute(BaseModel):
     value: Optional[str] = Field(default=None)
@@ -49,32 +49,44 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. PROMPTS
+# 3. SYSTEM PROMPTS
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
-Acknowledge their stress, validate their operational challenges, and ask ONE clear, friendly question at a time to guide the conversation.
+
+YOUR GOAL:
+Guide the executive step-by-step to understand their situation. Always validate their pressure or emotion before asking a question.
+
+CRITICAL INSTRUCTION FOR CONVERSATION ENDING:
+Check the current profile context provided to you. If you see that you already have the company size, current tools, and primary pain point:
+- DO NOT ask any more diagnostic questions.
+- Warmly inform the executive: "Thank you for all these details! I have gathered all the key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
 """
 
 CALL_B_SYSTEM_PROMPT = """
 Extract structured key-value profiles from the conversation into the given JSON format.
-Set conflict_flag=true if the user contradicts an earlier statement.
+Set conflict_flag=true if the user explicitly contradicts an earlier statement, and store the previous value in old_value.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
-You are a veteran executive peer and strategist. Write a personalized, highly human diagnostic report for this leader based on their profile data.
+You are a trusted executive strategist writing directly to a CEO. 
+Your tone must be warm, highly empathetic, direct, and pragmatic.
 
-DO NOT use generic AI template bullet points like "Upgrade Infrastructure" or "Leverage AI".
-Instead, write with deep empathy, clear executive authority, and actionable advice addressing their exact pain points, company size, and team reality.
+STRICT ACCURACY RULE:
+Use ONLY the exact facts provided in the profile (company size, tools, pain points). NEVER invent external details, metrics, or hallucinate.
 
-Structure your report into 3 distinct parts:
-1. 💡 **The Reality Check**: Acknowledge their situation with genuine empathy (mention their team size, their tools, and the real pressure they feel).
-2. 🚀 **Immediate High-Impact Action**: Give ONE pragmatic first step tailored specifically to their bottleneck (e.g. automating a specific repetitive friction point instead of replacing their whole system).
-3. 🛡️ **Reassurance & Strategic Direction**: Offer clear strategic reassurance on how to close the gap with competitors without overwhelming their employees.
+FORMATTING:
+- Use clear headings, short paragraphs, and bold key phrases for quick scanning.
+- Avoid generic AI jargon like "Upgrade Infrastructure" or "Leverage AI". Speak like a peer.
+
+Structure your report as follows:
+1. 💡 **The Reality Check**: Acknowledge their specific pressure directly, citing their exact team size, tool set, and the market friction they face.
+2. 🚀 **Immediate High-Impact Action**: Suggest ONE simple, pragmatic first automation step that targets their exact bottleneck without overhauling their whole tech stack.
+3. 🛡️ **Leadership Direction**: Provide calm strategic reassurance on how to close the gap with competitors while keeping their team engaged.
 """
 
 # -----------------------------------------------------------------------------
-# 4. INITIALIZATION
+# 4. SESSION STATE INITIALIZATION
 # -----------------------------------------------------------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = [
@@ -88,11 +100,11 @@ if "profile" not in st.session_state:
     st.session_state.profile = ExecutiveProfile().model_dump()
 
 # -----------------------------------------------------------------------------
-# 5. LAYOUT
+# 5. LAYOUT: TWO COLUMNS
 # -----------------------------------------------------------------------------
 col_chat, col_profile = st.columns([3, 2])
 
-# --- LEFT: CHAT ---
+# --- LEFT COLUMN: CHAT INTERFACE (CALL A) ---
 with col_chat:
     st.subheader("💬 Executive Consultation")
     
@@ -105,11 +117,15 @@ with col_chat:
         with st.chat_message("user"):
             st.markdown(user_input)
 
+        # Call A with profile context awareness
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
+                current_profile_str = json.dumps(st.session_state.profile)
+                system_with_context = f"{CALL_A_SYSTEM_PROMPT}\n\nCurrent Extracted Profile Context:\n{current_profile_str}"
+                
                 res_A = client.chat.completions.create(
                     model="gpt-4o",
-                    messages=[{"role": "system", "content": CALL_A_SYSTEM_PROMPT}, *st.session_state.messages],
+                    messages=[{"role": "system", "content": system_with_context}, *st.session_state.messages],
                     temperature=0.7
                 )
                 reply = res_A.choices[0].message.content
@@ -133,7 +149,7 @@ with col_chat:
         except Exception as e:
             st.error(f"Extraction error: {e}")
 
-# --- RIGHT: LIVE VISUAL CARDS & DIAGNOSIS ---
+# --- RIGHT COLUMN: VISUAL DASHBOARD & DIAGNOSIS ---
 with col_profile:
     st.subheader("📊 Strategic Live Profile")
 
@@ -141,7 +157,7 @@ with col_profile:
     facts = p.get("facts", {})
     interp = p.get("interpretation", {})
 
-    # Helper function for rendering clean status cards
+    # Helper function to render visual cards
     def render_card(label, item):
         val = item.get("value")
         conflict = item.get("conflict_flag", False)
@@ -165,7 +181,7 @@ with col_profile:
 
     st.divider()
 
-    # Gatekeeper Status
+    # Gatekeeper Validation Logic
     has_size = bool(facts.get("company_size", {}).get("value"))
     has_tools = bool(facts.get("tools", {}).get("value"))
     has_pain = bool(interp.get("primary_pain", {}).get("value"))
