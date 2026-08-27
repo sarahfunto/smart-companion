@@ -165,30 +165,26 @@ def merge_extraction_into_profile(extracted: dict, raw_user_text: str):
 def check_gate_thresholds(profile: dict):
     facts = profile["facts"]
     interp = profile["interpretation"]
-    absence = profile["absence"]
 
     missing_basic = []
-    if (facts["industry"].get("confidence") or 0.0) < 0.8: missing_basic.append("industry (conf >= 0.8)")
-    if not facts["company_size"].get("value"): missing_basic.append("company_size")
-    if (interp["primary_pain"].get("confidence") or 0.0) < 0.7: missing_basic.append("primary_pain (conf >= 0.7)")
-    if (interp["trigger"].get("confidence") or 0.0) < 0.6: missing_basic.append("trigger (conf >= 0.6)")
-    if (interp["lens"].get("confidence") or 0.0) < 0.6: missing_basic.append("lens (conf >= 0.6)")
-    if len(absence.get("inferred_insights", [])) < 1: missing_basic.append("at least 1 inferred_insight")
+    
+    # On vérifie simplement la présence des 5 champs clés de base
+    if not facts["industry"].get("value"): 
+        missing_basic.append("industry")
+    if not facts["company_size"].get("value"): 
+        missing_basic.append("company_size")
+    if not interp["primary_pain"].get("value"): 
+        missing_basic.append("primary_pain")
+    if not interp["trigger"].get("value"): 
+        missing_basic.append("trigger")
+    if not interp["lens"].get("value"): 
+        missing_basic.append("lens")
 
     unlocked_basic = len(missing_basic) == 0
 
-    missing_deep = list(missing_basic)
-    if (interp["strategic_posture"].get("confidence") or 0.0) < 0.6: missing_deep.append("strategic_posture (conf >= 0.6)")
-    if (interp["fear"].get("confidence") or 0.0) < 0.5: missing_deep.append("fear (conf >= 0.5)")
-    if (interp["ai_maturity"].get("confidence") or 0.0) < 0.5: missing_deep.append("ai_maturity (conf >= 0.5)")
-    if len(absence.get("gaps", [])) < 2: missing_deep.append("at least 2 gaps")
-    if not facts["org_context"].get("value"): missing_deep.append("org_context")
-
-    unlocked_deep = unlocked_basic and (len(missing_deep) == 0)
-
     return {
         "basic": {"unlocked": unlocked_basic, "missing": missing_basic},
-        "deep": {"unlocked": unlocked_deep, "missing": missing_deep}
+        "deep": {"unlocked": unlocked_basic, "missing": missing_basic}
     }
 
 # ---------------------------------------------------------
