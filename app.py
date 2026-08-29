@@ -1,11 +1,14 @@
 import streamlit as st
 import json
+import os
+import re
+import requests  # (Webhook Make / Zapier)
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from typing import Optional
 
 # -----------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & STYLES
+# 1. PAGE CONFIGURATION & DIRECTORY SETUP
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Smart Companion - Executive Profiler",
@@ -16,6 +19,10 @@ st.set_page_config(
 st.title("🎙️ Smart Companion")
 st.caption("AI-Powered Executive Profiling & Strategic Diagnostic Assistant")
 
+DATA_DIR = "saved_profiles"
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
+
 api_key = st.secrets.get("OPENAI_API_KEY")
 if not api_key:
     st.error("Please configure your OPENAI_API_KEY in .streamlit/secrets.toml")
@@ -23,8 +30,11 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 
+# URL du Webhook Make / Zapier / Google Sheets (à ajouter dans secrets.toml)
+WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", None)
+
 # -----------------------------------------------------------------------------
-# 2. PYDANTIC SCHEMAS (FOR CALL B EXTRACTION)
+# 2. PYDANTIC SCHEMAS
 # -----------------------------------------------------------------------------
 class ProfileAttribute(BaseModel):
     value: Optional[str] = Field(default=None)
@@ -57,10 +67,15 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to understand their situation. Always validate their pressure or emotion before asking a question.
 
-CRITICAL INSTRUCTION FOR CONVERSATION ENDING:
-Check the current profile context provided to you. If you see that you already have the company size, current tools, and primary pain point:
-- DO NOT ask any more diagnostic questions.
-- Warmly inform the executive: "Thank you for all these details! I have gathered all the key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
+CRITICAL INSTRUCTIONS FOR SPECIAL CASES:
+1. IF THE EXECUTIVE HAS NO TIME / REFUSES QUESTIONS / DEMANDS A QUICK YES/NO:
+   - Provide a concise, direct answer to their point.
+   - Do NOT ask any further diagnostic questions.
+   - Conclude warmly with a sign-off like: "I completely respect your time. Whenever you are ready to explore a tailored strategy, I remain at your disposal. Have a great day!"
+
+2. IF THE DIAGNOSTIC PROFILE IS COMPLETE (Industry, Size, Tools, Primary Pain are known):
+   - Do NOT ask any more diagnostic questions.
+   - Warmly inform them: "Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
 """
 
 CALL_B_SYSTEM_PROMPT = """
@@ -86,8 +101,69 @@ Structure your report as follows:
 """
 
 # -----------------------------------------------------------------------------
-# 4. SESSION STATE INITIALIZATION
+# 4. HELPERS: LOCAL & WEBHOOK STORAGE
 # -----------------------------------------------------------------------------
+def sanitize_email(email: str) -> str:
+    return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
+
+def save_and_sync_data(email: str, profile_data: dict, messages: list):
+    if not email:
+        return
+    
+    payload = {
+        "user_email": email,
+        "profile": profile_data,
+        "chat_history": messages
+    }
+    
+    # 1. Sauvegarde locale sur le serveur
+    safe_name = sanitize_email(email)
+    path = os.path.join(DATA_DIR, f"{safe_name}.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+        
+    # 2. OPTION 2 : Envoi automatique au Webhook pour Limor / Google Sheets
+    if WEBHOOK_URL:
+        try:
+            requests.post(WEBHOOK_URL, json=payload, timeout=5)
+        except Exception as e:
+            print(f"Webhook error: {e}")
+
+def load_user_data(email: str):
+    safe_name = sanitize_email(email)
+    path = os.path.join(DATA_DIR, f"{safe_name}.json")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+# -----------------------------------------------------------------------------
+# 5. HEADER & USER IDENTIFICATION
+# -----------------------------------------------------------------------------
+st.markdown("---")
+user_email = st.text_input("📧 Enter your business email to start or restore your session:", key="email_input")
+
+if "current_user" not in st.session_state:
+    st.session_state.current_user = ""
+
+if user_email and user_email != st.session_state.current_user:
+    st.session_state.current_user = user_email
+    existing_data = load_user_data(user_email)
+    
+    if existing_data:
+        st.session_state.profile = existing_data.get("profile", ExecutiveProfile().model_dump())
+        st.session_state.messages = existing_data.get("chat_history", [])
+        st.success(f"Welcome back! Loaded saved profile for {user_email}")
+    else:
+        st.session_state.profile = ExecutiveProfile().model_dump()
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": "Welcome! I'm your strategic AI companion. To start, could you share your executive role and the industry you're operating in?"
+            }
+        ]
+        save_and_sync_data(user_email, st.session_state.profile, st.session_state.messages)
+
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -100,11 +176,11 @@ if "profile" not in st.session_state:
     st.session_state.profile = ExecutiveProfile().model_dump()
 
 # -----------------------------------------------------------------------------
-# 5. LAYOUT: TWO COLUMNS
+# 6. LAYOUT: TWO COLUMNS
 # -----------------------------------------------------------------------------
 col_chat, col_profile = st.columns([3, 2])
 
-# --- LEFT COLUMN: CHAT INTERFACE (CALL A) ---
+# --- LEFT COLUMN: CHAT INTERFACE ---
 with col_chat:
     st.subheader("💬 Executive Consultation")
     
@@ -112,44 +188,50 @@ with col_chat:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    if user_input := st.chat_input("Type your message here..."):
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
+    if user_input := st.chat_input("Type your message here...", disabled=not user_email):
+        if not user_email:
+            st.warning("Please enter your email above before starting the consultation.")
+        else:
+            st.session_state.messages.append({"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.markdown(user_input)
 
-        # Call A with profile context awareness
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                current_profile_str = json.dumps(st.session_state.profile)
-                system_with_context = f"{CALL_A_SYSTEM_PROMPT}\n\nCurrent Extracted Profile Context:\n{current_profile_str}"
-                
-                res_A = client.chat.completions.create(
+            # Call A execution
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    current_profile_str = json.dumps(st.session_state.profile)
+                    system_with_context = f"{CALL_A_SYSTEM_PROMPT}\n\nCurrent Extracted Profile Context:\n{current_profile_str}"
+                    
+                    res_A = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "system", "content": system_with_context}, *st.session_state.messages],
+                        temperature=0.7
+                    )
+                    reply = res_A.choices[0].message.content
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+
+            # Call B Extraction & Webhook Sync
+            try:
+                conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
+                res_B = client.beta.chat.completions.parse(
                     model="gpt-4o",
-                    messages=[{"role": "system", "content": system_with_context}, *st.session_state.messages],
-                    temperature=0.7
+                    messages=[
+                        {"role": "system", "content": CALL_B_SYSTEM_PROMPT},
+                        {"role": "user", "content": f"Current Profile:\n{json.dumps(st.session_state.profile)}\n\nConversation:\n{conv_text}"}
+                    ],
+                    response_format=ExecutiveProfile,
+                    temperature=0.0
                 )
-                reply = res_A.choices[0].message.content
-                st.markdown(reply)
-                st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.session_state.profile = res_B.choices[0].message.parsed.model_dump()
+                
+                # Sync local + Webhook
+                save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Extraction error: {e}")
 
-        # Extraction Call B
-        try:
-            conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
-            res_B = client.beta.chat.completions.parse(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": CALL_B_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Current Profile:\n{json.dumps(st.session_state.profile)}\n\nConversation:\n{conv_text}"}
-                ],
-                response_format=ExecutiveProfile,
-                temperature=0.0
-            )
-            st.session_state.profile = res_B.choices[0].message.parsed.model_dump()
-            st.rerun()
-        except Exception as e:
-            st.error(f"Extraction error: {e}")
-
-# --- RIGHT COLUMN: VISUAL DASHBOARD & DIAGNOSIS ---
+# --- RIGHT COLUMN: VISUAL DASHBOARD ---
 with col_profile:
     st.subheader("📊 Strategic Live Profile")
 
@@ -157,7 +239,6 @@ with col_profile:
     facts = p.get("facts", {})
     interp = p.get("interpretation", {})
 
-    # Helper function to render visual cards
     def render_card(label, item):
         val = item.get("value")
         conflict = item.get("conflict_flag", False)
