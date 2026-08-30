@@ -59,7 +59,7 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS (FIXED: GUIDED CLARIFICATION & FACT REPLACEMENT)
+# 3. SYSTEM PROMPTS (CALL A & CALL B UPDATED FOR REFINEMENT & ASSISTED PROMPTS)
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
@@ -67,16 +67,16 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to understand their situation. Always validate their pressure or emotion before asking a question.
 
-CRITICAL RULE: MANDATORY PROACTIVE CLARIFICATION FOR VAGUE PHRASES
-When the executive uses vague terms (e.g., 'classic tools', 'decent-sized business', 'medium company', 'reporting is annoying'):
-1. DO NOT move on to open-ended diagnostic questions.
-2. IMMEDIATELY ask a structured clarification question offering 2–4 concrete options.
+MANDATORY INSTRUCTION: ASSISTED CLARIFICATION FOR VAGUE RESPONSES
+If the user provides a vague or approximate response, you MUST immediately clarify it by offering 2 to 4 concrete options before moving on to operational questions.
 
-EXAMPLES OF REQUIRED CLARIFICATIONS:
-- If user says 'classic tools' or 'usual software':
-  --> Reply: "When you say 'classic tools', do you mean mostly Excel/spreadsheets, an accounting/ERP system like Sage or SAP, email, or mostly manual paper processes?"
-- If user says 'decent-sized business' or 'growing team':
-  --> Reply: "To help me get a clear picture, roughly how many employees is that? For example: under 50, 50–100, around 100–150, or more than 200?"
+PATTERNS TO SPOT & HOW TO RESPOND:
+- Vague Size ('decent-sized business', 'around a hundred people'):
+  --> ASK: "To make sure I have an accurate picture, roughly how many employees is that — closer to 100, 120, or more than 150?"
+- Vague Tools ('classic stuff everyone uses', 'standard tech'):
+  --> ASK: "When you say 'classic tools', do you mean mainly Excel, an ERP/accounting system like Sage or SAP, email, or manual paper processes?"
+- Vague Pain ('reporting is annoying', 'too many fires'):
+  --> ASK: "Could you help me pinpoint that? Is the main issue manual data consolidation, missing real-time visibility, or delay in getting reports from teams?"
 
 SPECIAL CASES:
 1. IF THE EXECUTIVE HAS NO TIME / REFUSES QUESTIONS / DEMANDS A QUICK YES/NO:
@@ -92,17 +92,18 @@ SPECIAL CASES:
 CALL_B_SYSTEM_PROMPT = """
 Extract structured key-value profiles from the conversation into the given JSON format.
 
-RULE 1: REJECT VAGUE PLACEHOLDERS & OVERWRITE WITH SPECIFIC FACTS
-- DO NOT store vague, qualitative placeholders in structured facts.
-  * Current Tools: NEVER store 'classic tools', 'standard software', or 'usual stuff'. If the user says 'classic tools', keep value = null. When the user later specifies 'Excel and Sage', OVERWRITE the value to 'Excel, Sage'.
-  * Company Size: NEVER store 'medium', 'decent-sized', or 'growing'. Keep value = null until a specific number or exact range is provided (e.g., '120 employees'). Always update to the exact number once given.
-  * Primary Pain: NEVER store vague complaints like 'reporting is annoying'. Wait for or update to the concrete operational bottleneck (e.g., 'Manual consolidation of financial reports from several Excel files').
+RULE 1: IGNORING VAGUE PHRASES VS. EXTRACTING EXPLICIT FACTS
+- Do NOT populate fields with generic placeholders like 'medium', 'decent-sized', 'classic tools', or 'reporting is annoying'. Keep value = null if ONLY vague statements are available.
+- CRITICAL: When the user subsequently provides EXPLICIT facts (e.g., '120 is close enough', 'Mainly Excel and Sage', 'manual consolidation of financial reports from several Excel files'), IMMEDIATELY UPDATE/POPULATE the field with these concrete facts!
+  * Company Size: Set to 'approximately 120 employees' (or '120 employees').
+  * Current Tools: Set to 'Excel, Sage'.
+  * Primary Pain: Set to 'Manual consolidation of financial reports from several Excel files'.
 
-RULE 2: NO UNNECESSARY CONFLICT FLAGS FOR REFINEMENTS
-- Clarifying vague info with exact facts (e.g., changing from null/'medium' to '120 employees' or from null to 'Excel, Sage') is a REFINEMENT, NOT a contradiction. Do NOT set conflict_flag=true for refinements.
+RULE 2: NO CONFLICT FLAGS FOR PROGRESSIVE REFINEMENT
+- Moving from null (or a vague description) to an explicit fact is a REFINEMENT, NOT a contradiction. Do NOT set conflict_flag=true for these updates. Only set conflict_flag=true if the user explicitly contradicts a previously confirmed fact.
 
 RULE 3: STRICT MARKET TRIGGER CLASSIFICATION
-- MARKET TRIGGER ("trigger"): Must ONLY be populated if the user explicitly mentions EXTERNAL market dynamics outside their direct control. INTERNAL operational issues must NEVER be classified as a Market Trigger. If no external market event is mentioned, set value = null or "Not specified yet".
+- MARKET TRIGGER ("trigger"): Must ONLY be populated if the user explicitly mentions EXTERNAL market dynamics outside their direct control. Internal operational issues must NEVER be classified as a Market Trigger. If no external market event is mentioned, set value = null or "Not specified yet".
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -119,7 +120,7 @@ FORMATTING:
 
 Structure your report as follows:
 1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their exact team size, precise tools (e.g., Sage, Excel), and the primary operational breakdown.
-2. 🚀 **Immediate High-Impact Action**: Provide ONE pragmatic action step targeting the exact process friction using minimal technical overhead (e.g., Power Query / automated consolidation between Sage and Excel).
+2. 🚀 **Immediate High-Impact Action**: Provide ONE pragmatic action step targeting the exact process friction using minimal technical overhead (e.g., automated consolidation between Sage and Excel).
 3. 🛡️ **Leadership Direction**: Provide calm strategic reassurance on how to streamline financial workflows while keeping team operations smooth.
 """
 
@@ -265,10 +266,6 @@ with col_profile:
     def render_card(label, item):
         val = item.get("value")
         conflict = item.get("conflict_flag", False)
-        
-        # Guard against generic terms rendered on screen
-        if val in ["classic tools", "medium", "decent-sized"]:
-            val = None
 
         if conflict:
             st.warning(f"**{label}:** {val} *(⚠️ Changed from: {item.get('old_value')})*")
@@ -290,9 +287,9 @@ with col_profile:
     st.divider()
 
     # Gatekeeper Validation Logic
-    has_size = bool(facts.get("company_size", {}).get("value")) and facts.get("company_size", {}).get("value") not in ["medium", "decent-sized"]
-    has_tools = bool(facts.get("tools", {}).get("value")) and facts.get("tools", {}).get("value") != "classic tools"
-    has_pain = bool(interp.get("primary_pain", {}).get("value")) and interp.get("primary_pain", {}).get("value") != "reporting is annoying"
+    has_size = bool(facts.get("company_size", {}).get("value"))
+    has_tools = bool(facts.get("tools", {}).get("value"))
+    has_pain = bool(interp.get("primary_pain", {}).get("value"))
     unlocked = has_size and has_tools and has_pain
 
     if unlocked:
