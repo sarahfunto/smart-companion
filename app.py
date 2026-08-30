@@ -59,7 +59,7 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS
+# 3. SYSTEM PROMPTS (STRUCTURED CONVERSATIONAL LOOP)
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
@@ -67,23 +67,20 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to gather operational facts and strategic insights.
 
-STRICT GATEKEEPER RULE:
-- Check the 'GATEKEEPER STATUS' provided at the end of this prompt.
-- IF GATEKEEPER STATUS IS 'LOCKED':
-  DO NOT declare the interview finished. DO NOT suggest clicking the diagnostic report button.
-  You MUST ask a direct follow-up question to continue the consultation.
+STATE-BASED CONVERSATIONAL LOGIC (STRICT):
 
-PRIORITY QUESTIONING FLOW (WHEN LOCKED):
-1. Operational Facts Clarification:
-   If Industry, Size, or Tools are vague, ask a targeted clarification question.
-2. Executive Fear / Business Consequence:
-   If Operational Pain is identified but Executive Fear is missing, YOU MUST ASK A QUESTION ABOUT BUSINESS IMPACT.
-   Example: "When you can't reliably calculate campaign ROI, what worries you most from a business perspective: wasting marketing budget, making the wrong investment decisions, or being unable to demonstrate marketing's contribution to revenue?"
-3. Market Trigger (Optional):
-   If Fear is identified, ask if any recent market trigger accelerated this priority.
+[CASE 1: GATEKEEPER STATUS IS 'LOCKED']
+You MUST continue the interview by asking ONE single targeted question based on what is missing in the Live Profile:
 
-IF GATEKEEPER STATUS IS 'UNLOCKED':
-  Inform them warmly: "Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
+1. Missing or Vague Operational Facts (Industry, Size, Tools):
+   - Ask a direct clarification question with 2-4 concrete options.
+2. Operational Pain known, BUT Executive Fear / Business Consequence missing (CRITICAL STEP):
+   - DO NOT stop after learning the pain point. You must explore the business impact.
+   - Example pattern: "When you encounter [stated pain], what is the primary business risk or fear from your perspective? Does it mainly affect budget allocation, your ability to demonstrate ROI to leadership, or strategic growth decisions?"
+
+[CASE 2: GATEKEEPER STATUS IS 'UNLOCKED']
+Inform them warmly:
+"Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
 """
 
 CALL_B_SYSTEM_PROMPT = """
@@ -96,7 +93,7 @@ CRITICAL EXTRACTION & OVERWRITE RULES:
 
 2. FIELD CLASSIFICATION:
    - Primary Pain Point (`primary_pain.value`): The operational breakdown (e.g., "Leads from campaigns aren't consistently matched with opportunities in HubSpot, hindering ROI calculation").
-   - Executive Fear / Concern (`fear.value`): The strategic business risk/consequence (e.g., "Inability to demonstrate marketing contribution / risk of misallocating budget"). Populate ONLY if explicit consequences are discussed.
+   - Executive Fear / Concern (`fear.value`): The strategic business risk/consequence (e.g., "Inability to demonstrate marketing contribution to revenue / risk of budget misallocation"). Populate ONLY if explicit business impacts or risks are mentioned by the user.
    - Market Trigger (`trigger.value`): External market forces outside company control (set to null if not stated).
 
 3. CONFLICT FLAGS:
@@ -225,7 +222,7 @@ with col_chat:
             with st.chat_message("user"):
                 st.markdown(user_input)
 
-            # 1. Synchronous Call B extraction
+            # 1. Extraction Call B
             try:
                 conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
                 res_B = client.beta.chat.completions.parse(
@@ -241,49 +238,60 @@ with col_chat:
             except Exception as e:
                 st.error(f"Extraction error: {e}")
 
-            # 2. Check strict Gatekeeper Status
+            # 2. Dynamic Gatekeeper Status Check
             gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
             gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
 
-            # 3. Call A Execution
+            # 3. Call A Generation with strict instruction based on Gatekeeper Status
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     current_profile_str = json.dumps(st.session_state.profile)
-                    system_with_context = (
+                    
+                    system_instruction = (
                         f"{CALL_A_SYSTEM_PROMPT}\n\n"
-                        f"Current Live Profile State:\n{current_profile_str}\n\n"
-                        f"GATEKEEPER STATUS: {gatekeeper_status_str}"
+                        f"CURRENT LIVE PROFILE STATE:\n{current_profile_str}\n\n"
+                        f"GATEKEEPER STATUS: {gatekeeper_status_str}\n"
                     )
                     
+                    if not gatekeeper_is_unlocked:
+                        system_instruction += (
+                            "CRITICAL DIRECTIVE: Gatekeeper is LOCKED. You ARE NOT ALLOWED to state that you have gathered all key insights. "
+                            "You MUST ask a targeted question to uncover the missing fields (specifically Executive Fear / Business Impact if pain is known)."
+                        )
+                    else:
+                        system_instruction += (
+                            "CRITICAL DIRECTIVE: Gatekeeper is UNLOCKED. You MUST now warmly inform the user that all key insights have been gathered "
+                            "and invite them to click the 'Generate Human Diagnostic Report' button."
+                        )
+
                     res_A = client.chat.completions.create(
                         model="gpt-4o",
-                        messages=[{"role": "system", "content": system_with_context}, *st.session_state.messages],
+                        messages=[{"role": "system", "content": system_instruction}, *st.session_state.messages],
                         temperature=0.7
                     )
                     reply = res_A.choices[0].message.content
 
-                    # HARD GUARD / FALLBACK LOGIC:
-                    # If Gatekeeper is LOCKED but Call A accidentally generates a closing sentence, intercept and override.
+                    # Hard Guard Fallback in Python (Safety net against model hallucinations)
                     if not gatekeeper_is_unlocked and ("gathered all key insights" in reply.lower() or "generate human diagnostic report" in reply.lower()):
                         interp = st.session_state.profile.get("interpretation", {})
                         has_fear = bool(interp.get("fear", {}).get("value"))
                         
                         if not has_fear:
                             reply = (
-                                "Thank you for sharing that operational challenge. "
+                                "Thank you for detailing that challenge. "
                                 "When you can't reliably calculate campaign ROI, what worries you most from a business perspective: "
                                 "wasting marketing budget, making the wrong investment decisions, or being unable to demonstrate marketing's contribution to revenue?"
                             )
                         else:
                             reply = (
-                                "Thank you for these insights. "
-                                "Has there been any recent market change or internal deadline that made solving this issue an urgent priority right now?"
+                                "Thank you. To complete our strategic picture, is there a specific market event or internal deadline "
+                                "that makes solving this priority urgent right now?"
                             )
 
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
 
-            # Save local + Webhook & Rerun UI
+            # Save & Refresh
             save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
             st.rerun()
 
