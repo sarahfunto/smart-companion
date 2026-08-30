@@ -30,7 +30,7 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 
-# URL du Webhook Make / Zapier / Google Sheets (à ajouter dans secrets.toml)
+# Webhook URL for Make / Zapier / Google Sheets
 WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", None)
 
 # -----------------------------------------------------------------------------
@@ -59,13 +59,18 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS
+# 3. SYSTEM PROMPTS (WITH GUARDRAILS & FIXES)
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
 
 YOUR GOAL:
 Guide the executive step-by-step to understand their situation. Always validate their pressure or emotion before asking a question.
+
+STRICT GROUNDING & NO-ASSUMPTION POLICY:
+1. If the executive changes or clarifies their main business priority (e.g., shifting from turnover to declining margins), immediately center your response on the new priority.
+2. DO NOT assume unverified root causes or propose specific software automations (e.g., "implement HubSpot lead nurturing") unless the user explicitly stated that exact operational bottleneck.
+3. If the primary cause behind a problem is still unknown, keep your observation broad and ask targeted diagnostic questions to uncover the real drivers (e.g., asking what areas contribute most to margin pressure).
 
 CRITICAL INSTRUCTIONS FOR SPECIAL CASES:
 1. IF THE EXECUTIVE HAS NO TIME / REFUSES QUESTIONS / DEMANDS A QUICK YES/NO:
@@ -81,23 +86,34 @@ CRITICAL INSTRUCTIONS FOR SPECIAL CASES:
 CALL_B_SYSTEM_PROMPT = """
 Extract structured key-value profiles from the conversation into the given JSON format.
 Set conflict_flag=true if the user explicitly contradicts an earlier statement, and store the previous value in old_value.
+
+CRITICAL CLASSIFICATION RULE FOR MARKET TRIGGER:
+- MARKET TRIGGER ("trigger"):
+  Must ONLY be populated if the user explicitly mentions EXTERNAL market dynamics or events outside their direct control 
+  (e.g., new competitor entry, industry regulations, economic shifts, market acquisition trends).
+  
+  INTERNAL OPERATIONAL ISSUES (e.g., employee turnover, staff departures in sales/CS, team friction, internal delays) 
+  are strictly INTERNAL SYMPTOMS/TRIGGERS and must NEVER be classified as a Market Trigger.
+  
+  If no external market event is explicitly stated by the user, set value = null or "Not specified yet".
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
 You are a trusted executive strategist writing directly to a CEO. 
 Your tone must be warm, highly empathetic, direct, and pragmatic.
 
-STRICT ACCURACY RULE:
-Use ONLY the exact facts provided in the profile (company size, tools, pain points). NEVER invent external details, metrics, or hallucinate.
+STRICT ACCURACY & GROUNDING RULE:
+- Use ONLY the exact facts provided in the profile (company size, tools, pain points). NEVER invent external details, metrics, or speculate on unconfirmed bottlenecks.
+- DO NOT suggest tool-level technical automations (e.g., HubSpot follow-ups) unless the user explicitly confirmed that specific operational failure.
 
 FORMATTING:
 - Use clear headings, short paragraphs, and bold key phrases for quick scanning.
 - Avoid generic AI jargon like "Upgrade Infrastructure" or "Leverage AI". Speak like a peer.
 
 Structure your report as follows:
-1. 💡 **The Reality Check**: Acknowledge their specific pressure directly, citing their exact team size, tool set, and the market friction they face.
-2. 🚀 **Immediate High-Impact Action**: Suggest ONE simple, pragmatic first automation step that targets their exact bottleneck without overhauling their whole tech stack.
-3. 🛡️ **Leadership Direction**: Provide calm strategic reassurance on how to close the gap with competitors while keeping their team engaged.
+1. 💡 **The Reality Check**: Acknowledge their specific pressure directly, citing their exact team size, tool set, and the primary business priority they defined.
+2. 🚀 **Immediate High-Impact Action**: Suggest ONE simple, pragmatic first strategic/diagnostic step that targets their primary bottleneck without overhauling their whole stack or making ungrounded technical assumptions.
+3. 🛡️ **Leadership Direction**: Provide calm strategic reassurance on how to align their team and operations around their core priority.
 """
 
 # -----------------------------------------------------------------------------
@@ -116,13 +132,13 @@ def save_and_sync_data(email: str, profile_data: dict, messages: list):
         "chat_history": messages
     }
     
-    # 1. Sauvegarde locale sur le serveur
+    # 1. Local backup on server
     safe_name = sanitize_email(email)
     path = os.path.join(DATA_DIR, f"{safe_name}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
         
-    # 2. OPTION 2 : Envoi automatique au Webhook pour Limor / Google Sheets
+    # 2. Sync to Webhook for Google Sheets / Make
     if WEBHOOK_URL:
         try:
             requests.post(WEBHOOK_URL, json=payload, timeout=5)
@@ -196,7 +212,7 @@ with col_chat:
             with st.chat_message("user"):
                 st.markdown(user_input)
 
-            # Call A execution
+            # Call A Execution
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     current_profile_str = json.dumps(st.session_state.profile)
@@ -245,7 +261,7 @@ with col_profile:
         
         if conflict:
             st.warning(f"**{label}:** {val} *(⚠️ Changed from: {item.get('old_value')})*")
-        elif val:
+        elif val and val != "Not specified yet":
             st.success(f"**{label}:** {val}")
         else:
             st.info(f"**{label}:** *Not specified yet*")
