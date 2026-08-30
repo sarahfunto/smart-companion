@@ -59,7 +59,7 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS (FIXED: STRICT DRILL-DOWN & RECENT FACT OVERRIDE)
+# 3. SYSTEM PROMPTS (CIBLAGE STRICT CALL A & CALL B OVERWRITE)
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
@@ -67,45 +67,51 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to understand their situation. Always validate their pressure or emotion before asking a question.
 
-CRITICAL RULE: MANDATORY INTERACTION STOPPER FOR VAGUE INPUTS
-When the executive gives an imprecise or vague answer, YOU MUST NOT CONTINUE THE REGULAR CONSULTATION FLOW.
-You MUST IMMEDIATELY ask a structured follow-up question offering 2 to 4 concrete choices.
+CRITICAL RULE: STRICT RE-PROMPT ON VAGUE OR UNQUANTIFIED INPUTS
+If the executive provides a response about company size, tech stack, or operational pain that is vague, qualitative, or approximate, YOU MUST NOT MOVE TO THE NEXT QUESTION.
+You MUST immediately ask a focused clarification question proposing 2 to 4 concrete choices.
 
-EXACT PATTERNS TO INTERCEPT:
-1. Vague Size ('decent-sized business', 'around a hundred people, maybe a bit more'):
-   --> STOP and ASK: "To make sure I capture the company size correctly, would you say you're closer to 100, 120, or more than 150 employees?"
-2. Vague Tools ('classic stuff everyone uses', 'standard tools', 'usual software'):
-   --> STOP and ASK: "When you say classic tools, do you mean mainly Excel, an ERP such as Sage or SAP, email, or something else?"
-3. Vague Pain ('reporting is annoying', 'too many manual tasks'):
-   --> STOP and ASK: "To narrow this down: is the issue manual data consolidation across spreadsheets, delay in getting data from team leaders, or lack of real-time reporting?"
+TRIGGER EXAMPLES & MANDATORY RESPONSES:
+1. User says: 'decent-sized business' OR 'around a hundred people, maybe a bit more'
+   --> DO NOT validate and change topics!
+   --> ASK IMMEDIATELY: "To make sure I capture your company size accurately, would you say you're closer to 100, 120, or more than 150 employees?"
+
+2. User says: 'classic stuff everyone uses' OR 'usual software'
+   --> DO NOT validate and change topics!
+   --> ASK IMMEDIATELY: "When you say classic tools, do you mean mainly Excel, an ERP such as Sage or SAP, email, or manual paper processes?"
+
+3. User says: 'reporting is annoying' OR 'too many manual tasks'
+   --> ASK IMMEDIATELY: "To pinpoint this friction: is the primary bottleneck manual data consolidation across spreadsheets, delay in receiving reports, or lack of real-time visibility?"
 
 SPECIAL CASES:
-1. IF THE EXECUTIVE HAS NO TIME / REFUSES QUESTIONS / DEMANDS A QUICK YES/NO:
-   - Provide a concise, direct answer. Do NOT ask further diagnostic questions.
-   - Conclude warmly with a sign-off.
-
-2. IF THE DIAGNOSTIC PROFILE IS COMPLETE (Industry, Exact Size, Specific Tools, and Specific Primary Pain are fully known):
-   - Inform them warmly: "Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
+- IF THE PROFILE IS COMPLETE (Industry, Exact Size like 120, Specific Tools like Excel & Sage, and Precise Primary Pain are stored):
+  Warmly inform them: "Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
 """
 
 CALL_B_SYSTEM_PROMPT = """
-You are an ultra-precise JSON extractor. Evaluate the full conversation and extract the final state into the structured schema.
+You are a strict data extraction engine updating the executive profile from the conversation.
 
-CRITICAL EXTRACTION & OVERWRITE RULES:
+CRITICAL RULE: OVERWRITE VAGUE VALUES WITH SPECIFIC REFINEMENTS
+When analyzing the conversation, you must ALWAYS replace qualitative/vague terms with the user's latest specific confirmation.
 
-1. RECENT SPECIFIC FACTS ALWAYS OVERRIDE PREVIOUS VAGUE STATEMENTS
-- If the conversation starts with a vague term ('medium', 'decent-sized') but later the user confirms a number ('Yes, 120 is close enough'), YOU MUST SET company_size.value = 'approximately 120 employees'. (DO NOT LEAVE IT AS 'medium').
-- If the conversation starts with 'classic tools' but later the user specifies 'Mainly Excel and Sage', YOU MUST SET tools.value = 'Excel, Sage'. (DO NOT LEAVE IT AS 'classic tools').
-- If the pain transitions from 'reporting is annoying' to 'Every month we manually combine financial reports from several Excel files', YOU MUST SET primary_pain.value = 'Manual consolidation of financial reports from several Excel files'.
+RULES FOR UPDATING FIELDS:
+1. Company Size (`company_size.value`):
+   - NEVER keep 'medium' or 'decent-sized' if the user later states or confirms a specific number.
+   - Example: If previous state was 'medium' (or null) and user says "Yes, 120 is close enough", set `company_size.value` = "approximately 120 employees".
 
-2. REACTION TO UNCONFIRMED VAGUE STATEMENTS
-- If a category ONLY contains vague text and NO specific details have been provided yet in the entire conversation, set value = null (or leave empty). NEVER store 'medium' or 'classic tools' as final values.
+2. Current Tools (`tools.value`):
+   - NEVER keep 'classic tools' or 'usual software' if the user later names specific systems.
+   - Example: If previous state was 'classic tools' (or null) and user says "Mainly Excel and Sage", set `tools.value` = "Excel, Sage".
 
-3. CONFLICT FLAGS
-- Refining a vague statement with precise data (e.g. medium -> 120 employees) is NOT a conflict. Keep conflict_flag = false.
+3. Primary Pain Point (`primary_pain.value`):
+   - Replace generic complaints ('reporting is annoying') with the detailed operational issue as soon as stated.
+   - Example: Set `primary_pain.value` = "Manual consolidation of financial reports from several Excel files".
 
-4. MARKET TRIGGER
-- MARKET TRIGGER ("trigger"): Populate ONLY if the user explicitly mentions EXTERNAL market forces outside their control. Internal operational issues are NOT market triggers (set value = null if not stated).
+4. Conflict Flag (`conflict_flag`):
+   - Updating a vague/approximate value (e.g., 'medium' -> '120 employees') is a REFINEMENT, NOT a contradiction. Set `conflict_flag` = false.
+
+5. Market Trigger (`trigger.value`):
+   - Set ONLY if an external market event outside company control is explicitly mentioned. Keep null otherwise.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -115,7 +121,7 @@ Your tone must be warm, highly empathetic, direct, and pragmatic.
 STRICT BOTTLENECK ALIGNMENT & ACCURACY RULE:
 - Focus ONLY on the primary_pain specified in the profile.
 - IF primary_pain mentions a specific operational breakdown (e.g., manual Excel consolidation for financial reports), your "Immediate High-Impact Action" MUST directly target that exact process using their exact stated tools (e.g., Sage, Excel).
-- Avoid generic, fluffy recommendations like "hold a morning triage meeting" when a concrete workflow bottleneck has been identified.
+- Avoid generic recommendations when a concrete workflow bottleneck has been identified.
 
 FORMATTING:
 - Use clear headings, short paragraphs, and bold key phrases for quick scanning.
@@ -142,13 +148,11 @@ def save_and_sync_data(email: str, profile_data: dict, messages: list):
         "chat_history": messages
     }
     
-    # 1. Local backup on server
     safe_name = sanitize_email(email)
     path = os.path.join(DATA_DIR, f"{safe_name}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
         
-    # 2. Sync to Webhook for Google Sheets / Make
     if WEBHOOK_URL:
         try:
             requests.post(WEBHOOK_URL, json=payload, timeout=5)
@@ -226,7 +230,7 @@ with col_chat:
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     current_profile_str = json.dumps(st.session_state.profile)
-                    system_with_context = f"{CALL_A_SYSTEM_PROMPT}\n\nCurrent Extracted Profile Context:\n{current_profile_str}"
+                    system_with_context = f"{CALL_A_SYSTEM_PROMPT}\n\nCurrent Live Profile State:\n{current_profile_str}"
                     
                     res_A = client.chat.completions.create(
                         model="gpt-4o",
@@ -237,14 +241,14 @@ with col_chat:
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
 
-            # Call B Extraction & Webhook Sync (Full Conv History Focus)
+            # Call B Extraction & Profile Overwrite
             try:
                 conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
                 res_B = client.beta.chat.completions.parse(
                     model="gpt-4o",
                     messages=[
                         {"role": "system", "content": CALL_B_SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Full Conversation History:\n{conv_text}"}
+                        {"role": "user", "content": f"Previous Extracted Profile JSON:\n{json.dumps(st.session_state.profile)}\n\nFull Conversation History:\n{conv_text}"}
                     ],
                     response_format=ExecutiveProfile,
                     temperature=0.0
