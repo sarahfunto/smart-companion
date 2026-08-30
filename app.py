@@ -59,7 +59,7 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS (UPDATED WITH ACTIVE CLARIFICATION & NO-VAGUENESS RULES)
+# 3. SYSTEM PROMPTS (FIXED: GUIDED CLARIFICATION & FACT REPLACEMENT)
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
@@ -67,24 +67,24 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to understand their situation. Always validate their pressure or emotion before asking a question.
 
-CRITICAL INSTRUCTION: ACTIVE CLARIFICATION OF VAGUE INPUTS
-1. When the user provides a vague or generic answer (e.g., 'decent-sized business', 'classic tools', 'reporting is annoying'):
-   - Do NOT assume specific details or move on immediately to unrelated questions.
-   - Actively prompt them with a targeted clarification question containing 2–4 concrete options/examples.
-   - Example for vague size ('decent size'): "To help me tailor this, roughly how many employees is that? For instance: under 50, 50–100, 100–250, or more?"
-   - Example for vague tools ('classic stuff'): "When you say 'classic tools', do you mean mostly Excel/spreadsheets, an accounting/ERP system like Sage, or email and manual workflows?"
+CRITICAL RULE: MANDATORY PROACTIVE CLARIFICATION FOR VAGUE PHRASES
+When the executive uses vague terms (e.g., 'classic tools', 'decent-sized business', 'medium company', 'reporting is annoying'):
+1. DO NOT move on to open-ended diagnostic questions.
+2. IMMEDIATELY ask a structured clarification question offering 2–4 concrete options.
 
-STRICT GROUNDING POLICY:
-1. If the executive updates or clarifies a priority or operational workflow, focus directly on that precise issue.
-2. DO NOT assume unverified root causes or propose generic tools unless confirmed by the user.
+EXAMPLES OF REQUIRED CLARIFICATIONS:
+- If user says 'classic tools' or 'usual software':
+  --> Reply: "When you say 'classic tools', do you mean mostly Excel/spreadsheets, an accounting/ERP system like Sage or SAP, email, or mostly manual paper processes?"
+- If user says 'decent-sized business' or 'growing team':
+  --> Reply: "To help me get a clear picture, roughly how many employees is that? For example: under 50, 50–100, around 100–150, or more than 200?"
 
-SPECIAL CASES HANDLING:
+SPECIAL CASES:
 1. IF THE EXECUTIVE HAS NO TIME / REFUSES QUESTIONS / DEMANDS A QUICK YES/NO:
    - Provide a concise, direct answer to their point.
    - Do NOT ask any further diagnostic questions.
    - Conclude warmly with a sign-off like: "I completely respect your time. Whenever you are ready to explore a tailored strategy, I remain at your disposal. Have a great day!"
 
-2. IF THE DIAGNOSTIC PROFILE IS COMPLETE (Industry, Size, Tools, Primary Pain are precise and known):
+2. IF THE DIAGNOSTIC PROFILE IS COMPLETE (Industry, Exact Size, Specific Tools, and Specific Primary Pain are fully known):
    - Do NOT ask any more diagnostic questions.
    - Warmly inform them: "Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
 """
@@ -92,20 +92,17 @@ SPECIAL CASES HANDLING:
 CALL_B_SYSTEM_PROMPT = """
 Extract structured key-value profiles from the conversation into the given JSON format.
 
-RULE 1: STRICT REJECTION OF VAGUE / GENERIC PHRASES
-- NEVER extract vague qualitative descriptors into structured facts:
-  * Company Size: Reject phrases like 'decent-sized', 'medium', 'growing team'. Only extract numeric values or specific ranges (e.g., '120 employees'). If vague, keep value = null.
-  * Current Tools: Reject generic placeholders like 'classic tools', 'standard software', 'usual tech'. Only extract named tools or clear systems (e.g., 'Excel', 'Sage', 'SAP Business One'). If vague, keep value = null.
-  * Primary Pain: Reject generic feelings like 'reporting is annoying', 'operational fires'. Update to the specific operational bottleneck once stated (e.g., 'manual consolidation of financial reports from multiple Excel files'). If only vague emotions exist, keep value = null or wait for clarification.
+RULE 1: REJECT VAGUE PLACEHOLDERS & OVERWRITE WITH SPECIFIC FACTS
+- DO NOT store vague, qualitative placeholders in structured facts.
+  * Current Tools: NEVER store 'classic tools', 'standard software', or 'usual stuff'. If the user says 'classic tools', keep value = null. When the user later specifies 'Excel and Sage', OVERWRITE the value to 'Excel, Sage'.
+  * Company Size: NEVER store 'medium', 'decent-sized', or 'growing'. Keep value = null until a specific number or exact range is provided (e.g., '120 employees'). Always update to the exact number once given.
+  * Primary Pain: NEVER store vague complaints like 'reporting is annoying'. Wait for or update to the concrete operational bottleneck (e.g., 'Manual consolidation of financial reports from several Excel files').
 
-RULE 2: PROGRESSIVE REFINEMENT OVER GENERIC LABELS
-- When the user clarifies a vague pain point with a concrete operational issue, update primary_pain to that precise operational root cause. Do NOT set conflict_flag=true for clarifications (only for explicit contradictions).
+RULE 2: NO UNNECESSARY CONFLICT FLAGS FOR REFINEMENTS
+- Clarifying vague info with exact facts (e.g., changing from null/'medium' to '120 employees' or from null to 'Excel, Sage') is a REFINEMENT, NOT a contradiction. Do NOT set conflict_flag=true for refinements.
 
 RULE 3: STRICT MARKET TRIGGER CLASSIFICATION
-- MARKET TRIGGER ("trigger"):
-  Must ONLY be populated if the user explicitly mentions EXTERNAL market dynamics outside their direct control. 
-  INTERNAL OPERATIONAL ISSUES are strictly internal symptoms and must NEVER be classified as a Market Trigger.
-  If no external market event is explicitly stated, set value = null or "Not specified yet".
+- MARKET TRIGGER ("trigger"): Must ONLY be populated if the user explicitly mentions EXTERNAL market dynamics outside their direct control. INTERNAL operational issues must NEVER be classified as a Market Trigger. If no external market event is mentioned, set value = null or "Not specified yet".
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -114,15 +111,15 @@ Your tone must be warm, highly empathetic, direct, and pragmatic.
 
 STRICT BOTTLENECK ALIGNMENT & ACCURACY RULE:
 - Focus ONLY on the primary_pain specified in the profile.
-- IF primary_pain mentions a specific operational breakdown (e.g., manual Excel consolidation for financial reports), your "Immediate High-Impact Action" MUST directly target that exact process using their stated tools (e.g., Sage, Excel).
-- Avoid fluffy, generic recommendations like "hold a morning triage meeting" when a concrete workflow bottleneck has been identified.
+- IF primary_pain mentions a specific operational breakdown (e.g., manual Excel consolidation for financial reports), your "Immediate High-Impact Action" MUST directly target that exact process using their exact stated tools (e.g., Sage, Excel).
+- Avoid generic, fluffy recommendations like "hold a morning triage meeting" when a concrete workflow bottleneck has been identified.
 
 FORMATTING:
 - Use clear headings, short paragraphs, and bold key phrases for quick scanning.
 
 Structure your report as follows:
-1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their exact team size, tools (e.g., Sage, Excel), and the primary operational breakdown.
-2. 🚀 **Immediate High-Impact Action**: Provide ONE pragmatic action step targeting the exact process friction using minimal technical overhead.
+1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their exact team size, precise tools (e.g., Sage, Excel), and the primary operational breakdown.
+2. 🚀 **Immediate High-Impact Action**: Provide ONE pragmatic action step targeting the exact process friction using minimal technical overhead (e.g., Power Query / automated consolidation between Sage and Excel).
 3. 🛡️ **Leadership Direction**: Provide calm strategic reassurance on how to streamline financial workflows while keeping team operations smooth.
 """
 
@@ -269,6 +266,10 @@ with col_profile:
         val = item.get("value")
         conflict = item.get("conflict_flag", False)
         
+        # Guard against generic terms rendered on screen
+        if val in ["classic tools", "medium", "decent-sized"]:
+            val = None
+
         if conflict:
             st.warning(f"**{label}:** {val} *(⚠️ Changed from: {item.get('old_value')})*")
         elif val and val != "Not specified yet":
@@ -289,9 +290,9 @@ with col_profile:
     st.divider()
 
     # Gatekeeper Validation Logic
-    has_size = bool(facts.get("company_size", {}).get("value"))
-    has_tools = bool(facts.get("tools", {}).get("value"))
-    has_pain = bool(interp.get("primary_pain", {}).get("value"))
+    has_size = bool(facts.get("company_size", {}).get("value")) and facts.get("company_size", {}).get("value") not in ["medium", "decent-sized"]
+    has_tools = bool(facts.get("tools", {}).get("value")) and facts.get("tools", {}).get("value") != "classic tools"
+    has_pain = bool(interp.get("primary_pain", {}).get("value")) and interp.get("primary_pain", {}).get("value") != "reporting is annoying"
     unlocked = has_size and has_tools and has_pain
 
     if unlocked:
