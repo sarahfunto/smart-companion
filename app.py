@@ -59,7 +59,7 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS (CIBLAGE STRICT CALL A & CALL B OVERWRITE)
+# 3. SYSTEM PROMPTS (CIBLAGE STRICT : CLARIFICATION RULE & UPDATE RULE)
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
@@ -67,51 +67,47 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to understand their situation. Always validate their pressure or emotion before asking a question.
 
-CRITICAL RULE: STRICT RE-PROMPT ON VAGUE OR UNQUANTIFIED INPUTS
-If the executive provides a response about company size, tech stack, or operational pain that is vague, qualitative, or approximate, YOU MUST NOT MOVE TO THE NEXT QUESTION.
-You MUST immediately ask a focused clarification question proposing 2 to 4 concrete choices.
+CLARIFICATION RULE (MANDATORY):
+If the user's answer for a required field (Company Size, Tools, or Pain Point) is vague, generic, approximate, or non-actionable, DO NOT treat the field as complete and DO NOT move on to the next topic.
+You MUST ask ONE short clarification question with 2 to 4 concrete choices/examples.
 
-TRIGGER EXAMPLES & MANDATORY RESPONSES:
-1. User says: 'decent-sized business' OR 'around a hundred people, maybe a bit more'
-   --> DO NOT validate and change topics!
-   --> ASK IMMEDIATELY: "To make sure I capture your company size accurately, would you say you're closer to 100, 120, or more than 150 employees?"
-
-2. User says: 'classic stuff everyone uses' OR 'usual software'
-   --> DO NOT validate and change topics!
-   --> ASK IMMEDIATELY: "When you say classic tools, do you mean mainly Excel, an ERP such as Sage or SAP, email, or manual paper processes?"
-
-3. User says: 'reporting is annoying' OR 'too many manual tasks'
-   --> ASK IMMEDIATELY: "To pinpoint this friction: is the primary bottleneck manual data consolidation across spreadsheets, delay in receiving reports, or lack of real-time visibility?"
+EXAMPLES OF INTERCEPTIONS REQUIRED:
+- User says: 'decent-sized business' OR 'around a hundred people, maybe a bit more'
+  --> ASK: "To make sure I capture your team size accurately, would you say you're closer to 100, 120, or more than 150 employees?"
+- User says: 'classic stuff everyone uses' OR 'usual software'
+  --> ASK: "Which ones specifically — for example Excel, an ERP such as Sage or SAP, email, or something else?"
+- User says: 'reporting is annoying' OR 'too many manual tasks'
+  --> ASK: "To narrow this down: is the primary issue manual data consolidation across spreadsheets, delay in getting data from managers, or lack of real-time visibility?"
 
 SPECIAL CASES:
-- IF THE PROFILE IS COMPLETE (Industry, Exact Size like 120, Specific Tools like Excel & Sage, and Precise Primary Pain are stored):
-  Warmly inform them: "Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
+- IF ALL KEY FIELDS ARE FULLY SPECIFIED (Industry, Exact Size like 120, Specific Tools like Excel & Sage, and Precise Primary Pain):
+  Inform them warmly: "Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
 """
 
 CALL_B_SYSTEM_PROMPT = """
-You are a strict data extraction engine updating the executive profile from the conversation.
+You are a strict JSON data extraction engine updating the structured executive profile from the conversation history.
 
-CRITICAL RULE: OVERWRITE VAGUE VALUES WITH SPECIFIC REFINEMENTS
-When analyzing the conversation, you must ALWAYS replace qualitative/vague terms with the user's latest specific confirmation.
+UPDATE RULE (CRITICAL):
+When a new user statement provides a more specific explicit value for an already populated field, ALWAYS REPLACE the previous vague or generic value. A more precise explicit user statement has ABSOLUTE PRIORITY over an earlier generic or inferred value.
 
-RULES FOR UPDATING FIELDS:
+SPECIFIC OVERWRITE INSTRUCTIONS:
 1. Company Size (`company_size.value`):
-   - NEVER keep 'medium' or 'decent-sized' if the user later states or confirms a specific number.
-   - Example: If previous state was 'medium' (or null) and user says "Yes, 120 is close enough", set `company_size.value` = "approximately 120 employees".
+   - Replace "medium" or generic statements with the exact confirmed figure.
+   - Example: User says "Yes, 120 is close enough" --> Set `company_size.value` = "approximately 120 employees".
 
 2. Current Tools (`tools.value`):
-   - NEVER keep 'classic tools' or 'usual software' if the user later names specific systems.
-   - Example: If previous state was 'classic tools' (or null) and user says "Mainly Excel and Sage", set `tools.value` = "Excel, Sage".
+   - Replace "classic tools" or generic phrases with explicit software names.
+   - Example: User says "Mainly Excel and Sage" --> Set `tools.value` = "Excel, Sage".
 
 3. Primary Pain Point (`primary_pain.value`):
-   - Replace generic complaints ('reporting is annoying') with the detailed operational issue as soon as stated.
+   - Replace general complaints ("reporting is annoying") with the explicit breakdown as soon as detailed.
    - Example: Set `primary_pain.value` = "Manual consolidation of financial reports from several Excel files".
 
 4. Conflict Flag (`conflict_flag`):
-   - Updating a vague/approximate value (e.g., 'medium' -> '120 employees') is a REFINEMENT, NOT a contradiction. Set `conflict_flag` = false.
+   - Refining a vague value (e.g., "medium" -> "120 employees") is a REFINEMENT, NOT a contradiction. Set `conflict_flag` = false.
 
 5. Market Trigger (`trigger.value`):
-   - Set ONLY if an external market event outside company control is explicitly mentioned. Keep null otherwise.
+   - Populate ONLY if an external market event outside company control is explicitly stated. Set to null otherwise.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -241,21 +237,23 @@ with col_chat:
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
 
-            # Call B Extraction & Profile Overwrite
+            # Call B Extraction & Overwrite Sync
             try:
                 conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
                 res_B = client.beta.chat.completions.parse(
                     model="gpt-4o",
                     messages=[
                         {"role": "system", "content": CALL_B_SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Previous Extracted Profile JSON:\n{json.dumps(st.session_state.profile)}\n\nFull Conversation History:\n{conv_text}"}
+                        {"role": "user", "content": f"Previous State Profile JSON:\n{json.dumps(st.session_state.profile)}\n\nFull Conversation History:\n{conv_text}"}
                     ],
                     response_format=ExecutiveProfile,
                     temperature=0.0
                 )
+                
+                # Update Session State with Parsed Output
                 st.session_state.profile = res_B.choices[0].message.parsed.model_dump()
                 
-                # Sync local + Webhook
+                # Local File + Webhook Backup
                 save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
                 st.rerun()
             except Exception as e:
