@@ -59,42 +59,45 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS (UPDATED FOR STRATEGIC FEAR DRILL-DOWN & AUDIT ACTION)
+# 3. SYSTEM PROMPTS (CIBLAGE STRICT : SYNCHRO GATEKEEPER & DIALOGUE)
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
 
 YOUR GOAL:
-Guide the executive step-by-step to understand their situation. Always validate their pressure or emotion before asking a question.
+Guide the executive step-by-step to gather operational facts and strategic insights.
 
-MANDATORY STRATEGIC FLOW:
-1. CLARIFICATION RULE FOR VAGUE OPERATIONAL FACTS:
-   If Industry, Size, or Tools are vague, ask a targeted multiple-choice question before moving on.
+STRICT GATEKEEPER SYNCHRONIZATION RULE:
+- Check the 'GATEKEEPER STATUS' provided at the bottom of this prompt.
+- IF GATEKEEPER STATUS IS 'LOCKED':
+  YOU MUST NEVER SAY "I have gathered all key insights needed" or ask them to click the report button.
+  You MUST ask the next focused question to unlock the gatekeeper.
 
-2. STRATEGIC CONSEQUENCE DRILL-DOWN (CRITICAL):
-   Once the operational pain is identified (e.g. "leads aren't matched with opportunities, ROI can't be calculated"), DO NOT STOP THE INTERVIEW.
-   You MUST ask a follow-up question to identify the EXECUTIVE FEAR / BUSINESS CONSEQUENCE.
-   
-   Example question pattern:
-   "What is the biggest risk or impact if you can't reliably measure campaign ROI? Does it mainly affect your ability to justify marketing spend to leadership, optimize budget allocation across channels, or scale acquisition confidently?"
+PRIORITY QUESTIONING SEQUENCE:
+1. Operational Facts Clarification:
+   If Industry, Size, or Tools are vague, ask a targeted clarification question.
+2. Executive Fear / Business Consequence (CRITICAL):
+   If Operational Pain is known but Executive Fear is missing, YOU MUST ASK A QUESTION ABOUT BUSINESS CONSEQUENCE.
+   Example:
+   "What is the business consequence when you can't reliably calculate campaign ROI? Does it mainly affect budget allocation, your ability to justify marketing spend to leadership, or strategic investment decisions?"
+3. Market Trigger (Optional Exploration):
+   If Fear is identified, you may ask if any recent external market trigger or event accelerated this issue.
 
-3. WHEN TO COMPLETE THE INTERVIEW:
-   Only declare completion when Industry, Exact Size, Specific Tools, Primary Pain, AND Executive Fear/Concern are ALL clearly understood.
-   Then inform them warmly: "Thank you for sharing these details! We now have the complete picture. You can click on the **Generate Human Diagnostic Report** button on the right panel."
+IF GATEKEEPER STATUS IS 'UNLOCKED':
+  Inform them warmly: "Thank you for sharing these details! I have gathered all key insights needed. You can now click on the **Generate Human Diagnostic Report** button on the right panel to view your customized strategic analysis."
 """
 
 CALL_B_SYSTEM_PROMPT = """
 You are a strict JSON data extraction engine updating the executive profile from the conversation history.
 
 CRITICAL EXTRACTION & OVERWRITE RULES:
-
 1. UPDATE RULE (PRIORITY OVERWRITE):
    - Replace vague/inferred initial statements with recent explicit user statements.
    - Example: Marketing team of 5 + overall company of 150 --> `company_size.value` = "150 employees (marketing team of 5)".
 
 2. FIELD CLASSIFICATION:
    - Primary Pain Point (`primary_pain.value`): The operational breakdown (e.g., "Leads from campaigns aren't consistently matched with opportunities in HubSpot, hindering ROI calculation").
-   - Executive Fear / Concern (`fear.value`): The strategic/business risk resulting from the pain (e.g., "Inability to justify marketing spend to leadership / risk of misallocating budget").
+   - Executive Fear / Concern (`fear.value`): The strategic business risk/consequence (e.g., "Inability to justify marketing spend to leadership / risk of budget misallocation"). Populate ONLY if explicit consequences are discussed.
    - Market Trigger (`trigger.value`): External market forces outside company control (set to null if not stated).
 
 3. CONFLICT FLAGS:
@@ -152,6 +155,17 @@ def load_user_data(email: str):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     return None
+
+def check_gatekeeper_unlocked(profile: dict) -> bool:
+    facts = profile.get("facts", {})
+    interp = profile.get("interpretation", {})
+    
+    has_size = bool(facts.get("company_size", {}).get("value"))
+    has_tools = bool(facts.get("tools", {}).get("value"))
+    has_pain = bool(interp.get("primary_pain", {}).get("value"))
+    has_fear = bool(interp.get("fear", {}).get("value"))
+    
+    return has_size and has_tools and has_pain and has_fear
 
 # -----------------------------------------------------------------------------
 # 5. HEADER & USER IDENTIFICATION
@@ -212,22 +226,7 @@ with col_chat:
             with st.chat_message("user"):
                 st.markdown(user_input)
 
-            # Call A Execution
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    current_profile_str = json.dumps(st.session_state.profile)
-                    system_with_context = f"{CALL_A_SYSTEM_PROMPT}\n\nCurrent Live Profile State:\n{current_profile_str}"
-                    
-                    res_A = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[{"role": "system", "content": system_with_context}, *st.session_state.messages],
-                        temperature=0.7
-                    )
-                    reply = res_A.choices[0].message.content
-                    st.markdown(reply)
-                    st.session_state.messages.append({"role": "assistant", "content": reply})
-
-            # Call B Extraction & Profile Overwrite
+            # 1. First run Call B to extract current state from user statement
             try:
                 conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
                 res_B = client.beta.chat.completions.parse(
@@ -239,15 +238,36 @@ with col_chat:
                     response_format=ExecutiveProfile,
                     temperature=0.0
                 )
-                
-                # Update Session State with Parsed Output
                 st.session_state.profile = res_B.choices[0].message.parsed.model_dump()
-                
-                # Local File + Webhook Backup
-                save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
-                st.rerun()
             except Exception as e:
                 st.error(f"Extraction error: {e}")
+
+            # 2. Check strict Gatekeeper Status
+            gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
+            gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
+
+            # 3. Call A Execution with injected Gatekeeper status
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    current_profile_str = json.dumps(st.session_state.profile)
+                    system_with_context = (
+                        f"{CALL_A_SYSTEM_PROMPT}\n\n"
+                        f"Current Live Profile State:\n{current_profile_str}\n\n"
+                        f"GATEKEEPER STATUS: {gatekeeper_status_str}"
+                    )
+                    
+                    res_A = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "system", "content": system_with_context}, *st.session_state.messages],
+                        temperature=0.7
+                    )
+                    reply = res_A.choices[0].message.content
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+
+            # Save local + Webhook & Rerun UI
+            save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
+            st.rerun()
 
 # --- RIGHT COLUMN: VISUAL DASHBOARD ---
 with col_profile:
@@ -280,14 +300,8 @@ with col_profile:
 
     st.divider()
 
-    # Gatekeeper Validation Logic (STRICT CHECK FOR EXECUTIVE FEAR)
-    has_size = bool(facts.get("company_size", {}).get("value"))
-    has_tools = bool(facts.get("tools", {}).get("value"))
-    has_pain = bool(interp.get("primary_pain", {}).get("value"))
-    has_fear = bool(interp.get("fear", {}).get("value"))
-    
-    # Gatekeeper requires Operational Facts + Pain + Business Consequence (Fear)
-    unlocked = has_size and has_tools and has_pain and has_fear
+    # Evaluated via helper function
+    unlocked = check_gatekeeper_unlocked(p)
 
     if unlocked:
         st.success("🟢 Diagnostic Gatekeeper: READY")
