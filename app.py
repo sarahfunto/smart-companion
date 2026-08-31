@@ -59,7 +59,7 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS (STRUCTURED CONVERSATIONAL LOOP)
+# 3. SYSTEM PROMPTS
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
@@ -67,7 +67,7 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to gather operational facts and strategic insights.
 
-STATE-BASED CONVERSATIONAL LOGIC (STRICT):
+STATE-BASED CONVERSATIONAL LOGIC:
 
 [CASE 1: GATEKEEPER STATUS IS 'LOCKED']
 You MUST continue the interview by asking ONE single targeted question based on what is missing in the Live Profile:
@@ -86,35 +86,38 @@ Inform them warmly:
 CALL_B_SYSTEM_PROMPT = """
 You are a strict JSON data extraction engine updating the executive profile from the conversation history.
 
-CRITICAL EXTRACTION & OVERWRITE RULES:
-1. UPDATE RULE (PRIORITY OVERWRITE):
-   - Replace vague/inferred initial statements with recent explicit user statements.
-   - Example: Marketing team of 5 + overall company of 150 --> `company_size.value` = "150 employees (marketing team of 5)".
+CRITICAL CONFLICT & OVERWRITE RULES:
 
-2. FIELD CLASSIFICATION:
-   - Primary Pain Point (`primary_pain.value`): The operational breakdown (e.g., "Leads from campaigns aren't consistently matched with opportunities in HubSpot, hindering ROI calculation").
-   - Executive Fear / Concern (`fear.value`): The strategic business risk/consequence (e.g., "Inability to demonstrate marketing contribution to revenue / risk of budget misallocation"). Populate ONLY if explicit business impacts or risks are mentioned by the user.
+1. CONFLICT DETECTION (`conflict_flag` & `old_value`):
+   - IF the user explicitly contradicts or changes a previously stated priority or fact (e.g., initially states main pain is "High turnover", then says "Actually no, the real problem is my margins"):
+     * Set `conflict_flag` = true
+     * Set `old_value` = "[previous value]" (e.g., "High employee turnover")
+     * Set `value` = "[new value]" (e.g., "Insufficient profit margins")
+   
+2. REFINEMENT VS CONFLICT:
+   - Clarifying details (e.g., "team of 5" -> "company overall is 150") or adding specific software names to vague tools is a REFINEMENT, NOT a conflict. Set `conflict_flag` = false for refinements.
+
+3. FIELD CLASSIFICATION:
+   - Primary Pain Point (`primary_pain.value`): Main operational challenge.
+   - Executive Fear / Concern (`fear.value`): Strategic risk/consequence (e.g., "Risk of insolvency", "Inability to justify spend"). Populate ONLY if explicit consequences are discussed.
    - Market Trigger (`trigger.value`): External market forces outside company control (set to null if not stated).
-
-3. CONFLICT FLAGS:
-   - Scope clarifications (e.g. 5 team members -> 150 overall company) are refinements. Set `conflict_flag` = false.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
 You are a trusted executive strategist writing directly to a CEO/Executive. 
 Your tone must be warm, highly empathetic, direct, and pragmatic.
 
-STRICT PRAGMATIC ACTION RULE (NO PREMATURE AUTOMATION):
-- DO NOT recommend immediate workflow automation unless the root cause of the data breakdown has already been diagnosed.
-- If data is lost between systems (e.g., Campaigns -> Google Analytics -> HubSpot Opportunities), your "Immediate High-Impact Action" MUST be an **AUDIT & ROOT-CAUSE ANALYSIS** of the data pipeline first (e.g., audit tracking parameters, deal creation workflows, and attribution rules) before automating.
+STRICT PRAGMATIC ACTION RULE:
+- DO NOT recommend immediate software or workflow automation unless the root cause of the breakdown has already been diagnosed.
+- If a data breakdown or conflict is present, your "Immediate High-Impact Action" MUST be an **AUDIT & ROOT-CAUSE ANALYSIS** first.
 
 FORMATTING:
 - Use clear headings, short paragraphs, and bold key phrases for quick scanning.
 
 Structure your report as follows:
-1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their company size, tech stack, operational pain, and the strategic business risk (fear).
-2. 🚀 **Immediate High-Impact Action**: Recommend a pragmatic, low-overhead FIRST STEP (Audit & trace the exact point where data matching breaks across GA/HubSpot before attempting automation).
-3. 🛡️ **Leadership Direction**: Reassure the executive on how to regain control over ROI metrics and align marketing spend with executive expectations.
+1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their company size, tech stack, operational pain (and any shift in priorities), and strategic risk.
+2. 🚀 **Immediate High-Impact Action**: Recommend a pragmatic, low-overhead FIRST STEP.
+3. 🛡️ **Leadership Direction**: Reassure the executive on how to realign focus and navigate strategic priorities.
 """
 
 # -----------------------------------------------------------------------------
@@ -242,7 +245,7 @@ with col_chat:
             gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
             gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
 
-            # 3. Call A Generation with strict instruction based on Gatekeeper Status
+            # 3. Call A Generation
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     current_profile_str = json.dumps(st.session_state.profile)
@@ -271,7 +274,7 @@ with col_chat:
                     )
                     reply = res_A.choices[0].message.content
 
-                    # Hard Guard Fallback in Python (Safety net against model hallucinations)
+                    # Hard Guard Fallback
                     if not gatekeeper_is_unlocked and ("gathered all key insights" in reply.lower() or "generate human diagnostic report" in reply.lower()):
                         interp = st.session_state.profile.get("interpretation", {})
                         has_fear = bool(interp.get("fear", {}).get("value"))
@@ -279,8 +282,8 @@ with col_chat:
                         if not has_fear:
                             reply = (
                                 "Thank you for detailing that challenge. "
-                                "When you can't reliably calculate campaign ROI, what worries you most from a business perspective: "
-                                "wasting marketing budget, making the wrong investment decisions, or being unable to demonstrate marketing's contribution to revenue?"
+                                "When facing this primary obstacle, what worries you most from a business perspective: "
+                                "budget constraints, investment risks, or demonstrating ROI to key stakeholders?"
                             )
                         else:
                             reply = (
@@ -306,9 +309,11 @@ with col_profile:
     def render_card(label, item):
         val = item.get("value")
         conflict = item.get("conflict_flag", False)
+        old_val = item.get("old_value")
 
+        # AFFICHAGE DE CONFLIT / CONTRADICTION (WARNING BADGE)
         if conflict:
-            st.warning(f"**{label}:** {val} *(⚠️ Changed from: {item.get('old_value')})*")
+            st.warning(f"**{label}:** {val}\n\n⚠️ *Contradiction detected — Previously stated:* `{old_val}`")
         elif val and val != "Not specified yet":
             st.success(f"**{label}:** {val}")
         else:
@@ -326,7 +331,7 @@ with col_profile:
 
     st.divider()
 
-    # Evaluated via helper function
+    # Gatekeeper status check
     unlocked = check_gatekeeper_unlocked(p)
 
     if unlocked:
@@ -346,3 +351,7 @@ with col_profile:
             )
             st.markdown("---")
             st.markdown(diag_res.choices[0].message.content)
+
+    # BLOCK DEBUG JSON (POUR VÉRIFICATION QA RAPIDE)
+    with st.expander("🛠️ Raw JSON State (Debug Mode)"):
+        st.json(p)
