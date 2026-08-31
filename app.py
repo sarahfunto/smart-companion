@@ -34,7 +34,7 @@ client = OpenAI(api_key=api_key)
 WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", None)
 
 # -----------------------------------------------------------------------------
-# 2. PYDANTIC SCHEMAS
+# 2. PYDANTIC SCHEMAS (UPDATED WITH OPTION B)
 # -----------------------------------------------------------------------------
 class ProfileAttribute(BaseModel):
     value: Optional[str] = Field(default=None)
@@ -46,6 +46,7 @@ class ProfileAttribute(BaseModel):
 
 class FactsGroup(BaseModel):
     industry: ProfileAttribute = Field(default_factory=ProfileAttribute)
+    direct_team_size: ProfileAttribute = Field(default_factory=ProfileAttribute)  # <-- ADDED FOR SCENARIO 4
     company_size: ProfileAttribute = Field(default_factory=ProfileAttribute)
     tools: ProfileAttribute = Field(default_factory=ProfileAttribute)
 
@@ -70,7 +71,7 @@ Guide the executive step-by-step to gather operational facts and strategic insig
 PRIORITY MATRIX & STEP-BY-STEP FLOW:
 
 1. STEP 1 - MISSING FACTS (HIGHEST PRIORITY):
-   - `company_size`: If missing/null, ask with numerical brackets (e.g., under 10, 10 to 30, 50+).
+   - `company_size` & `direct_team_size`: Clarify overall company size vs immediate direct team scope.
    - `tools`: If vague (e.g., "standard tools"), ask for specific daily software/apps (e.g., Excel, WhatsApp, CRM).
    - `industry`: If missing/null, ask smoothly about their business domain/industry.
 
@@ -84,19 +85,19 @@ PRIORITY MATRIX & STEP-BY-STEP FLOW:
 CALL_B_SYSTEM_PROMPT = """
 You are a strict JSON data extraction engine updating the executive profile from full conversation history.
 
-EXTRACTION & CONFLICT RULES:
+SCOPE HANDLING & DUAL GRANULARITY RULES (SCENARIO 4 FIX):
+1. SEPARATE DIRECT TEAM VS COMPANY SIZE:
+   - If the user distinguishes their immediate direct team size (e.g., "my direct team is 5") from the overall organization (e.g., "the whole company is around 150"), extract BOTH:
+     * `direct_team_size.value` = "5 people (marketing team)"
+     * `company_size.value` = "150 people (overall organization)"
+   - Do NOT overwrite one with the other.
 
-1. CLARIFICATION vs CONFLICT (CRITICAL RULE):
-   - Refinement of a vague answer (e.g., moving from "standard tools" to "Excel and WhatsApp", or "small team" to "around 10") IS NOT A CONFLICT. 
-   - Set `conflict_flag` = false and `old_value` = null when a user clarifies or specifies a previously vague detail.
-   - Trigger `conflict_flag` = true ONLY if the user directly CONTRADICTS a clear, specific numerical or factual statement they previously made (e.g., saying "we have 5 people" then later "we have 50 people").
-
-2. FULL HISTORY PRESERVATION:
-   - Read the FULL conversation context. Never reset or overwrite existing valid extractions (like `primary_pain` or `industry`) unless the user explicitly contradicts them.
+2. CLARIFICATION vs CONFLICT:
+   - Refinement of a vague answer IS NOT A CONFLICT. Set `conflict_flag` = false and `old_value` = null when a user clarifies details.
+   - Trigger `conflict_flag` = true ONLY if the user directly CONTRADICTS a clear, specific numerical or factual statement previously made.
 
 3. VAGUE VALUES INTERDICTION FOR FACTS:
-   - DO NOT extract qualitative or evasive statements for `company_size` ("decent size") or `tools` ("standard tools").
-   - Set value = null and confidence = 0.0 until specific names or numbers are provided.
+   - DO NOT extract qualitative or evasive statements for `company_size` ("decent size") or `tools` ("standard tools"). Set value = null and confidence = 0.0 until specific facts are provided.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -111,7 +112,7 @@ FORMATTING:
 - Use clear headings, short paragraphs, and bold key phrases for quick scanning.
 
 Structure your report as follows:
-1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their company size, tech stack, operational pain, and strategic risk.
+1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their direct team size, overall company size, tech stack, operational pain, and strategic risk.
 2. 🚀 **Immediate High-Impact Action**: Recommend a pragmatic, low-overhead FIRST STEP.
 3. 🛡️ **Leadership Direction**: Reassure the executive on how to realign focus and navigate strategic priorities.
 """
@@ -200,7 +201,7 @@ def check_gatekeeper_unlocked(profile: dict) -> bool:
     facts = profile.get("facts", {})
     interp = profile.get("interpretation", {})
     
-    has_size = bool(facts.get("company_size", {}).get("value"))
+    has_size = bool(facts.get("company_size", {}).get("value")) or bool(facts.get("direct_team_size", {}).get("value"))
     has_tools = bool(facts.get("tools", {}).get("value"))
     has_pain = bool(interp.get("primary_pain", {}).get("value"))
     has_fear = bool(interp.get("fear", {}).get("value"))
@@ -337,7 +338,8 @@ with col_profile:
 
     st.markdown("### 🏢 Operational Facts")
     render_card("Industry", facts.get("industry", {}))
-    render_card("Company Size", facts.get("company_size", {}))
+    render_card("Direct Team Size", facts.get("direct_team_size", {}))  # <-- RENDER DIRECT TEAM SIZE
+    render_card("Company Size (Overall)", facts.get("company_size", {}))
     render_card("Current Tools", facts.get("tools", {}))
 
     st.markdown("### 🎯 Strategic Insights")
@@ -371,3 +373,4 @@ with col_profile:
     # BLOCK DEBUG JSON
     with st.expander("🛠️ Raw JSON State (Debug Mode)"):
         st.json(p)
+        
