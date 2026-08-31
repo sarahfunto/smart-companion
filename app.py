@@ -67,37 +67,36 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to gather operational facts and strategic insights.
 
-BALANCED CONVERSATIONAL RULES:
-1. ALWAYS ACKNOWLEDGE PREVIOUSLY EXPRESSED PAIN:
-   - If the user mentioned a specific problem (e.g., kitchen staff attendance, supplier delays), acknowledge it warmly first in ONE sentence before asking your follow-up.
-   - Example: "I completely hear you on the kitchen staff attendance issues — that constant reshuffling must be exhausting."
+PRIORITY MATRIX & STEP-BY-STEP FLOW:
 
-2. RE-PROMPT FOR MISSING FACTS WITH BRACKETS:
-   - If `company_size` is missing or null in the live profile, seamlessly combine your empathy with a targeted bracket question.
-   - Example: "...To help me gauge the operational scope of this scheduling issue, roughly how many total staff are we talking about across both locations: under 10, between 10 and 30, or over 50?"
+1. STEP 1 - MISSING FACTS (HIGHEST PRIORITY):
+   - `company_size`: If missing/null, ask with numerical brackets (e.g., under 10, 10 to 30, 50+).
+   - `tools`: If vague (e.g., "standard tools"), ask for specific daily software/apps (e.g., Excel, WhatsApp, CRM).
+   - `industry`: If missing/null, ask smoothly about their business domain/industry.
 
-3. EXPLORE BUSINESS FEAR / IMPACT:
-   - Once team size and main pain point are captured, ask about the underlying strategic fear (e.g. risk of burnout, financial loss, service degradation).
+2. STEP 2 - STRATEGIC PAIN & FEARS:
+   - Once basic facts are captured, ask about operational bottlenecks (`primary_pain`) and strategic impacts (`fear`/business risk).
+
+3. EMPATHY & CLARITY RULE:
+   - Acknowledge their previous response in ONE empathetic sentence before introducing your targeted question.
 """
 
 CALL_B_SYSTEM_PROMPT = """
 You are a strict JSON data extraction engine updating the executive profile from full conversation history.
 
-FULL-HISTORY EXTRACTION RULES:
+EXTRACTION & CONFLICT RULES:
 
-1. DO NOT DROP PREVIOUSLY STATED PAIN POINTS:
-   - Read the FULL conversation context. If the user stated "The problem is my kitchen staff, it's open bar on attendance", you MUST extract `primary_pain.value` = "Kitchen staff attendance and scheduling issues" with HIGH confidence (>=0.8), even if recent assistant questions focused on team size.
+1. CLARIFICATION vs CONFLICT (CRITICAL RULE):
+   - Refinement of a vague answer (e.g., moving from "standard tools" to "Excel and WhatsApp", or "small team" to "around 10") IS NOT A CONFLICT. 
+   - Set `conflict_flag` = false and `old_value` = null when a user clarifies or specifies a previously vague detail.
+   - Trigger `conflict_flag` = true ONLY if the user directly CONTRADICTS a clear, specific numerical or factual statement they previously made (e.g., saying "we have 5 people" then later "we have 50 people").
 
-2. VAGUE VALUES INTERDICTION FOR FACTS:
-   - DO NOT extract qualitative statements for `company_size` (e.g., "quite a lot of people", "many", "several").
-   - Set `company_size.value` = null and `confidence` = 0.0 unless explicit numbers or numerical brackets are provided.
+2. FULL HISTORY PRESERVATION:
+   - Read the FULL conversation context. Never reset or overwrite existing valid extractions (like `primary_pain` or `industry`) unless the user explicitly contradicts them.
 
-3. QUALITY OF EXECUTIVE FEAR CAPTURE:
-   - DO NOT extract third-party quotes or anecdotes (e.g. "my parents said the restaurant industry is too hard") as executive fear.
-   - Extract the active, personal business strain/concern felt by the prospect (e.g., "Personal & family strain due to operational overload", "Executive burnout risk").
-
-4. STRICT USER CONFLICT DETECTION:
-   - Only trigger `conflict_flag` = true if the USER explicitly contradicts a statement THEY previously made. Ignore AI assistant paraphrases.
+3. VAGUE VALUES INTERDICTION FOR FACTS:
+   - DO NOT extract qualitative or evasive statements for `company_size` ("decent size") or `tools` ("standard tools").
+   - Set value = null and confidence = 0.0 until specific names or numbers are provided.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -126,20 +125,28 @@ def sanitize_email(email: str) -> str:
 def enforce_conflict_flags(profile_dict: dict) -> dict:
     """
     DETERMINISTIC POST-PROCESSING:
-    1. Filter out vague values for company_size.
-    2. Enforce logic consistency.
+    1. Filter out vague values for facts.
+    2. Prevent false conflicts on vague-to-specific refinements.
     """
     facts = profile_dict.get("facts", {})
+    
+    # Check company size vagueness
     comp_size = facts.get("company_size", {})
     val_size = str(comp_size.get("value", "")).lower()
-    
-    # Reject vague company size expressions
-    vague_phrases = ["quite a lot", "a lot", "many people", "a bunch", "several", "quite a lot of people"]
-    if any(phrase in val_size for phrase in vague_phrases):
+    vague_size_phrases = ["decent size", "quite a lot", "a lot", "many people", "a bunch", "several"]
+    if any(phrase in val_size for phrase in vague_size_phrases):
         comp_size["value"] = None
         comp_size["confidence"] = 0.0
 
-    # Strict conflict check across groups
+    # Check tools vagueness
+    tools_item = facts.get("tools", {})
+    val_tools = str(tools_item.get("value", "")).lower()
+    vague_tools_phrases = ["standard tools", "nothing special", "usual stuff", "basic tools"]
+    if any(phrase in val_tools for phrase in vague_tools_phrases):
+        tools_item["value"] = None
+        tools_item["confidence"] = 0.0
+
+    # Strict conflict verification (Ignore vagueness transitions)
     for group_key in ["facts", "interpretation"]:
         group = profile_dict.get(group_key, {})
         for attr_key, attr in group.items():
@@ -147,10 +154,16 @@ def enforce_conflict_flags(profile_dict: dict) -> dict:
                 val = attr.get("value")
                 old_val = attr.get("old_value")
                 
-                if old_val and isinstance(old_val, str) and old_val.strip() and old_val != val:
-                    attr["conflict_flag"] = True
-                else:
-                    attr["conflict_flag"] = False
+                # Ignore conflict if old_val was just a vague filler
+                if old_val and isinstance(old_val, str):
+                    old_clean = old_val.lower().strip()
+                    if any(v in old_clean for v in vague_tools_phrases + vague_size_phrases):
+                        attr["conflict_flag"] = False
+                        attr["old_value"] = None
+                    elif old_val != val and val is not None:
+                        attr["conflict_flag"] = True
+                    else:
+                        attr["conflict_flag"] = False
                     
     return profile_dict
 
@@ -294,14 +307,6 @@ with col_chat:
                         temperature=0.7
                     )
                     reply = res_A.choices[0].message.content
-
-                    # SOFT GUARD FALLBACK FOR COMPANY SIZE BRACKETS
-                    facts = st.session_state.profile.get("facts", {})
-                    has_size = bool(facts.get("company_size", {}).get("value"))
-                    
-                    if not has_size and not any(char.isdigit() for char in reply):
-                        # Append brackets gracefully without wiping out Call A's empathetic response
-                        reply += "\n\n*(Just to give us a clear baseline: are we talking under 10 total team members, between 10 and 30, or 50+ across both locations?)*"
 
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
