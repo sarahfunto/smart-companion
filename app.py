@@ -88,14 +88,15 @@ You are a strict JSON data extraction engine updating the executive profile from
 
 CRITICAL CONFLICT & OVERWRITE RULES:
 
-1. CONFLICT DETECTION (`conflict_flag` & `old_value`):
+1. CONFLICT DETECTION & MEMORY (`conflict_flag` & `old_value`):
    - IF the user explicitly contradicts or changes a previously stated priority or fact (e.g., initially states main pain is "High turnover", then says "Actually no, the real problem is my margins"):
-     * Set `conflict_flag` = true
      * Set `old_value` = "[previous value]" (e.g., "High employee turnover")
      * Set `value` = "[new value]" (e.g., "Insufficient profit margins")
-   
+     * Set `conflict_flag` = true
+   - ABSOLUTE RULE: Whenever you populate `old_value` with a non-null, differing string from `value`, you MUST set `conflict_flag` to true. These two fields must always be consistent.
+
 2. REFINEMENT VS CONFLICT:
-   - Clarifying details (e.g., "team of 5" -> "company overall is 150") or adding specific software names to vague tools is a REFINEMENT, NOT a conflict. Set `conflict_flag` = false for refinements.
+   - Clarifying details (e.g., "team of 5" -> "company overall is 150") or adding specific software names to vague tools is a REFINEMENT, NOT a conflict. Set `conflict_flag` = false for refinements and leave `old_value` as null.
 
 3. FIELD CLASSIFICATION:
    - Primary Pain Point (`primary_pain.value`): Main operational challenge.
@@ -121,10 +122,26 @@ Structure your report as follows:
 """
 
 # -----------------------------------------------------------------------------
-# 4. HELPERS: LOCAL & WEBHOOK STORAGE
+# 4. HELPERS: POST-PROCESSING, LOCAL & WEBHOOK STORAGE
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
+
+def enforce_conflict_flags(profile_dict: dict) -> dict:
+    """
+    DETERMINISTIC POST-PROCESSING RULE:
+    If old_value is present, non-empty, and differs from value, force conflict_flag to True.
+    """
+    for group_key in ["facts", "interpretation"]:
+        group = profile_dict.get(group_key, {})
+        for attr_key, attr in group.items():
+            if isinstance(attr, dict):
+                val = attr.get("value")
+                old_val = attr.get("old_value")
+                
+                if old_val and isinstance(old_val, str) and old_val.strip() and old_val != val:
+                    attr["conflict_flag"] = True
+    return profile_dict
 
 def save_and_sync_data(email: str, profile_data: dict, messages: list):
     if not email:
@@ -180,7 +197,7 @@ if user_email and user_email != st.session_state.current_user:
     existing_data = load_user_data(user_email)
     
     if existing_data:
-        st.session_state.profile = existing_data.get("profile", ExecutiveProfile().model_dump())
+        st.session_state.profile = enforce_conflict_flags(existing_data.get("profile", ExecutiveProfile().model_dump()))
         st.session_state.messages = existing_data.get("chat_history", [])
         st.success(f"Welcome back! Loaded saved profile for {user_email}")
     else:
@@ -237,7 +254,11 @@ with col_chat:
                     response_format=ExecutiveProfile,
                     temperature=0.0
                 )
-                st.session_state.profile = res_B.choices[0].message.parsed.model_dump()
+                raw_profile_dict = res_B.choices[0].message.parsed.model_dump()
+                
+                # ENFORCE DETERMINISTIC CONFLICT FLAG IN PYTHON
+                st.session_state.profile = enforce_conflict_flags(raw_profile_dict)
+
             except Exception as e:
                 st.error(f"Extraction error: {e}")
 
@@ -311,7 +332,6 @@ with col_profile:
         conflict = item.get("conflict_flag", False)
         old_val = item.get("old_value")
 
-        # AFFICHAGE DE CONFLIT / CONTRADICTION (WARNING BADGE)
         if conflict:
             st.warning(f"**{label}:** {val}\n\n⚠️ *Contradiction detected — Previously stated:* `{old_val}`")
         elif val and val != "Not specified yet":
