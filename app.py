@@ -67,42 +67,37 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to gather operational facts and strategic insights.
 
-STRICT STEP-BY-STEP QUESTIONING ORDER (PRIORITY MATRIX):
+BALANCED CONVERSATIONAL RULES:
+1. ALWAYS ACKNOWLEDGE PREVIOUSLY EXPRESSED PAIN:
+   - If the user mentioned a specific problem (e.g., kitchen staff attendance, supplier delays), acknowledge it warmly first in ONE sentence before asking your follow-up.
+   - Example: "I completely hear you on the kitchen staff attendance issues — that constant reshuffling must be exhausting."
 
-1. STEP 1 - MISSING OPERATIONAL FACTS (HIGHEST PRIORITY):
-   - IF `company_size` is missing or null in the profile, YOU MUST ASK FOR TEAM SIZE USING CONCRETE BRACKETS.
-     Example: "To help me picture the operational scale across your restaurants, roughly how many team members do you manage in total: under 10, between 10 and 30, or 50+?"
-   - DO NOT move to strategic impact/fear or long-term risks if company_size is still missing/null.
+2. RE-PROMPT FOR MISSING FACTS WITH BRACKETS:
+   - If `company_size` is missing or null in the live profile, seamlessly combine your empathy with a targeted bracket question.
+   - Example: "...To help me gauge the operational scope of this scheduling issue, roughly how many total staff are we talking about across both locations: under 10, between 10 and 30, or over 50?"
 
-2. STEP 2 - MISSING STRATEGIC FEAR / BUSINESS IMPACT:
-   - ONLY IF facts (industry, company_size, tools) AND primary_pain are filled, ask about the business risk/fear.
-     Example: "When facing these scheduling breakdowns, what concerns you most: financial losses, risk of manager burnout, or customer dissatisfaction?"
-
-3. STEP 3 - GATEKEEPER UNLOCKED:
-   - Inform them warmly to click the "Generate Human Diagnostic Report" button.
+3. EXPLORE BUSINESS FEAR / IMPACT:
+   - Once team size and main pain point are captured, ask about the underlying strategic fear (e.g. risk of burnout, financial loss, service degradation).
 """
 
 CALL_B_SYSTEM_PROMPT = """
-You are a strict JSON data extraction engine updating the executive profile from conversation history.
+You are a strict JSON data extraction engine updating the executive profile from full conversation history.
 
-STRICT EXTRACTION & CONFLICT RULES:
+FULL-HISTORY EXTRACTION RULES:
 
-1. VAGUE VALUES INTERDICTION FOR FACTS:
-   - DO NOT extract qualitative or vague statements for `company_size` (e.g., "quite a lot of people", "many", "several").
-   - If the user answer lacks numerical ranges or numbers, set `company_size.value` = null and `confidence` = 0.0.
+1. DO NOT DROP PREVIOUSLY STATED PAIN POINTS:
+   - Read the FULL conversation context. If the user stated "The problem is my kitchen staff, it's open bar on attendance", you MUST extract `primary_pain.value` = "Kitchen staff attendance and scheduling issues" with HIGH confidence (>=0.8), even if recent assistant questions focused on team size.
 
-2. CONFLICT EXTRACTION (STRICT USER-ONLY ORIGIN):
-   - Look ONLY at messages sent by 'user:'. COMPLETELY IGNORE paraphrases or words used by 'assistant:'.
-   - Trigger `conflict_flag` = true ONLY if the USER explicitly contradicts a statement THEY previously made.
-   - If a valid user contradiction occurs:
-     * `old_value` = "[previous user statement]"
-     * `value` = "[new user statement]"
-     * `conflict_flag` = true
-   - Normal progression or refinement is NOT a conflict (`conflict_flag` = false, `old_value` = null).
+2. VAGUE VALUES INTERDICTION FOR FACTS:
+   - DO NOT extract qualitative statements for `company_size` (e.g., "quite a lot of people", "many", "several").
+   - Set `company_size.value` = null and `confidence` = 0.0 unless explicit numbers or numerical brackets are provided.
 
-3. EMOTIONAL NOISE SEPARATION:
-   - Filter out personal/marital/parental complaints from facts.
-   - Store business risk in `fear.value` only if explicitly mentioned.
+3. QUALITY OF EXECUTIVE FEAR CAPTURE:
+   - DO NOT extract third-party quotes or anecdotes (e.g. "my parents said the restaurant industry is too hard") as executive fear.
+   - Extract the active, personal business strain/concern felt by the prospect (e.g., "Personal & family strain due to operational overload", "Executive burnout risk").
+
+4. STRICT USER CONFLICT DETECTION:
+   - Only trigger `conflict_flag` = true if the USER explicitly contradicts a statement THEY previously made. Ignore AI assistant paraphrases.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -132,7 +127,7 @@ def enforce_conflict_flags(profile_dict: dict) -> dict:
     """
     DETERMINISTIC POST-PROCESSING:
     1. Filter out vague values for company_size.
-    2. Force conflict_flag = True if old_value != value and old_value is not empty.
+    2. Enforce logic consistency.
     """
     facts = profile_dict.get("facts", {})
     comp_size = facts.get("company_size", {})
@@ -300,19 +295,13 @@ with col_chat:
                     )
                     reply = res_A.choices[0].message.content
 
-                    # HARD GUARD FALLBACK (PYTHON DETERMINISTIC OVERRIDE)
+                    # SOFT GUARD FALLBACK FOR COMPANY SIZE BRACKETS
                     facts = st.session_state.profile.get("facts", {})
                     has_size = bool(facts.get("company_size", {}).get("value"))
                     
-                    # If company size is missing, FORCE Call A to ask for numerical brackets
-                    if not has_size:
-                        # Check if the LLM response forgot to ask for brackets
-                        if not any(char.isdigit() for char in reply) and "how many" not in reply.lower():
-                            reply = (
-                                "I completely understand that team size fluctuates with extras and seasonal staff. "
-                                "To help me get a clear operational picture across both restaurants, roughly how many people "
-                                "are we talking about in total: **under 10 staff, between 10 and 30, or more than 50**?"
-                            )
+                    if not has_size and not any(char.isdigit() for char in reply):
+                        # Append brackets gracefully without wiping out Call A's empathetic response
+                        reply += "\n\n*(Just to give us a clear baseline: are we talking under 10 total team members, between 10 and 30, or 50+ across both locations?)*"
 
                     st.markdown(reply)
                     st.session_state.messages.append({"role": "assistant", "content": reply})
