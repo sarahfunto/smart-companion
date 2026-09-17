@@ -1,8 +1,8 @@
-import streamlit as st
 import json
 import os
 import re
 import requests  # (Webhook Make / Zapier)
+import streamlit as st
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -16,8 +16,8 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🎙️ Smart Companion")
-st.caption("AI-Powered Executive Profiling & Strategic Diagnostic Assistant")
+st.title("🎙️ Smart Companion - Voice & Executive Diagnostic")
+st.caption("AI-Powered Executive Profiling with Voice Assistant")
 
 DATA_DIR = "saved_profiles"
 if not os.path.exists(DATA_DIR):
@@ -34,7 +34,7 @@ client = OpenAI(api_key=api_key)
 WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", None)
 
 # -----------------------------------------------------------------------------
-# 2. PYDANTIC SCHEMAS (UPDATED WITH OPTION B)
+# 2. PYDANTIC SCHEMAS
 # -----------------------------------------------------------------------------
 class ProfileAttribute(BaseModel):
     value: Optional[str] = Field(default=None)
@@ -46,7 +46,7 @@ class ProfileAttribute(BaseModel):
 
 class FactsGroup(BaseModel):
     industry: ProfileAttribute = Field(default_factory=ProfileAttribute)
-    direct_team_size: ProfileAttribute = Field(default_factory=ProfileAttribute)  # <-- ADDED FOR SCENARIO 4
+    direct_team_size: ProfileAttribute = Field(default_factory=ProfileAttribute)
     company_size: ProfileAttribute = Field(default_factory=ProfileAttribute)
     tools: ProfileAttribute = Field(default_factory=ProfileAttribute)
 
@@ -85,19 +85,20 @@ PRIORITY MATRIX & STEP-BY-STEP FLOW:
 CALL_B_SYSTEM_PROMPT = """
 You are a strict JSON data extraction engine updating the executive profile from full conversation history.
 
-SCOPE HANDLING & DUAL GRANULARITY RULES (SCENARIO 4 FIX):
+SCOPE HANDLING & DUAL GRANULARITY RULES:
 1. SEPARATE DIRECT TEAM VS COMPANY SIZE:
    - If the user distinguishes their immediate direct team size (e.g., "my direct team is 5") from the overall organization (e.g., "the whole company is around 150"), extract BOTH:
-     * `direct_team_size.value` = "5 people (marketing team)"
-     * `company_size.value` = "150 people (overall organization)"
+     * `direct_team_size.value` = "5 people"
+     * `company_size.value` = "150 people"
    - Do NOT overwrite one with the other.
 
 2. CLARIFICATION vs CONFLICT:
    - Refinement of a vague answer IS NOT A CONFLICT. Set `conflict_flag` = false and `old_value` = null when a user clarifies details.
    - Trigger `conflict_flag` = true ONLY if the user directly CONTRADICTS a clear, specific numerical or factual statement previously made.
 
-3. VAGUE VALUES INTERDICTION FOR FACTS:
-   - DO NOT extract qualitative or evasive statements for `company_size` ("decent size") or `tools` ("standard tools"). Set value = null and confidence = 0.0 until specific facts are provided.
+3. TOOLS & FACTS EXTRACTION:
+   - When tool names (Excel, WhatsApp, SAP, CRM, etc.) are present in the evidence, you MUST populate `tools.value` with the exact tool names and set confidence = 1.0.
+   - DO NOT extract vague statements like "standard tools". Set value = null and confidence = 0.0 until specific facts are provided.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -105,30 +106,53 @@ You are a trusted executive strategist writing directly to a CEO/Executive.
 Your tone must be warm, highly empathetic, direct, and pragmatic.
 
 STRICT PRAGMATIC ACTION RULE:
+- Focus on immediate high-impact value. Provide 3 concrete, short-term actions to execute within 3 days.
 - DO NOT recommend immediate software or workflow automation unless the root cause of the breakdown has already been diagnosed.
-- If data or operational breakdowns are present, your "Immediate High-Impact Action" MUST be an **AUDIT & ROOT-CAUSE ANALYSIS** first.
 
 FORMATTING:
 - Use clear headings, short paragraphs, and bold key phrases for quick scanning.
 
 Structure your report as follows:
 1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their direct team size, overall company size, tech stack, operational pain, and strategic risk.
-2. 🚀 **Immediate High-Impact Action**: Recommend a pragmatic, low-overhead FIRST STEP.
+2. 🚀 **Immediate High-Impact Action (3-Day Execution Plan)**: Recommend 3 pragmatic, low-overhead FIRST STEPS.
 3. 🛡️ **Leadership Direction**: Reassure the executive on how to realign focus and navigate strategic priorities.
 """
 
 # -----------------------------------------------------------------------------
-# 4. HELPERS: POST-PROCESSING, LOCAL & WEBHOOK STORAGE
+# 4. HELPERS: AUDIO PROCESSING & STORAGE
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
+def transcribe_audio(audio_bytes) -> str:
+    """ Transcribes audio using OpenAI Whisper """
+    try:
+        with open("temp_input.wav", "wb") as f:
+            f.write(audio_bytes)
+        with open("temp_input.wav", "rb") as f:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f
+            )
+        return transcript.text
+    except Exception as e:
+        st.error(f"Error transcribing audio: {e}")
+        return ""
+
+def generate_speech(text: str) -> bytes:
+    """ Generates audio response using OpenAI TTS """
+    try:
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=text
+        )
+        return response.content
+    except Exception as e:
+        st.error(f"Error generating speech: {e}")
+        return b""
+
 def enforce_conflict_flags(profile_dict: dict) -> dict:
-    """
-    DETERMINISTIC POST-PROCESSING:
-    1. Filter out vague values for facts.
-    2. Prevent false conflicts on vague-to-specific refinements.
-    """
     facts = profile_dict.get("facts", {})
     
     # Check company size vagueness
@@ -147,7 +171,6 @@ def enforce_conflict_flags(profile_dict: dict) -> dict:
         tools_item["value"] = None
         tools_item["confidence"] = 0.0
 
-    # Strict conflict verification (Ignore vagueness transitions)
     for group_key in ["facts", "interpretation"]:
         group = profile_dict.get(group_key, {})
         for attr_key, attr in group.items():
@@ -155,7 +178,6 @@ def enforce_conflict_flags(profile_dict: dict) -> dict:
                 val = attr.get("value")
                 old_val = attr.get("old_value")
                 
-                # Ignore conflict if old_val was just a vague filler
                 if old_val and isinstance(old_val, str):
                     old_clean = old_val.lower().strip()
                     if any(v in old_clean for v in vague_tools_phrases + vague_size_phrases):
@@ -208,6 +230,18 @@ def check_gatekeeper_unlocked(profile: dict) -> bool:
     
     return has_size and has_tools and has_pain and has_fear
 
+def calculate_progress(profile: dict) -> float:
+    facts = profile.get("facts", {})
+    interp = profile.get("interpretation", {})
+    total_slots = 5
+    filled_slots = 0
+    if facts.get("industry", {}).get("value"): filled_slots += 1
+    if facts.get("company_size", {}).get("value") or facts.get("direct_team_size", {}).get("value"): filled_slots += 1
+    if facts.get("tools", {}).get("value"): filled_slots += 1
+    if interp.get("primary_pain", {}).get("value"): filled_slots += 1
+    if interp.get("fear", {}).get("value"): filled_slots += 1
+    return filled_slots / total_slots
+
 # -----------------------------------------------------------------------------
 # 5. HEADER & USER IDENTIFICATION
 # -----------------------------------------------------------------------------
@@ -251,70 +285,96 @@ if "profile" not in st.session_state:
 # -----------------------------------------------------------------------------
 col_chat, col_profile = st.columns([3, 2])
 
-# --- LEFT COLUMN: CHAT INTERFACE ---
+# --- LEFT COLUMN: CHAT & VOICE INTERFACE ---
 with col_chat:
-    st.subheader("💬 Executive Consultation")
+    st.subheader("💬 Executive Consultation (Voice & Text)")
     
+    # Progress Bar UI (Feedback for Limor's request)
+    progress_val = calculate_progress(st.session_state.profile)
+    st.progress(progress_val, text=f"Diagnostic Readiness: {int(progress_val * 100)}%")
+
+    # Render previous messages
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            if "audio" in msg:
+                st.audio(msg["audio"], format="audio/mp3")
 
-    if user_input := st.chat_input("Type your message here...", disabled=not user_email):
-        if not user_email:
-            st.warning("Please enter your email above before starting the consultation.")
-        else:
-            st.session_state.messages.append({"role": "user", "content": user_input})
-            with st.chat_message("user"):
-                st.markdown(user_input)
+    user_input = None
 
-            # 1. Extraction Call B
-            try:
-                conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
-                res_B = client.beta.chat.completions.parse(
-                    model="gpt-4o",
-                    messages=[
-                        {"role": "system", "content": CALL_B_SYSTEM_PROMPT},
-                        {"role": "user", "content": f"Previous State Profile JSON:\n{json.dumps(st.session_state.profile)}\n\nFull Conversation History:\n{conv_text}"}
-                    ],
-                    response_format=ExecutiveProfile,
-                    temperature=0.0
-                )
-                raw_profile_dict = res_B.choices[0].message.parsed.model_dump()
+    # Audio input module
+    audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email)
+    if audio_value:
+        with st.spinner("Transcribing voice input..."):
+            audio_bytes = audio_value.read()
+            user_input = transcribe_audio(audio_bytes)
+            if user_input:
+                st.info(f"🗣️ **Transcribed:** \"{user_input}\"")
+
+    # Fallback Text input
+    if not user_input:
+        user_input = st.chat_input("Or type your message here...", disabled=not user_email)
+
+    # Main interaction loop
+    if user_input and user_email:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        # 1. Extraction Call B
+        try:
+            conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
+            res_B = client.beta.chat.completions.parse(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": CALL_B_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Previous State Profile JSON:\n{json.dumps(st.session_state.profile)}\n\nFull Conversation History:\n{conv_text}"}
+                ],
+                response_format=ExecutiveProfile,
+                temperature=0.0
+            )
+            raw_profile_dict = res_B.choices[0].message.parsed.model_dump()
+            st.session_state.profile = enforce_conflict_flags(raw_profile_dict)
+
+        except Exception as e:
+            st.error(f"Extraction error: {e}")
+
+        # 2. Status Check & Call A Response Generation
+        gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
+        gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking & generating voice response..."):
+                current_profile_str = json.dumps(st.session_state.profile)
                 
-                # ENFORCE DETERMINISTIC RULES IN PYTHON
-                st.session_state.profile = enforce_conflict_flags(raw_profile_dict)
+                system_instruction = (
+                    f"{CALL_A_SYSTEM_PROMPT}\n\n"
+                    f"CURRENT LIVE PROFILE STATE:\n{current_profile_str}\n\n"
+                    f"GATEKEEPER STATUS: {gatekeeper_status_str}\n"
+                )
 
-            except Exception as e:
-                st.error(f"Extraction error: {e}")
+                res_A = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "system", "content": system_instruction}, *st.session_state.messages],
+                    temperature=0.7
+                )
+                reply = res_A.choices[0].message.content
 
-            # 2. Dynamic Gatekeeper Status Check
-            gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
-            gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
+                # Generate speech audio output
+                audio_reply = generate_speech(reply)
 
-            # 3. Call A Generation
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    current_profile_str = json.dumps(st.session_state.profile)
-                    
-                    system_instruction = (
-                        f"{CALL_A_SYSTEM_PROMPT}\n\n"
-                        f"CURRENT LIVE PROFILE STATE:\n{current_profile_str}\n\n"
-                        f"GATEKEEPER STATUS: {gatekeeper_status_str}\n"
-                    )
+                st.markdown(reply)
+                if audio_reply:
+                    st.audio(audio_reply, format="audio/mp3", autoplay=True)
 
-                    res_A = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[{"role": "system", "content": system_instruction}, *st.session_state.messages],
-                        temperature=0.7
-                    )
-                    reply = res_A.choices[0].message.content
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": reply,
+                    "audio": audio_reply
+                })
 
-                    st.markdown(reply)
-                    st.session_state.messages.append({"role": "assistant", "content": reply})
-
-            # Save & Refresh
-            save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
-            st.rerun()
+        save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
+        st.rerun()
 
 # --- RIGHT COLUMN: VISUAL DASHBOARD ---
 with col_profile:
@@ -338,7 +398,7 @@ with col_profile:
 
     st.markdown("### 🏢 Operational Facts")
     render_card("Industry", facts.get("industry", {}))
-    render_card("Direct Team Size", facts.get("direct_team_size", {}))  # <-- RENDER DIRECT TEAM SIZE
+    render_card("Direct Team Size", facts.get("direct_team_size", {}))
     render_card("Company Size (Overall)", facts.get("company_size", {}))
     render_card("Current Tools", facts.get("tools", {}))
 
@@ -349,7 +409,6 @@ with col_profile:
 
     st.divider()
 
-    # Gatekeeper status check
     unlocked = check_gatekeeper_unlocked(p)
 
     if unlocked:
@@ -367,10 +426,13 @@ with col_profile:
                 ],
                 temperature=0.7
             )
+            report_text = diag_res.choices[0].message.content
             st.markdown("---")
-            st.markdown(diag_res.choices[0].message.content)
+            st.markdown(report_text)
+            
+            # Optional: Play voice version of the diagnosis summary
+            audio_diag = generate_speech("Here is your strategic executive diagnosis summary.")
+            st.audio(audio_diag, format="audio/mp3", autoplay=True)
 
-    # BLOCK DEBUG JSON
     with st.expander("🛠️ Raw JSON State (Debug Mode)"):
         st.json(p)
-        
