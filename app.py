@@ -30,7 +30,6 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 
-# Webhook URL for Make / Zapier / Google Sheets
 WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", None)
 
 # -----------------------------------------------------------------------------
@@ -119,13 +118,12 @@ Structure your report as follows:
 """
 
 # -----------------------------------------------------------------------------
-# 4. HELPERS: AUDIO PROCESSING & STORAGE
+# 4. HELPERS
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
 def transcribe_audio(audio_bytes) -> str:
-    """ Transcribes audio using OpenAI Whisper """
     try:
         with open("temp_input.wav", "wb") as f:
             f.write(audio_bytes)
@@ -136,11 +134,10 @@ def transcribe_audio(audio_bytes) -> str:
             )
         return transcript.text
     except Exception as e:
-        st.error(f"Error transcribing audio: {e}")
+        st.error(f"Transcription error: {e}")
         return ""
 
-def generate_speech(text: str) -> bytes:
-    """ Generates audio response using OpenAI TTS """
+def generate_speech(text: str) -> Optional[bytes]:
     try:
         response = client.audio.speech.create(
             model="tts-1",
@@ -149,13 +146,11 @@ def generate_speech(text: str) -> bytes:
         )
         return response.content
     except Exception as e:
-        st.error(f"Error generating speech: {e}")
-        return b""
+        st.warning(f"Audio TTS warning: {e}")
+        return None
 
 def enforce_conflict_flags(profile_dict: dict) -> dict:
     facts = profile_dict.get("facts", {})
-    
-    # Check company size vagueness
     comp_size = facts.get("company_size", {})
     val_size = str(comp_size.get("value", "")).lower()
     vague_size_phrases = ["decent size", "quite a lot", "a lot", "many people", "a bunch", "several"]
@@ -163,7 +158,6 @@ def enforce_conflict_flags(profile_dict: dict) -> dict:
         comp_size["value"] = None
         comp_size["confidence"] = 0.0
 
-    # Check tools vagueness
     tools_item = facts.get("tools", {})
     val_tools = str(tools_item.get("value", "")).lower()
     vague_tools_phrases = ["standard tools", "nothing special", "usual stuff", "basic tools"]
@@ -177,7 +171,6 @@ def enforce_conflict_flags(profile_dict: dict) -> dict:
             if isinstance(attr, dict):
                 val = attr.get("value")
                 old_val = attr.get("old_value")
-                
                 if old_val and isinstance(old_val, str):
                     old_clean = old_val.lower().strip()
                     if any(v in old_clean for v in vague_tools_phrases + vague_size_phrases):
@@ -187,19 +180,16 @@ def enforce_conflict_flags(profile_dict: dict) -> dict:
                         attr["conflict_flag"] = True
                     else:
                         attr["conflict_flag"] = False
-                    
     return profile_dict
 
 def save_and_sync_data(email: str, profile_data: dict, messages: list):
     if not email:
         return
-    
     payload = {
         "user_email": email,
         "profile": profile_data,
         "chat_history": messages
     }
-    
     safe_name = sanitize_email(email)
     path = os.path.join(DATA_DIR, f"{safe_name}.json")
     with open(path, "w", encoding="utf-8") as f:
@@ -222,12 +212,10 @@ def load_user_data(email: str):
 def check_gatekeeper_unlocked(profile: dict) -> bool:
     facts = profile.get("facts", {})
     interp = profile.get("interpretation", {})
-    
     has_size = bool(facts.get("company_size", {}).get("value")) or bool(facts.get("direct_team_size", {}).get("value"))
     has_tools = bool(facts.get("tools", {}).get("value"))
     has_pain = bool(interp.get("primary_pain", {}).get("value"))
     has_fear = bool(interp.get("fear", {}).get("value"))
-    
     return has_size and has_tools and has_pain and has_fear
 
 def calculate_progress(profile: dict) -> float:
@@ -292,41 +280,35 @@ col_chat, col_profile = st.columns([3, 2])
 with col_chat:
     st.subheader("💬 Executive Consultation (Voice & Text)")
     
-    # Progress Bar UI
     progress_val = calculate_progress(st.session_state.profile)
     st.progress(progress_val, text=f"Diagnostic Readiness: {int(progress_val * 100)}%")
 
-    # Render previous messages
+    # Affichage de l'historique
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
     user_input = None
 
-    # Audio input module with key tracking to prevent infinite processing
+    # Entrée audio
     audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input")
-    
     if audio_value:
         audio_bytes = audio_value.read()
-        # Verify if this specific audio payload was already processed
         if audio_bytes != st.session_state.last_processed_audio:
             with st.spinner("Transcribing voice input..."):
                 user_input = transcribe_audio(audio_bytes)
                 st.session_state.last_processed_audio = audio_bytes
 
-    # Fallback Text input
-    if not user_input:
-        text_val = st.chat_input("Or type your message here...", disabled=not user_email)
-        if text_val:
-            user_input = text_val
+    # Entrée texte
+    text_val = st.chat_input("Or type your message here...", disabled=not user_email)
+    if text_val and not user_input:
+        user_input = text_val
 
-    # Main interaction loop
+    # Traitement de la demande
     if user_input and user_email:
         st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
 
-        # 1. Extraction Call B
+        # 1. Extraction JSON Call B
         try:
             conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
             res_B = client.beta.chat.completions.parse(
@@ -340,42 +322,37 @@ with col_chat:
             )
             raw_profile_dict = res_B.choices[0].message.parsed.model_dump()
             st.session_state.profile = enforce_conflict_flags(raw_profile_dict)
-
         except Exception as e:
             st.error(f"Extraction error: {e}")
 
-        # 2. Status Check & Call A Response Generation
+        # 2. Réponse de l'IA (Call A)
         gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
         gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
 
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking & generating response..."):
-                current_profile_str = json.dumps(st.session_state.profile)
-                
-                system_instruction = (
-                    f"{CALL_A_SYSTEM_PROMPT}\n\n"
-                    f"CURRENT LIVE PROFILE STATE:\n{current_profile_str}\n\n"
-                    f"GATEKEEPER STATUS: {gatekeeper_status_str}\n"
-                )
+        with st.spinner("Thinking..."):
+            current_profile_str = json.dumps(st.session_state.profile)
+            system_instruction = (
+                f"{CALL_A_SYSTEM_PROMPT}\n\n"
+                f"CURRENT LIVE PROFILE STATE:\n{current_profile_str}\n\n"
+                f"GATEKEEPER STATUS: {gatekeeper_status_str}\n"
+            )
 
-                res_A = client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[{"role": "system", "content": system_instruction}, *st.session_state.messages],
-                    temperature=0.7
-                )
-                reply = res_A.choices[0].message.content
+            res_A = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": system_instruction}, *st.session_state.messages],
+                temperature=0.7
+            )
+            reply = res_A.choices[0].message.content
 
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": reply
-                })
+            st.session_state.messages.append({
+                "role": "assistant", 
+                "content": reply
+            })
 
-                st.markdown(reply)
-
-                # Generate speech
-                audio_reply = generate_speech(reply)
-                if audio_reply:
-                    st.audio(audio_reply, format="audio/mp3", autoplay=True)
+            # Génération vocale sécurisée (ne bloque pas en cas d'erreur)
+            audio_reply = generate_speech(reply)
+            if audio_reply:
+                st.audio(audio_reply, format="audio/mp3", autoplay=True)
 
         save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
         st.rerun()
