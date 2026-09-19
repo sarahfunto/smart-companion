@@ -1,3 +1,5 @@
+Python
+
 import json
 import os
 import re
@@ -289,7 +291,7 @@ col_chat, col_profile = st.columns([3, 2])
 with col_chat:
     st.subheader("💬 Executive Consultation (Voice & Text)")
     
-    # Progress Bar UI (Feedback for Limor's request)
+    # Progress Bar UI
     progress_val = calculate_progress(st.session_state.profile)
     st.progress(progress_val, text=f"Diagnostic Readiness: {int(progress_val * 100)}%")
 
@@ -297,8 +299,6 @@ with col_chat:
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-            if "audio" in msg:
-                st.audio(msg["audio"], format="audio/mp3")
 
     user_input = None
 
@@ -360,18 +360,18 @@ with col_chat:
                 )
                 reply = res_A.choices[0].message.content
 
-                # Generate speech audio output
-                audio_reply = generate_speech(reply)
-
-                st.markdown(reply)
-                if audio_reply:
-                    st.audio(audio_reply, format="audio/mp3", autoplay=True)
-
+                # Save ONLY text content to session_state to ensure clean JSON storage
                 st.session_state.messages.append({
                     "role": "assistant", 
-                    "content": reply,
-                    "audio": audio_reply
+                    "content": reply
                 })
+
+                st.markdown(reply)
+
+                # On-the-fly speech generation and audio playback
+                audio_reply = generate_speech(reply)
+                if audio_reply:
+                    st.audio(audio_reply, format="audio/mp3", autoplay=True)
 
         save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
         st.rerun()
@@ -430,9 +430,10 @@ with col_profile:
             st.markdown("---")
             st.markdown(report_text)
             
-            # Optional: Play voice version of the diagnosis summary
+            # Voice summary playback for generated report
             audio_diag = generate_speech("Here is your strategic executive diagnosis summary.")
-            st.audio(audio_diag, format="audio/mp3", autoplay=True)
+            if audio_diag:
+                st.audio(audio_diag, format="audio/mp3", autoplay=True)
 
     with st.expander("🛠️ Raw JSON State (Debug Mode)"):
         st.json(p)
