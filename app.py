@@ -251,6 +251,9 @@ user_email = st.text_input("📧 Enter your business email to start or restore y
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
 
+if "last_processed_audio" not in st.session_state:
+    st.session_state.last_processed_audio = None
+
 if user_email and user_email != st.session_state.current_user:
     st.session_state.current_user = user_email
     existing_data = load_user_data(user_email)
@@ -300,18 +303,22 @@ with col_chat:
 
     user_input = None
 
-    # Audio input module
-    audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email)
+    # Audio input module with key tracking to prevent infinite processing
+    audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input")
+    
     if audio_value:
-        with st.spinner("Transcribing voice input..."):
-            audio_bytes = audio_value.read()
-            user_input = transcribe_audio(audio_bytes)
-            if user_input:
-                st.info(f"🗣️ **Transcribed:** \"{user_input}\"")
+        audio_bytes = audio_value.read()
+        # Verify if this specific audio payload was already processed
+        if audio_bytes != st.session_state.last_processed_audio:
+            with st.spinner("Transcribing voice input..."):
+                user_input = transcribe_audio(audio_bytes)
+                st.session_state.last_processed_audio = audio_bytes
 
     # Fallback Text input
     if not user_input:
-        user_input = st.chat_input("Or type your message here...", disabled=not user_email)
+        text_val = st.chat_input("Or type your message here...", disabled=not user_email)
+        if text_val:
+            user_input = text_val
 
     # Main interaction loop
     if user_input and user_email:
@@ -342,7 +349,7 @@ with col_chat:
         gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
 
         with st.chat_message("assistant"):
-            with st.spinner("Thinking & generating voice response..."):
+            with st.spinner("Thinking & generating response..."):
                 current_profile_str = json.dumps(st.session_state.profile)
                 
                 system_instruction = (
@@ -358,7 +365,6 @@ with col_chat:
                 )
                 reply = res_A.choices[0].message.content
 
-                # Save ONLY text content to session_state to ensure clean JSON storage
                 st.session_state.messages.append({
                     "role": "assistant", 
                     "content": reply
@@ -366,7 +372,7 @@ with col_chat:
 
                 st.markdown(reply)
 
-                # On-the-fly speech generation and audio playback
+                # Generate speech
                 audio_reply = generate_speech(reply)
                 if audio_reply:
                     st.audio(audio_reply, format="audio/mp3", autoplay=True)
@@ -428,7 +434,6 @@ with col_profile:
             st.markdown("---")
             st.markdown(report_text)
             
-            # Voice summary playback for generated report
             audio_diag = generate_speech("Here is your strategic executive diagnosis summary.")
             if audio_diag:
                 st.audio(audio_diag, format="audio/mp3", autoplay=True)
