@@ -1,12 +1,17 @@
 import json
 import os
 import re
-import requests  # (Optional: Webhook Make / Zapier)
 import base64
+import tempfile
+import requests  # (Optional: Webhook Make / Zapier)
 import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from typing import Optional
+from fpdf import FPDF
 
 # -----------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION & DIRECTORY SETUP
@@ -18,7 +23,7 @@ st.set_page_config(
 )
 
 st.title("🎙️ Smart Companion - Voice & Executive Diagnostic")
-st.caption("AI-Powered Executive Profiling with Voice Assistant")
+st.caption("AI-Powered Executive Profiling with Voice Assistant & Interactive Analytics")
 
 DATA_DIR = "saved_profiles"
 if not os.path.exists(DATA_DIR):
@@ -30,7 +35,6 @@ if not api_key:
     st.stop()
 
 client = OpenAI(api_key=api_key)
-
 WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", None)
 
 # -----------------------------------------------------------------------------
@@ -68,8 +72,13 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 YOUR GOAL:
 Guide the executive step-by-step to gather operational facts and strategic insights.
 
-PRIORITY MATRIX & STEP-BY-STEP FLOW:
+CRITICAL RULE WHEN GATEKEEPER IS UNLOCKED:
+- IF `GATEKEEPER STATUS` is "UNLOCKED":
+  STOP asking mandatory diagnostic questions.
+  Directly inform the executive:
+  "The diagnostic is now ready! I invite you to click the 'Generate Human Diagnostic Report' button on the right to review your tailored strategy. However, if any point feels unclear or if you would like to add more precision to any section, please feel free to share it with me and I will refine the analysis."
 
+IF GATEKEEPER IS LOCKED (PRIORITY MATRIX & STEP-BY-STEP FLOW):
 1. STEP 1 - MISSING FACTS (HIGHEST PRIORITY):
    - `company_size` & `direct_team_size`: Clarify overall company size vs immediate direct team scope.
    - `tools`: If vague (e.g., "standard tools"), ask for specific daily software/apps (e.g., Excel, WhatsApp, CRM).
@@ -123,24 +132,34 @@ Structure your report as follows:
 """
 
 # -----------------------------------------------------------------------------
-# 4. HELPERS
+# 4. HELPERS & PDF GENERATOR
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
 def transcribe_audio(audio_bytes) -> str:
+    """Robust audio transcription handling temporary file creation and cleanup."""
+    tmp_file_path = None
     try:
-        with open("temp_input.wav", "wb") as f:
-            f.write(audio_bytes)
-        with open("temp_input.wav", "rb") as f:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_file.write(audio_bytes)
+            tmp_file_path = tmp_file.name
+
+        with open(tmp_file_path, "rb") as f:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f
             )
         return transcript.text
     except Exception as e:
-        st.error(f"Transcription error: {e}")
+        st.error(f"Voice Transcription Error: {e}")
         return ""
+    finally:
+        if tmp_file_path and os.path.exists(tmp_file_path):
+            try:
+                os.remove(tmp_file_path)
+            except Exception:
+                pass
 
 def play_audio_response(text: str):
     """Generates OpenAI TTS speech and forces HTML5 autoplay."""
@@ -243,6 +262,51 @@ def calculate_progress(profile: dict) -> float:
     if interp.get("fear", {}).get("value"): filled_slots += 1
     return filled_slots / total_slots
 
+def parse_number(val_str: Optional[str]) -> int:
+    """Helper to extract numbers from strings like '50 employees' -> 50."""
+    if not val_str:
+        return 0
+    nums = re.findall(r'\d+', str(val_str))
+    return int(nums[0]) if nums else 0
+
+def generate_pdf_report(profile: dict, report_text: str) -> bytes:
+    """Generates a clean PDF version of the Executive Diagnostic."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=16, style="B")
+    pdf.cell(0, 10, text="Smart Companion - Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="C")
+    
+    pdf.set_font("Helvetica", size=10, style="I")
+    pdf.cell(0, 8, text="Generated automatically from your executive consultation session", new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.ln(5)
+
+    # Key Facts Section
+    pdf.set_font("Helvetica", size=12, style="B")
+    pdf.cell(0, 8, text="1. Profile Context & Key Facts", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=10)
+    
+    facts = profile.get("facts", {})
+    interp = profile.get("interpretation", {})
+    
+    pdf.cell(0, 6, text=f"- Industry: {facts.get('industry', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Direct Team Size: {facts.get('direct_team_size', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Overall Company Size: {facts.get('company_size', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Current Tech Stack / Tools: {facts.get('tools', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Primary Bottleneck: {interp.get('primary_pain', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Critical Risk / Concern: {interp.get('fear', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+
+    # Diagnostic Body
+    pdf.set_font("Helvetica", size=12, style="B")
+    pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=10)
+    
+    # Strip markdown bolding for PDF
+    clean_text = report_text.replace("**", "").replace("#", "")
+    pdf.multi_cell(0, 6, text=clean_text)
+    
+    return bytes(pdf.output())
+
 # -----------------------------------------------------------------------------
 # 5. HEADER & USER IDENTIFICATION
 # -----------------------------------------------------------------------------
@@ -303,7 +367,6 @@ with col_chat:
     for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-            # If this is the latest assistant response, attach the audio player
             if msg["role"] == "assistant" and idx == len(st.session_state.messages) - 1 and st.session_state.last_reply_text:
                 play_audio_response(st.session_state.last_reply_text)
 
@@ -369,7 +432,7 @@ with col_chat:
         save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
         st.rerun()
 
-# --- RIGHT COLUMN: VISUAL DASHBOARD ---
+# --- RIGHT COLUMN: VISUAL DASHBOARD & DYNAMIC REPORTS ---
 with col_profile:
     st.subheader("📊 Strategic Live Profile")
 
@@ -377,28 +440,69 @@ with col_profile:
     facts = p.get("facts", {})
     interp = p.get("interpretation", {})
 
-    def render_card(label, item):
-        val = item.get("value")
-        conflict = item.get("conflict_flag", False)
-        old_val = item.get("old_value")
+    tab_overview, tab_analytics = st.tabs(["📋 Executive Summary", "📈 Analytics & Diagrams"])
 
-        if conflict:
-            st.warning(f"**{label}:** {val}\n\n⚠️ *Contradiction detected — Previously stated:* `{old_val}`")
-        elif val and val != "Not specified yet":
-            st.success(f"**{label}:** {val}")
+    with tab_overview:
+        def render_card(label, item):
+            val = item.get("value")
+            conflict = item.get("conflict_flag", False)
+            old_val = item.get("old_value")
+
+            if conflict:
+                st.warning(f"**{label}:** {val}\n\n⚠️ *Contradiction detected — Previously stated:* `{old_val}`")
+            elif val and val != "Not specified yet":
+                st.success(f"**{label}:** {val}")
+            else:
+                st.info(f"**{label}:** *Not specified yet*")
+
+        st.markdown("### 🏢 Operational Facts")
+        render_card("Industry", facts.get("industry", {}))
+        render_card("Direct Team Size", facts.get("direct_team_size", {}))
+        render_card("Company Size (Overall)", facts.get("company_size", {}))
+        render_card("Current Tools", facts.get("tools", {}))
+
+        st.markdown("### 🎯 Strategic Insights")
+        render_card("Primary Pain Point", interp.get("primary_pain", {}))
+        render_card("Market Trigger", interp.get("trigger", {}))
+        render_card("Executive Fear / Concern", interp.get("fear", {}))
+
+    with tab_analytics:
+        st.markdown("### 📊 Operational Scope Breakdown")
+        
+        direct_n = parse_number(facts.get("direct_team_size", {}).get("value"))
+        total_n = parse_number(facts.get("company_size", {}).get("value"))
+
+        if total_n > 0 or direct_n > 0:
+            df_chart = pd.DataFrame({
+                "Scope": ["Direct Team", "Remaining Company"],
+                "Headcount": [direct_n, max(0, total_n - direct_n)]
+            })
+            fig = px.bar(df_chart, x="Scope", y="Headcount", color="Scope", title="Team vs Company Scale", text_auto=True)
+            fig.update_layout(showlegend=False, height=280)
+            st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info(f"**{label}:** *Not specified yet*")
+            st.caption("Provide numeric team & company sizes to render headcount chart.")
 
-    st.markdown("### 🏢 Operational Facts")
-    render_card("Industry", facts.get("industry", {}))
-    render_card("Direct Team Size", facts.get("direct_team_size", {}))
-    render_card("Company Size (Overall)", facts.get("company_size", {}))
-    render_card("Current Tools", facts.get("tools", {}))
+        st.markdown("### 🎯 Strategic Radar")
+        categories = ['Operational Clarity', 'Tool Alignment', 'Risk Mitigation', 'Strategic Focus']
+        
+        # Calculate score based on extracted metrics
+        score_clarity = 80 if facts.get("industry", {}).get("value") else 30
+        score_tools = 80 if facts.get("tools", {}).get("value") else 20
+        score_risk = 40 if interp.get("fear", {}).get("value") else 80
+        score_focus = 40 if interp.get("primary_pain", {}).get("value") else 80
 
-    st.markdown("### 🎯 Strategic Insights")
-    render_card("Primary Pain Point", interp.get("primary_pain", {}))
-    render_card("Market Trigger", interp.get("trigger", {}))
-    render_card("Executive Fear / Concern", interp.get("fear", {}))
+        fig_radar = go.Figure(data=go.Scatterpolar(
+            r=[score_clarity, score_tools, score_risk, score_focus],
+            theta=categories,
+            fill='toself'
+        ))
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+            showlegend=False,
+            height=300
+        )
+        st.plotly_chart(fig_radar, use_container_width=True)
 
     st.divider()
 
@@ -419,9 +523,19 @@ with col_profile:
                 ],
                 temperature=0.7
             )
-            report_text = diag_res.choices[0].message.content
-            st.markdown("---")
-            st.markdown(report_text)
+            st.session_state.current_report = diag_res.choices[0].message.content
+
+    if "current_report" in st.session_state:
+        st.markdown("---")
+        st.markdown(st.session_state.current_report)
+
+        pdf_bytes = generate_pdf_report(p, st.session_state.current_report)
+        st.download_button(
+            label="📥 Download Executive Diagnostic (PDF)",
+            data=pdf_bytes,
+            file_name="Executive_Diagnostic_Report.pdf",
+            mime="application/pdf"
+        )
 
     with st.expander("🛠️ Raw JSON State (Debug Mode)"):
         st.json(p)
