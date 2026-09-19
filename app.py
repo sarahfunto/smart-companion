@@ -98,6 +98,10 @@ SCOPE HANDLING & DUAL GRANULARITY RULES:
 3. TOOLS & FACTS EXTRACTION:
    - When tool names (Excel, WhatsApp, SAP, CRM, etc.) are present in the evidence, you MUST populate `tools.value` with the exact tool names and set confidence = 1.0.
    - DO NOT extract vague statements like "standard tools". Set value = null and confidence = 0.0 until specific facts are provided.
+
+4. PAIN & FEAR EXTRACTION:
+   - If user mentions margin decline, operational delays, inefficiency, or bottlenecks, extract into `primary_pain.value`.
+   - If user mentions market share loss, competitors, bankruptcy, or failure, extract into `fear.value`.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -136,18 +140,6 @@ def transcribe_audio(audio_bytes) -> str:
     except Exception as e:
         st.error(f"Transcription error: {e}")
         return ""
-
-def generate_speech(text: str) -> Optional[bytes]:
-    try:
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",
-            input=text
-        )
-        return response.content
-    except Exception as e:
-        st.warning(f"Audio TTS warning: {e}")
-        return None
 
 def enforce_conflict_flags(profile_dict: dict) -> dict:
     facts = profile_dict.get("facts", {})
@@ -214,9 +206,8 @@ def check_gatekeeper_unlocked(profile: dict) -> bool:
     interp = profile.get("interpretation", {})
     has_size = bool(facts.get("company_size", {}).get("value")) or bool(facts.get("direct_team_size", {}).get("value"))
     has_tools = bool(facts.get("tools", {}).get("value"))
-    has_pain = bool(interp.get("primary_pain", {}).get("value"))
-    has_fear = bool(interp.get("fear", {}).get("value"))
-    return has_size and has_tools and has_pain and has_fear
+    has_pain_or_fear = bool(interp.get("primary_pain", {}).get("value")) or bool(interp.get("fear", {}).get("value"))
+    return has_size and has_tools and has_pain_or_fear
 
 def calculate_progress(profile: dict) -> float:
     facts = profile.get("facts", {})
@@ -283,14 +274,12 @@ with col_chat:
     progress_val = calculate_progress(st.session_state.profile)
     st.progress(progress_val, text=f"Diagnostic Readiness: {int(progress_val * 100)}%")
 
-    # Affichage de l'historique
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
     user_input = None
 
-    # Entrée audio
     audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input")
     if audio_value:
         audio_bytes = audio_value.read()
@@ -299,16 +288,14 @@ with col_chat:
                 user_input = transcribe_audio(audio_bytes)
                 st.session_state.last_processed_audio = audio_bytes
 
-    # Entrée texte
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
         user_input = text_val
 
-    # Traitement de la demande
     if user_input and user_email:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
-        # 1. Extraction JSON Call B
+        # 1. Extraction Call B
         try:
             conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
             res_B = client.beta.chat.completions.parse(
@@ -325,7 +312,7 @@ with col_chat:
         except Exception as e:
             st.error(f"Extraction error: {e}")
 
-        # 2. Réponse de l'IA (Call A)
+        # 2. Call A Response
         gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
         gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
 
@@ -348,11 +335,6 @@ with col_chat:
                 "role": "assistant", 
                 "content": reply
             })
-
-            # Génération vocale sécurisée (ne bloque pas en cas d'erreur)
-            audio_reply = generate_speech(reply)
-            if audio_reply:
-                st.audio(audio_reply, format="audio/mp3", autoplay=True)
 
         save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
         st.rerun()
@@ -410,10 +392,6 @@ with col_profile:
             report_text = diag_res.choices[0].message.content
             st.markdown("---")
             st.markdown(report_text)
-            
-            audio_diag = generate_speech("Here is your strategic executive diagnosis summary.")
-            if audio_diag:
-                st.audio(audio_diag, format="audio/mp3", autoplay=True)
 
     with st.expander("🛠️ Raw JSON State (Debug Mode)"):
         st.json(p)
