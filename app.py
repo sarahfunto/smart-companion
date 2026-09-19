@@ -1,7 +1,8 @@
 import json
 import os
 import re
-import requests  # (Webhook Make / Zapier)
+import requests  # (Optional: Webhook Make / Zapier)
+import base64
 import streamlit as st
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -141,6 +142,26 @@ def transcribe_audio(audio_bytes) -> str:
         st.error(f"Transcription error: {e}")
         return ""
 
+def play_audio_response(text: str):
+    """Generates OpenAI TTS speech and forces HTML5 autoplay."""
+    try:
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=text
+        )
+        audio_bytes = response.content
+        b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
+        audio_html = f"""
+            <audio autoplay controls style="width: 100%; margin-top: 10px;">
+                <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
+                Your browser does not support audio playback.
+            </audio>
+        """
+        st.markdown(audio_html, unsafe_allow_html=True)
+    except Exception as e:
+        st.warning(f"Unable to generate speech: {e}")
+
 def enforce_conflict_flags(profile_dict: dict) -> dict:
     facts = profile_dict.get("facts", {})
     comp_size = facts.get("company_size", {})
@@ -206,8 +227,9 @@ def check_gatekeeper_unlocked(profile: dict) -> bool:
     interp = profile.get("interpretation", {})
     has_size = bool(facts.get("company_size", {}).get("value")) or bool(facts.get("direct_team_size", {}).get("value"))
     has_tools = bool(facts.get("tools", {}).get("value"))
-    has_pain_or_fear = bool(interp.get("primary_pain", {}).get("value")) or bool(interp.get("fear", {}).get("value"))
-    return has_size and has_tools and has_pain_or_fear
+    has_pain = bool(interp.get("primary_pain", {}).get("value"))
+    has_fear = bool(interp.get("fear", {}).get("value"))
+    return has_size and has_tools and has_pain and has_fear
 
 def calculate_progress(profile: dict) -> float:
     facts = profile.get("facts", {})
@@ -232,6 +254,9 @@ if "current_user" not in st.session_state:
 
 if "last_processed_audio" not in st.session_state:
     st.session_state.last_processed_audio = None
+
+if "last_reply_text" not in st.session_state:
+    st.session_state.last_reply_text = None
 
 if user_email and user_email != st.session_state.current_user:
     st.session_state.current_user = user_email
@@ -274,9 +299,13 @@ with col_chat:
     progress_val = calculate_progress(st.session_state.profile)
     st.progress(progress_val, text=f"Diagnostic Readiness: {int(progress_val * 100)}%")
 
-    for msg in st.session_state.messages:
+    # Display chat history
+    for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            # If this is the latest assistant response, attach the audio player
+            if msg["role"] == "assistant" and idx == len(st.session_state.messages) - 1 and st.session_state.last_reply_text:
+                play_audio_response(st.session_state.last_reply_text)
 
     user_input = None
 
@@ -335,6 +364,7 @@ with col_chat:
                 "role": "assistant", 
                 "content": reply
             })
+            st.session_state.last_reply_text = reply
 
         save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
         st.rerun()
