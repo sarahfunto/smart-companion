@@ -76,12 +76,12 @@ CRITICAL RULE WHEN GATEKEEPER IS UNLOCKED:
 - IF `GATEKEEPER STATUS` is "UNLOCKED":
   STOP asking mandatory diagnostic questions.
   Directly inform the executive:
-  "The diagnostic is now ready! I invite you to click the 'Generate Human Diagnostic Report' button on the right to review your tailored strategy. However, if any point feels unclear or if you would like to add more precision to any section, please feel free to share it with me and I will refine the analysis."
+  "The diagnostic is now complete! I have updated your **Operational Scope Breakdown** and live strategic profile in the right sidebar. You can now click the 'Generate Human Diagnostic Report' button on the right to review and download your tailored PDF strategy. However, if any point feels unclear or if you would like to add more precision, please feel free to share it here with me."
 
 IF GATEKEEPER IS LOCKED (PRIORITY MATRIX & STEP-BY-STEP FLOW):
 1. STEP 1 - MISSING FACTS (HIGHEST PRIORITY):
    - `company_size` & `direct_team_size`: Clarify overall company size vs immediate direct team scope.
-   - `tools`: If vague (e.g., "standard tools"), ask for specific daily software/apps (e.g., Excel, WhatsApp, CRM).
+   - `tools`: If vague, ask for specific daily software/apps (e.g., Slack, Notion, Salesforce, Excel).
    - `industry`: If missing/null, ask smoothly about their business domain/industry.
 
 2. STEP 2 - STRATEGIC PAIN & FEARS:
@@ -96,22 +96,22 @@ You are a strict JSON data extraction engine updating the executive profile from
 
 SCOPE HANDLING & DUAL GRANULARITY RULES:
 1. SEPARATE DIRECT TEAM VS COMPANY SIZE:
-   - If the user distinguishes their immediate direct team size (e.g., "my direct team is 5") from the overall organization (e.g., "the whole company is around 150"), extract BOTH:
-     * `direct_team_size.value` = "5 people"
+   - If the user distinguishes their immediate direct team size from the overall organization, extract BOTH:
+     * `direct_team_size.value` = "6 people"
      * `company_size.value` = "150 people"
    - Do NOT overwrite one with the other.
 
 2. CLARIFICATION vs CONFLICT:
    - Refinement of a vague answer IS NOT A CONFLICT. Set `conflict_flag` = false and `old_value` = null when a user clarifies details.
-   - Trigger `conflict_flag` = true ONLY if the user directly CONTRADICTS a clear, specific numerical or factual statement previously made.
+   - Trigger `conflict_flag` = true ONLY if the user directly CONTRADICTS a clear, specific statement previously made.
 
 3. TOOLS & FACTS EXTRACTION:
-   - When tool names (Excel, WhatsApp, SAP, CRM, etc.) are present in the evidence, you MUST populate `tools.value` with the exact tool names and set confidence = 1.0.
-   - DO NOT extract vague statements like "standard tools". Set value = null and confidence = 0.0 until specific facts are provided.
+   - When tool names (Slack, Notion, Salesforce, Excel, etc.) are present in the evidence, you MUST populate `tools.value` with the exact tool names.
+   - DO NOT extract vague statements like "standard tools".
 
 4. PAIN & FEAR EXTRACTION:
-   - If user mentions margin decline, operational delays, inefficiency, or bottlenecks, extract into `primary_pain.value`.
-   - If user mentions market share loss, competitors, bankruptcy, or failure, extract into `fear.value`.
+   - If user mentions margin decline, operational delays, or bottlenecks, extract into `primary_pain.value`.
+   - If user mentions cash flow issues, market share loss, or failure, extract into `fear.value`.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -120,7 +120,6 @@ Your tone must be warm, highly empathetic, direct, and pragmatic.
 
 STRICT PRAGMATIC ACTION RULE:
 - Focus on immediate high-impact value. Provide 3 concrete, short-term actions to execute within 3 days.
-- DO NOT recommend immediate software or workflow automation unless the root cause of the breakdown has already been diagnosed.
 
 FORMATTING:
 - Use clear headings, short paragraphs, and bold key phrases for quick scanning.
@@ -132,13 +131,13 @@ Structure your report as follows:
 """
 
 # -----------------------------------------------------------------------------
-# 4. HELPERS & PDF GENERATOR
+# 4. HELPERS & STABLE PDF GENERATOR
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
 def transcribe_audio(audio_bytes) -> str:
-    """Robust audio transcription with file size safety check."""
+    """Robust audio transcription with safety check."""
     if not audio_bytes or len(audio_bytes) < 1000:
         return ""
         
@@ -188,11 +187,11 @@ def clean_text_for_pdf(text: str) -> str:
     """Strips Markdown and non-Latin1 characters to prevent FPDF encoding crashes."""
     if not text:
         return ""
-    text = text.replace("**", "").replace("#", "")
+    text = text.replace("**", "").replace("#", "").replace("•", "-")
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
 def generate_pdf_report(profile: dict, report_text: str) -> bytes:
-    """Generates an Executive Diagnostic PDF featuring a side-by-side layout for Scenario 2."""
+    """Generates an Executive Diagnostic PDF (Clean & Exception-Free)."""
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -214,7 +213,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     pdf.line(10, 28, 200, 28)
     pdf.ln(8)
 
-    # 1. Profile Context Summary (Scenario 2: Side-by-Side Dual Granularity Box)
+    # 1. Profile Context Summary (Side-by-Side Dual Granularity Box)
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 8, text="1. Profile Context & Granularity Check", new_x="LMARGIN", new_y="NEXT")
@@ -230,13 +229,13 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     bottleneck = clean_text_for_pdf(str(interp.get('primary_pain', {}).get('value', 'N/A')))
     concern = clean_text_for_pdf(str(interp.get('fear', {}).get('value', 'N/A')))
 
-    # Side-by-Side Boxes
+    # Standard Rectangles (No non-standard 'r' parameter)
     start_y = pdf.get_y()
     
     # Left Box: Direct Team
     pdf.set_fill_color(245, 247, 250)
     pdf.set_draw_color(210, 215, 225)
-    pdf.rect(10, start_y, 90, 18, fill=True)
+    pdf.rect(10, start_y, 90, 18, style='F')
     pdf.set_xy(12, start_y + 2)
     pdf.set_font("Helvetica", style="B", size=9)
     pdf.set_text_color(*PRIMARY)
@@ -247,7 +246,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     pdf.cell(86, 6, text=f"Headcount: {direct_team}", new_x="LMARGIN", new_y="NEXT")
 
     # Right Box: Overall Company Size
-    pdf.rect(105, start_y, 90, 18, fill=True)
+    pdf.rect(105, start_y, 90, 18, style='F')
     pdf.set_xy(107, start_y + 2)
     pdf.set_font("Helvetica", style="B", size=9)
     pdf.set_text_color(*PRIMARY)
@@ -259,7 +258,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
 
     pdf.set_y(start_y + 22)
 
-    # Operational Details List
+    # Details List
     details = [
         ("Industry Domain", industry),
         ("Current Tech Stack", tools),
@@ -312,14 +311,14 @@ def enforce_conflict_flags(profile_dict: dict) -> dict:
     facts = profile_dict.get("facts", {})
     comp_size = facts.get("company_size", {})
     val_size = str(comp_size.get("value", "")).lower()
-    vague_size_phrases = ["decent size", "quite a lot", "a lot", "many people", "a bunch", "several"]
+    vague_size_phrases = ["decent size", "quite a lot", "a lot", "many people"]
     if any(phrase in val_size for phrase in vague_size_phrases):
         comp_size["value"] = None
         comp_size["confidence"] = 0.0
 
     tools_item = facts.get("tools", {})
     val_tools = str(tools_item.get("value", "")).lower()
-    vague_tools_phrases = ["standard tools", "nothing special", "usual stuff", "basic tools"]
+    vague_tools_phrases = ["standard tools", "nothing special", "usual stuff"]
     if any(phrase in val_tools for phrase in vague_tools_phrases):
         tools_item["value"] = None
         tools_item["confidence"] = 0.0
@@ -353,12 +352,6 @@ def save_and_sync_data(email: str, profile_data: dict, messages: list):
     path = os.path.join(DATA_DIR, f"{safe_name}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
-        
-    if WEBHOOK_URL:
-        try:
-            requests.post(WEBHOOK_URL, json=payload, timeout=5)
-        except Exception as e:
-            print(f"Webhook error: {e}")
 
 def load_user_data(email: str):
     safe_name = sanitize_email(email)
@@ -396,7 +389,7 @@ def parse_number(val_str: Optional[str]) -> int:
     return int(nums[0]) if nums else 0
 
 # -----------------------------------------------------------------------------
-# 5. HEADER & USER IDENTIFICATION
+# 5. SESSION INITIALIZATION
 # -----------------------------------------------------------------------------
 st.markdown("---")
 user_email = st.text_input("📧 Enter your business email to start or restore your session:", key="email_input")
@@ -484,8 +477,8 @@ with col_chat:
     if user_input and user_email:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
-        # Call B: JSON extraction
         try:
+            # Call B: JSON extraction
             conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
             res_B = client.beta.chat.completions.parse(
                 model="gpt-4o",
@@ -498,36 +491,37 @@ with col_chat:
             )
             raw_profile_dict = res_B.choices[0].message.parsed.model_dump()
             st.session_state.profile = enforce_conflict_flags(raw_profile_dict)
+
+            # Call A: Consultant response
+            gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
+            gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
+
+            with st.spinner("Generating strategy advice..."):
+                current_profile_str = json.dumps(st.session_state.profile)
+                system_instruction = (
+                    f"{CALL_A_SYSTEM_PROMPT}\n\n"
+                    f"CURRENT LIVE PROFILE STATE:\n{current_profile_str}\n\n"
+                    f"GATEKEEPER STATUS: {gatekeeper_status_str}\n"
+                )
+
+                res_A = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "system", "content": system_instruction}, *st.session_state.messages],
+                    temperature=0.7
+                )
+                reply = res_A.choices[0].message.content
+
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": reply
+                })
+                st.session_state.last_reply_text = reply
+
+            save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
+            st.rerun()
+
         except Exception as e:
-            st.error(f"Extraction error: {e}")
-
-        # Call A: Consultant response
-        gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
-        gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
-
-        with st.spinner("Generating strategy advice..."):
-            current_profile_str = json.dumps(st.session_state.profile)
-            system_instruction = (
-                f"{CALL_A_SYSTEM_PROMPT}\n\n"
-                f"CURRENT LIVE PROFILE STATE:\n{current_profile_str}\n\n"
-                f"GATEKEEPER STATUS: {gatekeeper_status_str}\n"
-            )
-
-            res_A = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "system", "content": system_instruction}, *st.session_state.messages],
-                temperature=0.7
-            )
-            reply = res_A.choices[0].message.content
-
-            st.session_state.messages.append({
-                "role": "assistant", 
-                "content": reply
-            })
-            st.session_state.last_reply_text = reply
-
-        save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
-        st.rerun()
+            st.error(f"Error during AI processing: {e}")
 
 # --- RIGHT COLUMN: DASHBOARD & REPORT GENERATION ---
 with col_profile:
