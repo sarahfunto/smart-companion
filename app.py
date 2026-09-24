@@ -4,6 +4,7 @@ import re
 import base64
 import tempfile
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -22,7 +23,7 @@ st.set_page_config(
 )
 
 st.title("🎙️ Smart Companion - Voice & Executive Diagnostic")
-st.caption("AI-Powered Executive Profiling with Voice Assistant & Interactive Analytics")
+st.caption("AI-Powered Executive Profiling with WebRTC Voice Control & Dynamic Flow")
 
 DATA_DIR = "saved_profiles"
 if not os.path.exists(DATA_DIR):
@@ -62,7 +63,7 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS WITH DYNAMIC REPHRASING & STRICT SEQUENTIAL FLOW
+# 3. SYSTEM PROMPTS
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
@@ -94,7 +95,8 @@ SEQUENTIAL FLOW:
 
 GATEKEEPER UNLOCKED RULE:
 - IF `GATEKEEPER STATUS` is "UNLOCKED":
-  Inform the executive that the assessment is complete and invite them to generate and review their full diagnostic report in the right panel.
+  Directly inform the executive:
+  "The diagnostic is now complete and ready! I invite you to click the 'Generate Human Diagnostic Report' button on the right sidebar to review your tailored strategy. However, if any point feels unclear or if you would like to add more precision or additional context to any section, please feel free to share it with me here, and I will continuously refine and optimize the analysis for you."
 """
 
 CALL_B_SYSTEM_PROMPT = """
@@ -181,7 +183,6 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     PRIMARY = (31, 78, 121)
     TEXT_COLOR = (40, 40, 40)
     
-    # Title Block
     pdf.set_font("Helvetica", size=18, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 10, text="Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="L")
@@ -190,7 +191,6 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     facts = profile.get("facts", {})
     interp = profile.get("interpretation", {})
 
-    # Section 1: Facts & Scope
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.cell(0, 8, text="1. Profile Context & Scope", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=10)
@@ -199,7 +199,6 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     pdf.cell(0, 6, text=clean_text_for_pdf(f"Tech Stack: {facts.get('tools', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
-    # Section 2: Embed Plotly Charts
     tmp_files = []
     try:
         if fig_bar and fig_radar:
@@ -225,7 +224,6 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
                     pass
 
     pdf.ln(4)
-    # Section 3: Strategic Assessment
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
@@ -234,9 +232,6 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     
     pdf.multi_cell(0, 5, text=clean_text_for_pdf(report_text), new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
-
-def enforce_conflict_flags(profile_dict: dict) -> dict:
-    return profile_dict
 
 def save_and_sync_data(email: str, profile_data: dict, messages: list):
     if not email:
@@ -336,24 +331,81 @@ with col_chat:
 
     user_input = None
 
-    # --- VOICE WIDGET & TEXT INPUT ---
-    st.markdown("#### 🎙️ Voice & Text Input")
+    # --- WEBRTC JS VOICE BUTTONS (START / STOP) ---
+    st.markdown("#### 🎙️ Voice Control Panel")
     
-    try:
-        audio_value = st.audio_input("Record your voice response", disabled=not user_email, key="voice_mic_input")
-        if audio_value is not None:
-            audio_bytes = audio_value.read()
-            if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.get("last_processed_audio"):
-                with st.status("⚡ Transcribing audio with Whisper...", expanded=False) as status:
-                    transcribed = transcribe_audio(audio_bytes)
-                    if transcribed:
-                        user_input = transcribed
-                        st.session_state.last_processed_audio = audio_bytes
-                        status.update(label="✅ Voice captured!", state="complete")
-                    else:
-                        status.update(label="⚠️ Speech not recognized. Please try typing below.", state="error")
-    except Exception:
-        st.caption("🎙️ Voice input ready.")
+    js_recorder_code = """
+    <div style="font-family: sans-serif; display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+        <button id="startBtn" onclick="startRecording()" style="padding: 10px 16px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+            ▶️ Start Speaking
+        </button>
+        <button id="stopBtn" onclick="stopRecording()" disabled style="padding: 10px 16px; background-color: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; opacity: 0.5;">
+            ⏹️ Stop & Send
+        </button>
+        <span id="status" style="font-size: 14px; color: #555;">Ready</span>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(audioBlob);
+                    reader.onloadend = () => {
+                        const base64Audio = reader.result.split(',')[1];
+                        window.parent.postMessage({
+                            type: 'streamlit:setComponentValue',
+                            value: base64Audio
+                        }, '*');
+                    };
+                };
+
+                mediaRecorder.start();
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('startBtn').style.opacity = '0.5';
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('stopBtn').style.opacity = '1.0';
+                document.getElementById('status').innerText = '🔴 Recording...';
+            } catch (err) {
+                document.getElementById('status').innerText = '⚠️ Microphone Access Denied';
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('startBtn').style.opacity = '1.0';
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('stopBtn').style.opacity = '0.5';
+                document.getElementById('status').innerText = '⏳ Processing Audio...';
+            }
+        }
+    </script>
+    """
+    
+    voice_b64 = components.html(js_recorder_code, height=60)
+
+    if voice_b64 and isinstance(voice_b64, str) and len(voice_b64) > 100:
+        try:
+            audio_bytes = base64.b64decode(voice_b64)
+            transcribed = transcribe_audio(audio_bytes)
+            if transcribed:
+                user_input = transcribed
+        except Exception:
+            st.warning("Failed to process voice input.")
 
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
