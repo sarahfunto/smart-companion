@@ -185,7 +185,7 @@ def play_audio_response(text: str):
         st.warning(f"Unable to generate speech response: {e}")
 
 def clean_text_for_pdf(text: str) -> str:
-    """Strips Markdown and non-Latin1 emojis to prevent FPDF encoding crashes."""
+    """Strips Markdown and non-Latin1 characters to prevent FPDF encoding crashes."""
     if not text:
         return ""
     text = text.replace("**", "").replace("#", "")
@@ -230,7 +230,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     bottleneck = clean_text_for_pdf(str(interp.get('primary_pain', {}).get('value', 'N/A')))
     concern = clean_text_for_pdf(str(interp.get('fear', {}).get('value', 'N/A')))
 
-    # Side-by-Side Boxes for Direct Team vs Overall Company Size
+    # Side-by-Side Boxes
     start_y = pdf.get_y()
     
     # Left Box: Direct Team
@@ -246,7 +246,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     pdf.set_text_color(*TEXT_COLOR)
     pdf.cell(86, 6, text=f"Headcount: {direct_team}", new_x="LMARGIN", new_y="NEXT")
 
-    # Right Box: Overall Company Size (Side-by-Side)
+    # Right Box: Overall Company Size
     pdf.rect(105, start_y, 90, 18, fill=True)
     pdf.set_xy(107, start_y + 2)
     pdf.set_font("Helvetica", style="B", size=9)
@@ -285,15 +285,13 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     pdf.set_text_color(*TEXT_COLOR)
     
     clean_report = clean_text_for_pdf(report_text)
-    paragraphs = clean_report.split("\n")
-
-    for line in paragraphs:
+    for line in clean_report.split("\n"):
         line_str = line.strip()
         if not line_str:
             pdf.ln(2)
             continue
 
-        if line_str.startswith("1.") or line_str.startswith("2.") or line_str.startswith("3."):
+        if line_str.startswith(("1.", "2.", "3.")):
             pdf.ln(3)
             pdf.set_font("Helvetica", style="B", size=11)
             pdf.set_text_color(*PRIMARY)
@@ -462,12 +460,12 @@ with col_chat:
 
     user_input = None
 
-    # Safe audio input block to prevent widget error popups
+    # Safe audio input block
     try:
-        audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input")
-        if audio_value:
+        audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input_widget")
+        if audio_value is not None:
             audio_bytes = audio_value.read()
-            if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.last_processed_audio:
+            if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.get("last_processed_audio"):
                 with st.status("⚡ Transcribing audio...", expanded=False) as status:
                     transcribed = transcribe_audio(audio_bytes)
                     if transcribed:
@@ -475,9 +473,9 @@ with col_chat:
                         st.session_state.last_processed_audio = audio_bytes
                         status.update(label="✅ Voice captured!", state="complete")
                     else:
-                        status.update(label="⚠️ Speech not recognized. Please try again.", state="error")
+                        status.update(label="⚠️ Speech not recognized. Please try typing or speaking again.", state="error")
     except Exception as audio_err:
-        st.caption("Initializing voice input component...")
+        st.caption("🎙️ Voice input standby / ready for input.")
 
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
