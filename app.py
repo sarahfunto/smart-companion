@@ -138,8 +138,8 @@ def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
 def transcribe_audio(audio_bytes) -> str:
-    """Robust audio transcription with temporary file cleanup."""
-    if not audio_bytes or len(audio_bytes) < 500:
+    """Robust audio transcription with file size safety check."""
+    if not audio_bytes or len(audio_bytes) < 1000:
         return ""
         
     tmp_file_path = None
@@ -153,9 +153,9 @@ def transcribe_audio(audio_bytes) -> str:
                 model="whisper-1",
                 file=f
             )
-        return transcript.text
+        return transcript.text.strip()
     except Exception as e:
-        st.error(f"Voice Transcription Error: {e}")
+        print(f"Transcription error bypass: {e}")
         return ""
     finally:
         if tmp_file_path and os.path.exists(tmp_file_path):
@@ -192,40 +192,122 @@ def clean_text_for_pdf(text: str) -> str:
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
 def generate_pdf_report(profile: dict, report_text: str) -> bytes:
-    """Generates a clean PDF version of the Executive Diagnostic."""
+    """Generates an Executive Diagnostic PDF featuring a side-by-side layout for Scenario 2."""
     pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
-    pdf.set_font("Helvetica", size=16, style="B")
-    pdf.cell(0, 10, text="Smart Companion - Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="C")
+    
+    PRIMARY = (31, 78, 121)     # Deep Blue
+    SECONDARY = (80, 80, 80)    # Slate Gray
+    TEXT_COLOR = (40, 40, 40)   # Charcoal
+    
+    # Title Block
+    pdf.set_font("Helvetica", size=18, style="B")
+    pdf.set_text_color(*PRIMARY)
+    pdf.cell(0, 10, text="Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="L")
     
     pdf.set_font("Helvetica", size=10, style="I")
-    pdf.cell(0, 8, text="Generated automatically from your executive consultation session", new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.ln(5)
-
-    # Key Facts Section
-    pdf.set_font("Helvetica", size=12, style="B")
-    pdf.cell(0, 8, text="1. Profile Context & Key Facts", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", size=10)
+    pdf.set_text_color(*SECONDARY)
+    pdf.cell(0, 6, text="Smart Companion AI - Strategic Assessment", new_x="LMARGIN", new_y="NEXT", align="L")
     
+    pdf.set_draw_color(200, 200, 200)
+    pdf.line(10, 28, 200, 28)
+    pdf.ln(8)
+
+    # 1. Profile Context Summary (Scenario 2: Side-by-Side Dual Granularity Box)
+    pdf.set_font("Helvetica", size=12, style="B")
+    pdf.set_text_color(*PRIMARY)
+    pdf.cell(0, 8, text="1. Profile Context & Granularity Check", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
     facts = profile.get("facts", {})
     interp = profile.get("interpretation", {})
     
-    pdf.cell(0, 6, text=f"- Industry: {clean_text_for_pdf(str(facts.get('industry', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Direct Team Size: {clean_text_for_pdf(str(facts.get('direct_team_size', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Overall Company Size: {clean_text_for_pdf(str(facts.get('company_size', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Current Tech Stack / Tools: {clean_text_for_pdf(str(facts.get('tools', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Primary Bottleneck: {clean_text_for_pdf(str(interp.get('primary_pain', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Critical Risk / Concern: {clean_text_for_pdf(str(interp.get('fear', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(5)
+    direct_team = clean_text_for_pdf(str(facts.get('direct_team_size', {}).get('value', 'N/A')))
+    company_size = clean_text_for_pdf(str(facts.get('company_size', {}).get('value', 'N/A')))
+    industry = clean_text_for_pdf(str(facts.get('industry', {}).get('value', 'N/A')))
+    tools = clean_text_for_pdf(str(facts.get('tools', {}).get('value', 'N/A')))
+    bottleneck = clean_text_for_pdf(str(interp.get('primary_pain', {}).get('value', 'N/A')))
+    concern = clean_text_for_pdf(str(interp.get('fear', {}).get('value', 'N/A')))
 
-    # Diagnostic Body
-    pdf.set_font("Helvetica", size=12, style="B")
+    # Side-by-Side Boxes for Direct Team vs Overall Company Size
+    start_y = pdf.get_y()
+    
+    # Left Box: Direct Team
+    pdf.set_fill_color(245, 247, 250)
+    pdf.set_draw_color(210, 215, 225)
+    pdf.rect(10, start_y, 90, 18, fill=True)
+    pdf.set_xy(12, start_y + 2)
+    pdf.set_font("Helvetica", style="B", size=9)
+    pdf.set_text_color(*PRIMARY)
+    pdf.cell(86, 5, text="DIRECT TEAM SCOPE", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(12)
+    pdf.set_font("Helvetica", style="", size=10)
+    pdf.set_text_color(*TEXT_COLOR)
+    pdf.cell(86, 6, text=f"Headcount: {direct_team}", new_x="LMARGIN", new_y="NEXT")
+
+    # Right Box: Overall Company Size (Side-by-Side)
+    pdf.rect(105, start_y, 90, 18, fill=True)
+    pdf.set_xy(107, start_y + 2)
+    pdf.set_font("Helvetica", style="B", size=9)
+    pdf.set_text_color(*PRIMARY)
+    pdf.cell(86, 5, text="OVERALL COMPANY SIZE", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(107)
+    pdf.set_font("Helvetica", style="", size=10)
+    pdf.set_text_color(*TEXT_COLOR)
+    pdf.cell(86, 6, text=f"Total Workforce: {company_size}", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_y(start_y + 22)
+
+    # Operational Details List
+    details = [
+        ("Industry Domain", industry),
+        ("Current Tech Stack", tools),
+        ("Primary Bottleneck", bottleneck),
+        ("Critical Concern", concern)
+    ]
+
+    for label, val in details:
+        pdf.set_font("Helvetica", style="B", size=10)
+        pdf.cell(45, 6, text=f"{label}:", new_x="RIGHT", new_y="TOP")
+        pdf.set_font("Helvetica", style="", size=10)
+        pdf.multi_cell(0, 6, text=val, new_x="LMARGIN", new_y="NEXT")
+    
+    pdf.ln(6)
+
+    # 2. Strategic Diagnostic & Action Plan
+    pdf.set_font("Helvetica", size=13, style="B")
+    pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
     pdf.set_font("Helvetica", size=10)
+    pdf.set_text_color(*TEXT_COLOR)
     
     clean_report = clean_text_for_pdf(report_text)
-    pdf.multi_cell(0, 6, text=clean_report)
-    
+    paragraphs = clean_report.split("\n")
+
+    for line in paragraphs:
+        line_str = line.strip()
+        if not line_str:
+            pdf.ln(2)
+            continue
+
+        if line_str.startswith("1.") or line_str.startswith("2.") or line_str.startswith("3."):
+            pdf.ln(3)
+            pdf.set_font("Helvetica", style="B", size=11)
+            pdf.set_text_color(*PRIMARY)
+            pdf.multi_cell(0, 6, text=line_str, new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", style="", size=10)
+            pdf.set_text_color(*TEXT_COLOR)
+        elif line_str.endswith(":"):
+            pdf.set_font("Helvetica", style="B", size=10)
+            pdf.multi_cell(0, 6, text=line_str, new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", style="", size=10)
+        else:
+            pdf.multi_cell(0, 5, text=line_str, new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(1)
+
     return bytes(pdf.output())
 
 def enforce_conflict_flags(profile_dict: dict) -> dict:
@@ -371,29 +453,31 @@ with col_chat:
     progress_val = calculate_progress(st.session_state.profile)
     st.progress(progress_val, text=f"Diagnostic Readiness: {int(progress_val * 100)}%")
 
-    # Display conversation history
+    # Display chat messages
     for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-            # Play voice response for the latest assistant message
             if msg["role"] == "assistant" and idx == len(st.session_state.messages) - 1 and st.session_state.last_reply_text:
                 play_audio_response(st.session_state.last_reply_text)
 
     user_input = None
 
-    # Audio input widget
-    audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input")
-    if audio_value:
-        audio_bytes = audio_value.read()
-        if audio_bytes and len(audio_bytes) > 500 and audio_bytes != st.session_state.last_processed_audio:
-            with st.status("⚡ Processing audio...", expanded=False) as status:
-                transcribed = transcribe_audio(audio_bytes)
-                if transcribed:
-                    user_input = transcribed
-                    st.session_state.last_processed_audio = audio_bytes
-                    status.update(label="✅ Audio transcribed!", state="complete")
-                else:
-                    status.update(label="❌ Transcription failed", state="error")
+    # Safe audio input block to prevent widget error popups
+    try:
+        audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input")
+        if audio_value:
+            audio_bytes = audio_value.read()
+            if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.last_processed_audio:
+                with st.status("⚡ Transcribing audio...", expanded=False) as status:
+                    transcribed = transcribe_audio(audio_bytes)
+                    if transcribed:
+                        user_input = transcribed
+                        st.session_state.last_processed_audio = audio_bytes
+                        status.update(label="✅ Voice captured!", state="complete")
+                    else:
+                        status.update(label="⚠️ Speech not recognized. Please try again.", state="error")
+    except Exception as audio_err:
+        st.caption("Initializing voice input component...")
 
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
@@ -402,7 +486,7 @@ with col_chat:
     if user_input and user_email:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
-        # 1. Profile Extraction (Call B)
+        # Call B: JSON extraction
         try:
             conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
             res_B = client.beta.chat.completions.parse(
@@ -419,7 +503,7 @@ with col_chat:
         except Exception as e:
             st.error(f"Extraction error: {e}")
 
-        # 2. Assistant Response (Call A)
+        # Call A: Consultant response
         gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
         gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
 
@@ -447,7 +531,7 @@ with col_chat:
         save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
         st.rerun()
 
-# --- RIGHT COLUMN: VISUAL DASHBOARD & DYNAMIC REPORTS ---
+# --- RIGHT COLUMN: DASHBOARD & REPORT GENERATION ---
 with col_profile:
     st.subheader("📊 Strategic Live Profile")
 
