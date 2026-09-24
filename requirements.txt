@@ -1,2 +1,7 @@
 streamlit
 openai
+pydantic
+requests
+pandas
+plotly
+fpdf2
