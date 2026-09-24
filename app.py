@@ -3,7 +3,6 @@ import os
 import re
 import base64
 import tempfile
-import requests
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -35,7 +34,6 @@ if not api_key:
     st.stop()
 
 client = OpenAI(api_key=api_key)
-WEBHOOK_URL = st.secrets.get("WEBHOOK_URL", None)
 
 # -----------------------------------------------------------------------------
 # 2. PYDANTIC SCHEMAS
@@ -76,7 +74,7 @@ CRITICAL RULE WHEN GATEKEEPER IS UNLOCKED:
 - IF `GATEKEEPER STATUS` is "UNLOCKED":
   STOP asking mandatory diagnostic questions.
   Directly inform the executive:
-  "The diagnostic is now complete! I have updated your **Operational Scope Breakdown** and live strategic profile in the right sidebar. You can now click the 'Generate Human Diagnostic Report' button on the right to review and download your tailored PDF strategy. However, if any point feels unclear or if you would like to add more precision, please feel free to share it here with me."
+  "The diagnostic is now complete! I have updated your **Operational Scope Breakdown** and live strategic profile in the right sidebar. You can now click the 'Generate Human Diagnostic Report' button on the right to review and download your tailored PDF strategy with embedded analytics. However, if any point feels unclear or if you would like to add more precision, please feel free to share it here with me."
 
 IF GATEKEEPER IS LOCKED (PRIORITY MATRIX & STEP-BY-STEP FLOW):
 1. STEP 1 - MISSING FACTS (HIGHEST PRIORITY):
@@ -106,7 +104,7 @@ SCOPE HANDLING & DUAL GRANULARITY RULES:
    - Trigger `conflict_flag` = true ONLY if the user directly CONTRADICTS a clear, specific statement previously made.
 
 3. TOOLS & FACTS EXTRACTION:
-   - When tool names (Slack, Notion, Salesforce, Excel, etc.) are present in the evidence, you MUST populate `tools.value` with the exact tool names.
+   - When tool names (Slack, Notion, Salesforce, Excel, etc.) are present in the evidence, populate `tools.value` with exact names.
    - DO NOT extract vague statements like "standard tools".
 
 4. PAIN & FEAR EXTRACTION:
@@ -131,13 +129,13 @@ Structure your report as follows:
 """
 
 # -----------------------------------------------------------------------------
-# 4. HELPERS & STABLE PDF GENERATOR
+# 4. HELPERS, AUDIO HANDLERS & STABLE PDF GENERATOR WITH CHARTS
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
 def transcribe_audio(audio_bytes) -> str:
-    """Robust audio transcription with safety check."""
+    """Robust audio transcription with error handling."""
     if not audio_bytes or len(audio_bytes) < 1000:
         return ""
         
@@ -154,7 +152,7 @@ def transcribe_audio(audio_bytes) -> str:
             )
         return transcript.text.strip()
     except Exception as e:
-        print(f"Transcription error bypass: {e}")
+        st.warning(f"Voice recognition error: {e}. Please use text input instead.")
         return ""
     finally:
         if tmp_file_path and os.path.exists(tmp_file_path):
@@ -164,7 +162,7 @@ def transcribe_audio(audio_bytes) -> str:
                 pass
 
 def play_audio_response(text: str):
-    """Generates speech via OpenAI TTS and triggers HTML5 autoplay."""
+    """Generates speech via OpenAI TTS and triggers HTML5 autoplay safely."""
     try:
         response = client.audio.speech.create(
             model="tts-1",
@@ -181,17 +179,17 @@ def play_audio_response(text: str):
         """
         st.markdown(audio_html, unsafe_allow_html=True)
     except Exception as e:
-        st.warning(f"Unable to generate speech response: {e}")
+        st.caption("Voice playback currently unavailable.")
 
 def clean_text_for_pdf(text: str) -> str:
-    """Strips Markdown and non-Latin1 characters to prevent FPDF encoding crashes."""
+    """Strips unsupported Markdown and non-Latin1 characters to prevent FPDF crashes."""
     if not text:
         return ""
     text = text.replace("**", "").replace("#", "").replace("•", "-")
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-def generate_pdf_report(profile: dict, report_text: str) -> bytes:
-    """Generates an Executive Diagnostic PDF (Clean & Exception-Free)."""
+def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = None, fig_radar: go.Figure = None) -> bytes:
+    """Generates an Executive Diagnostic PDF including static Plotly chart images."""
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -200,7 +198,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     SECONDARY = (80, 80, 80)    # Slate Gray
     TEXT_COLOR = (40, 40, 40)   # Charcoal
     
-    # Title Block
+    # Header
     pdf.set_font("Helvetica", size=18, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 10, text="Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="L")
@@ -213,7 +211,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     pdf.line(10, 28, 200, 28)
     pdf.ln(8)
 
-    # 1. Profile Context Summary (Side-by-Side Dual Granularity Box)
+    # 1. Profile Context Summary Box
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 8, text="1. Profile Context & Granularity Check", new_x="LMARGIN", new_y="NEXT")
@@ -229,7 +227,6 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     bottleneck = clean_text_for_pdf(str(interp.get('primary_pain', {}).get('value', 'N/A')))
     concern = clean_text_for_pdf(str(interp.get('fear', {}).get('value', 'N/A')))
 
-    # Standard Rectangles (No non-standard 'r' parameter)
     start_y = pdf.get_y()
     
     # Left Box: Direct Team
@@ -258,7 +255,6 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
 
     pdf.set_y(start_y + 22)
 
-    # Details List
     details = [
         ("Industry Domain", industry),
         ("Current Tech Stack", tools),
@@ -272,13 +268,48 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
         pdf.set_font("Helvetica", style="", size=10)
         pdf.multi_cell(0, 6, text=val, new_x="LMARGIN", new_y="NEXT")
     
-    pdf.ln(6)
+    pdf.ln(4)
 
-    # 2. Strategic Diagnostic & Action Plan
-    pdf.set_font("Helvetica", size=13, style="B")
+    # --- 2. EMBED PLOTLY CHARTS INTO PDF ---
+    pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
-    pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(3)
+    pdf.cell(0, 8, text="2. Operational Analytics & Strategic Radar", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    # Save Plotly figures as temporary PNG files and place them side-by-side
+    tmp_files = []
+    try:
+        if fig_bar and fig_radar:
+            tmp_bar = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            tmp_radar = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            tmp_files.extend([tmp_bar.name, tmp_radar.name])
+
+            # Export Plotly to static PNG
+            fig_bar.write_image(tmp_bar.name, format="png", width=500, height=300)
+            fig_radar.write_image(tmp_radar.name, format="png", width=500, height=300)
+
+            chart_y = pdf.get_y()
+            pdf.image(tmp_bar.name, x=10, y=chart_y, w=90)
+            pdf.image(tmp_radar.name, x=105, y=chart_y, w=90)
+            pdf.set_y(chart_y + 55)
+    except Exception as chart_err:
+        pdf.set_font("Helvetica", style="I", size=9)
+        pdf.cell(0, 6, text="(Charts rendering fallback enabled)", new_x="LMARGIN", new_y="NEXT")
+    finally:
+        for tmp_path in tmp_files:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+    pdf.ln(4)
+
+    # 3. Strategic Diagnostic & Action Plan
+    pdf.set_font("Helvetica", size=12, style="B")
+    pdf.set_text_color(*PRIMARY)
+    pdf.cell(0, 8, text="3. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
 
     pdf.set_font("Helvetica", size=10)
     pdf.set_text_color(*TEXT_COLOR)
@@ -453,7 +484,7 @@ with col_chat:
 
     user_input = None
 
-    # Safe audio input block
+    # Safe Voice Input Block
     try:
         audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input_widget")
         if audio_value is not None:
@@ -466,9 +497,9 @@ with col_chat:
                         st.session_state.last_processed_audio = audio_bytes
                         status.update(label="✅ Voice captured!", state="complete")
                     else:
-                        status.update(label="⚠️ Speech not recognized. Please try typing or speaking again.", state="error")
+                        status.update(label="⚠️ Speech not recognized. Please try typing below.", state="error")
     except Exception as audio_err:
-        st.caption("🎙️ Voice input standby / ready for input.")
+        st.caption("🎙️ Voice input standby / ready for text input.")
 
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
@@ -557,22 +588,20 @@ with col_profile:
         render_card("Market Trigger", interp.get("trigger", {}))
         render_card("Executive Fear / Concern", interp.get("fear", {}))
 
+    # --- TAB 2: PLOTLY FIGURES GENERATION ---
     with tab_analytics:
         st.markdown("### 📊 Operational Scope Breakdown")
         
         direct_n = parse_number(facts.get("direct_team_size", {}).get("value"))
         total_n = parse_number(facts.get("company_size", {}).get("value"))
 
-        if total_n > 0 or direct_n > 0:
-            df_chart = pd.DataFrame({
-                "Scope": ["Direct Team", "Remaining Company"],
-                "Headcount": [direct_n, max(0, total_n - direct_n)]
-            })
-            fig = px.bar(df_chart, x="Scope", y="Headcount", color="Scope", title="Team vs Company Scale", text_auto=True)
-            fig.update_layout(showlegend=False, height=280)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.caption("Provide numeric team & company sizes to render headcount chart.")
+        df_chart = pd.DataFrame({
+            "Scope": ["Direct Team", "Remaining Company"],
+            "Headcount": [direct_n, max(0, total_n - direct_n)]
+        })
+        fig_bar = px.bar(df_chart, x="Scope", y="Headcount", color="Scope", title="Team vs Company Scale", text_auto=True)
+        fig_bar.update_layout(showlegend=False, height=280)
+        st.plotly_chart(fig_bar, use_container_width=True)
 
         st.markdown("### 🎯 Strategic Radar")
         categories = ['Operational Clarity', 'Tool Alignment', 'Risk Mitigation', 'Strategic Focus']
@@ -620,9 +649,10 @@ with col_profile:
         st.markdown(st.session_state.current_report)
 
         try:
-            pdf_bytes = generate_pdf_report(p, st.session_state.current_report)
+            # Generate PDF passing the active Plotly figures for chart embedding
+            pdf_bytes = generate_pdf_report(p, st.session_state.current_report, fig_bar=fig_bar, fig_radar=fig_radar)
             st.download_button(
-                label="📥 Download Executive Diagnostic (PDF)",
+                label="📥 Download Executive Diagnostic (PDF with Charts)",
                 data=pdf_bytes,
                 file_name="Executive_Diagnostic_Report.pdf",
                 mime="application/pdf"
