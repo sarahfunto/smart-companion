@@ -138,8 +138,8 @@ def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
 def transcribe_audio(audio_bytes) -> str:
-    """Robust audio transcription with file check."""
-    if not audio_bytes or len(audio_bytes) < 100:
+    """Robust audio transcription with temporary file cleanup."""
+    if not audio_bytes or len(audio_bytes) < 500:
         return ""
         
     tmp_file_path = None
@@ -165,6 +165,7 @@ def transcribe_audio(audio_bytes) -> str:
                 pass
 
 def play_audio_response(text: str):
+    """Generates speech via OpenAI TTS and triggers HTML5 autoplay."""
     try:
         response = client.audio.speech.create(
             model="tts-1",
@@ -181,19 +182,17 @@ def play_audio_response(text: str):
         """
         st.markdown(audio_html, unsafe_allow_html=True)
     except Exception as e:
-        st.warning(f"Unable to generate speech: {e}")
+        st.warning(f"Unable to generate speech response: {e}")
 
 def clean_text_for_pdf(text: str) -> str:
-    """Supprime les émoticones et caractères non-Latin1 pour éviter le plantage FPDF."""
+    """Strips Markdown and non-Latin1 emojis to prevent FPDF encoding crashes."""
     if not text:
         return ""
-    # Enlève le markdown (**, #)
     text = text.replace("**", "").replace("#", "")
-    # Remplace les émoticones / caractères spéciaux hors Latin-1
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
 def generate_pdf_report(profile: dict, report_text: str) -> bytes:
-    """Génère un PDF propre sans erreur d'encodage FPDF."""
+    """Generates a clean PDF version of the Executive Diagnostic."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", size=16, style="B")
@@ -372,24 +371,29 @@ with col_chat:
     progress_val = calculate_progress(st.session_state.profile)
     st.progress(progress_val, text=f"Diagnostic Readiness: {int(progress_val * 100)}%")
 
-    # Display chat history
+    # Display conversation history
     for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            # Play voice response for the latest assistant message
             if msg["role"] == "assistant" and idx == len(st.session_state.messages) - 1 and st.session_state.last_reply_text:
                 play_audio_response(st.session_state.last_reply_text)
 
     user_input = None
 
+    # Audio input widget
     audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input")
     if audio_value:
         audio_bytes = audio_value.read()
-        if audio_bytes and audio_bytes != st.session_state.last_processed_audio:
-            with st.spinner("Transcribing voice input..."):
+        if audio_bytes and len(audio_bytes) > 500 and audio_bytes != st.session_state.last_processed_audio:
+            with st.status("⚡ Processing audio...", expanded=False) as status:
                 transcribed = transcribe_audio(audio_bytes)
                 if transcribed:
                     user_input = transcribed
                     st.session_state.last_processed_audio = audio_bytes
+                    status.update(label="✅ Audio transcribed!", state="complete")
+                else:
+                    status.update(label="❌ Transcription failed", state="error")
 
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
@@ -398,7 +402,7 @@ with col_chat:
     if user_input and user_email:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
-        # 1. Extraction Call B
+        # 1. Profile Extraction (Call B)
         try:
             conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
             res_B = client.beta.chat.completions.parse(
@@ -415,11 +419,11 @@ with col_chat:
         except Exception as e:
             st.error(f"Extraction error: {e}")
 
-        # 2. Call A Response
+        # 2. Assistant Response (Call A)
         gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
         gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
 
-        with st.spinner("Thinking..."):
+        with st.spinner("Generating strategy advice..."):
             current_profile_str = json.dumps(st.session_state.profile)
             system_instruction = (
                 f"{CALL_A_SYSTEM_PROMPT}\n\n"
