@@ -3,7 +3,7 @@ import os
 import re
 import base64
 import tempfile
-import requests  # (Optional: Webhook Make / Zapier)
+import requests
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -126,9 +126,9 @@ FORMATTING:
 - Use clear headings, short paragraphs, and bold key phrases for quick scanning.
 
 Structure your report as follows:
-1. 💡 **The Reality Check**: Acknowledge their exact situation directly, referencing their direct team size, overall company size, tech stack, operational pain, and strategic risk.
-2. 🚀 **Immediate High-Impact Action (3-Day Execution Plan)**: Recommend 3 pragmatic, low-overhead FIRST STEPS.
-3. 🛡️ **Leadership Direction**: Reassure the executive on how to realign focus and navigate strategic priorities.
+1. The Reality Check: Acknowledge their exact situation directly, referencing their direct team size, overall company size, tech stack, operational pain, and strategic risk.
+2. Immediate High-Impact Action (3-Day Execution Plan): Recommend 3 pragmatic, low-overhead FIRST STEPS.
+3. Leadership Direction: Reassure the executive on how to realign focus and navigate strategic priorities.
 """
 
 # -----------------------------------------------------------------------------
@@ -138,7 +138,10 @@ def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
 def transcribe_audio(audio_bytes) -> str:
-    """Robust audio transcription handling temporary file creation and cleanup."""
+    """Robust audio transcription with file check."""
+    if not audio_bytes or len(audio_bytes) < 100:
+        return ""
+        
     tmp_file_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
@@ -162,7 +165,6 @@ def transcribe_audio(audio_bytes) -> str:
                 pass
 
 def play_audio_response(text: str):
-    """Generates OpenAI TTS speech and forces HTML5 autoplay."""
     try:
         response = client.audio.speech.create(
             model="tts-1",
@@ -180,6 +182,52 @@ def play_audio_response(text: str):
         st.markdown(audio_html, unsafe_allow_html=True)
     except Exception as e:
         st.warning(f"Unable to generate speech: {e}")
+
+def clean_text_for_pdf(text: str) -> str:
+    """Supprime les émoticones et caractères non-Latin1 pour éviter le plantage FPDF."""
+    if not text:
+        return ""
+    # Enlève le markdown (**, #)
+    text = text.replace("**", "").replace("#", "")
+    # Remplace les émoticones / caractères spéciaux hors Latin-1
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
+def generate_pdf_report(profile: dict, report_text: str) -> bytes:
+    """Génère un PDF propre sans erreur d'encodage FPDF."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=16, style="B")
+    pdf.cell(0, 10, text="Smart Companion - Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="C")
+    
+    pdf.set_font("Helvetica", size=10, style="I")
+    pdf.cell(0, 8, text="Generated automatically from your executive consultation session", new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.ln(5)
+
+    # Key Facts Section
+    pdf.set_font("Helvetica", size=12, style="B")
+    pdf.cell(0, 8, text="1. Profile Context & Key Facts", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=10)
+    
+    facts = profile.get("facts", {})
+    interp = profile.get("interpretation", {})
+    
+    pdf.cell(0, 6, text=f"- Industry: {clean_text_for_pdf(str(facts.get('industry', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Direct Team Size: {clean_text_for_pdf(str(facts.get('direct_team_size', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Overall Company Size: {clean_text_for_pdf(str(facts.get('company_size', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Current Tech Stack / Tools: {clean_text_for_pdf(str(facts.get('tools', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Primary Bottleneck: {clean_text_for_pdf(str(interp.get('primary_pain', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=f"- Critical Risk / Concern: {clean_text_for_pdf(str(interp.get('fear', {}).get('value', 'N/A')))}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+
+    # Diagnostic Body
+    pdf.set_font("Helvetica", size=12, style="B")
+    pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=10)
+    
+    clean_report = clean_text_for_pdf(report_text)
+    pdf.multi_cell(0, 6, text=clean_report)
+    
+    return bytes(pdf.output())
 
 def enforce_conflict_flags(profile_dict: dict) -> dict:
     facts = profile_dict.get("facts", {})
@@ -263,49 +311,10 @@ def calculate_progress(profile: dict) -> float:
     return filled_slots / total_slots
 
 def parse_number(val_str: Optional[str]) -> int:
-    """Helper to extract numbers from strings like '50 employees' -> 50."""
     if not val_str:
         return 0
     nums = re.findall(r'\d+', str(val_str))
     return int(nums[0]) if nums else 0
-
-def generate_pdf_report(profile: dict, report_text: str) -> bytes:
-    """Generates a clean PDF version of the Executive Diagnostic."""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", size=16, style="B")
-    pdf.cell(0, 10, text="Smart Companion - Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="C")
-    
-    pdf.set_font("Helvetica", size=10, style="I")
-    pdf.cell(0, 8, text="Generated automatically from your executive consultation session", new_x="LMARGIN", new_y="NEXT", align="C")
-    pdf.ln(5)
-
-    # Key Facts Section
-    pdf.set_font("Helvetica", size=12, style="B")
-    pdf.cell(0, 8, text="1. Profile Context & Key Facts", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", size=10)
-    
-    facts = profile.get("facts", {})
-    interp = profile.get("interpretation", {})
-    
-    pdf.cell(0, 6, text=f"- Industry: {facts.get('industry', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Direct Team Size: {facts.get('direct_team_size', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Overall Company Size: {facts.get('company_size', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Current Tech Stack / Tools: {facts.get('tools', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Primary Bottleneck: {interp.get('primary_pain', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=f"- Critical Risk / Concern: {interp.get('fear', {}).get('value', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(5)
-
-    # Diagnostic Body
-    pdf.set_font("Helvetica", size=12, style="B")
-    pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", size=10)
-    
-    # Strip markdown bolding for PDF
-    clean_text = report_text.replace("**", "").replace("#", "")
-    pdf.multi_cell(0, 6, text=clean_text)
-    
-    return bytes(pdf.output())
 
 # -----------------------------------------------------------------------------
 # 5. HEADER & USER IDENTIFICATION
@@ -375,10 +384,12 @@ with col_chat:
     audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input")
     if audio_value:
         audio_bytes = audio_value.read()
-        if audio_bytes != st.session_state.last_processed_audio:
+        if audio_bytes and audio_bytes != st.session_state.last_processed_audio:
             with st.spinner("Transcribing voice input..."):
-                user_input = transcribe_audio(audio_bytes)
-                st.session_state.last_processed_audio = audio_bytes
+                transcribed = transcribe_audio(audio_bytes)
+                if transcribed:
+                    user_input = transcribed
+                    st.session_state.last_processed_audio = audio_bytes
 
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
@@ -486,7 +497,6 @@ with col_profile:
         st.markdown("### 🎯 Strategic Radar")
         categories = ['Operational Clarity', 'Tool Alignment', 'Risk Mitigation', 'Strategic Focus']
         
-        # Calculate score based on extracted metrics
         score_clarity = 80 if facts.get("industry", {}).get("value") else 30
         score_tools = 80 if facts.get("tools", {}).get("value") else 20
         score_risk = 40 if interp.get("fear", {}).get("value") else 80
@@ -529,13 +539,16 @@ with col_profile:
         st.markdown("---")
         st.markdown(st.session_state.current_report)
 
-        pdf_bytes = generate_pdf_report(p, st.session_state.current_report)
-        st.download_button(
-            label="📥 Download Executive Diagnostic (PDF)",
-            data=pdf_bytes,
-            file_name="Executive_Diagnostic_Report.pdf",
-            mime="application/pdf"
-        )
+        try:
+            pdf_bytes = generate_pdf_report(p, st.session_state.current_report)
+            st.download_button(
+                label="📥 Download Executive Diagnostic (PDF)",
+                data=pdf_bytes,
+                file_name="Executive_Diagnostic_Report.pdf",
+                mime="application/pdf"
+            )
+        except Exception as e:
+            st.error(f"PDF Generation Error: {e}")
 
     with st.expander("🛠️ Raw JSON State (Debug Mode)"):
         st.json(p)
