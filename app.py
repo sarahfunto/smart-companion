@@ -4,7 +4,6 @@ import re
 import base64
 import tempfile
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -23,7 +22,7 @@ st.set_page_config(
 )
 
 st.title("🎙️ Smart Companion - Voice & Executive Diagnostic")
-st.caption("AI-Powered Executive Profiling with WebRTC Voice Capture & Dynamic Flow Control")
+st.caption("AI-Powered Executive Profiling with Voice Assistant & Interactive Analytics")
 
 DATA_DIR = "saved_profiles"
 if not os.path.exists(DATA_DIR):
@@ -63,36 +62,35 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS (ENGLISH ONLY WITH DYNAMIC REPHRASING RULE)
+# 3. SYSTEM PROMPTS WITH DYNAMIC REPHRASING & STRICT SEQUENTIAL FLOW
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
 
-STRICT SEQUENTIAL FLOW & REPHRASING MANDATE:
-You must strictly obtain valid information for the current active step before moving forward.
+STRICT MANDATE ON REPHRASING & SEQUENTIAL PROGRESSION:
+You must strictly obtain valid factual information for the current active step before moving forward.
 
-RULE FOR OFF-TOPIC, VAGUE, OR CASUAL INPUTS (e.g., "hi", "ok", "coucou", "I don't know"):
+RULE FOR OFF-TOPIC, VAGUE, OR CASUAL INPUTS (e.g., "hi", "coucou", "ok", "I don't know"):
 1. ACKNOWLEDGE & REFRAME: Warmly acknowledge their response and adapt to their tone.
-2. REPHRASE THE CURRENT QUESTION: Rephrase the active step's question using a fresh, engaging, or simpler perspective.
-3. ABSOLUTE BLOCK: DO NOT move to the next topic until the current step's required data is captured in the profile state.
+2. REPHRASE THE CURRENT QUESTION: Rephrase the current missing question in a fresh, engaging, or simpler way.
+3. ABSOLUTE BLOCK: DO NOT move to the next topic until the current step's required field is populated in the profile state.
 
-ACTIVE STEP CHECKLIST:
-
+SEQUENTIAL FLOW:
 - STEP 1 (Role & Industry):
   Condition: Is `industry.value` filled?
-  If NO -> Acknowledge input, REPHRASE and re-ask for their current executive role and industry sector. DO NOT ask about team size or tools yet.
+  If NO -> Acknowledge, REPHRASE and re-ask about their executive role and industry sector. DO NOT ask about team size or tools yet.
 
-- STEP 2 (Team Scope & Company Scale):
+- STEP 2 (Direct Team vs Company Scope):
   Condition: Is `direct_team_size.value` or `company_size.value` filled?
-  If NO -> Acknowledge input, REPHRASE and ask specifically for their direct team size versus overall company headcount.
+  If NO -> Acknowledge, REPHRASE and ask specifically to clarify direct team size versus overall company scale.
 
-- STEP 3 (Current Tech Stack & Tools):
+- STEP 3 (Current Tech Stack / Tools):
   Condition: Is `tools.value` filled?
-  If NO -> Acknowledge input, REPHRASE and ask about the specific software and platforms used daily.
+  If NO -> Acknowledge, REPHRASE and ask about the specific software and platforms used daily.
 
-- STEP 4 (Bottlenecks & Strategic Risks):
+- STEP 4 (Bottlenecks & Critical Concerns):
   Condition: Are `primary_pain.value` and `fear.value` filled?
-  If NO -> Acknowledge input, REPHRASE and ask about operational delays or critical business concerns.
+  If NO -> Acknowledge, REPHRASE and ask about operational delays or strategic fears.
 
 GATEKEEPER UNLOCKED RULE:
 - IF `GATEKEEPER STATUS` is "UNLOCKED":
@@ -111,17 +109,17 @@ EXTRACTION RULES:
 
 HUMAN_DIAGNOSIS_PROMPT = """
 You are a trusted executive strategist writing directly to a CEO/Executive. 
-Your tone must be professional, highly empathetic, direct, and pragmatic.
+Your tone must be warm, highly empathetic, direct, and pragmatic.
 Provide 3 concrete, short-term actions to execute within 3 days.
 
 Structure your report as follows:
-1. The Reality Check: Summarize current team scale, tech stack, and primary pain points.
-2. Immediate High-Impact Action (3-Day Execution Plan): Provide 3 actionable low-overhead steps.
-3. Leadership Direction: Strategic orientation to realign focus and navigate operational priorities.
+1. The Reality Check: Acknowledge their exact situation directly, referencing team scale, tools, and main risks.
+2. Immediate High-Impact Action (3-Day Execution Plan): Recommend 3 pragmatic, low-overhead first steps.
+3. Leadership Direction: Reassure the executive on how to realign focus.
 """
 
 # -----------------------------------------------------------------------------
-# 4. HELPERS, AUDIO HANDLERS & PDF GENERATOR
+# 4. HELPERS & PDF GENERATOR
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
@@ -142,7 +140,7 @@ def transcribe_audio(audio_bytes) -> str:
             )
         return transcript.text.strip()
     except Exception as e:
-        st.warning(f"Voice recognition error: {e}")
+        st.warning(f"Voice transcription error: {e}")
         return ""
     finally:
         if tmp_file_path and os.path.exists(tmp_file_path):
@@ -183,6 +181,7 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     PRIMARY = (31, 78, 121)
     TEXT_COLOR = (40, 40, 40)
     
+    # Title Block
     pdf.set_font("Helvetica", size=18, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 10, text="Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="L")
@@ -191,15 +190,16 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     facts = profile.get("facts", {})
     interp = profile.get("interpretation", {})
 
+    # Section 1: Facts & Scope
     pdf.set_font("Helvetica", size=12, style="B")
-    pdf.cell(0, 8, text="1. Profile Context & Operational Scope", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, text="1. Profile Context & Scope", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=10)
-    pdf.cell(0, 6, text=clean_text_for_pdf(f"Industry Domain: {facts.get('industry', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, text=clean_text_for_pdf(f"Industry: {facts.get('industry', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 6, text=clean_text_for_pdf(f"Direct Team: {facts.get('direct_team_size', {}).get('value', 'N/A')} | Company Size: {facts.get('company_size', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 6, text=clean_text_for_pdf(f"Tech Stack: {facts.get('tools', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 6, text=clean_text_for_pdf(f"Primary Pain: {interp.get('primary_pain', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
+    # Section 2: Embed Plotly Charts
     tmp_files = []
     try:
         if fig_bar and fig_radar:
@@ -219,21 +219,28 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     finally:
         for tmp_path in tmp_files:
             if os.path.exists(tmp_path):
-                try: os.remove(tmp_path)
-                except Exception: pass
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
     pdf.ln(4)
+    # Section 3: Strategic Assessment
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
-    pdf.cell(0, 8, text="2. Strategic Assessment & Recommendations", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=10)
     pdf.set_text_color(*TEXT_COLOR)
     
     pdf.multi_cell(0, 5, text=clean_text_for_pdf(report_text), new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
 
+def enforce_conflict_flags(profile_dict: dict) -> dict:
+    return profile_dict
+
 def save_and_sync_data(email: str, profile_data: dict, messages: list):
-    if not email: return
+    if not email:
+        return
     payload = {"user_email": email, "profile": profile_data, "chat_history": messages}
     safe_name = sanitize_email(email)
     path = os.path.join(DATA_DIR, f"{safe_name}.json")
@@ -270,7 +277,8 @@ def calculate_progress(profile: dict) -> float:
     return cnt / total
 
 def parse_number(val_str: Optional[str]) -> int:
-    if not val_str: return 0
+    if not val_str:
+        return 0
     nums = re.findall(r'\d+', str(val_str))
     return int(nums[0]) if nums else 0
 
@@ -313,6 +321,7 @@ if "profile" not in st.session_state:
 # -----------------------------------------------------------------------------
 col_chat, col_profile = st.columns([3, 2])
 
+# --- LEFT COLUMN: CONSULTATION CHAT ---
 with col_chat:
     st.subheader("💬 Executive Consultation (Voice & Text)")
     
@@ -327,81 +336,24 @@ with col_chat:
 
     user_input = None
 
-    # --- HTML5/JS WEBRTC CUSTOM VOICE CONTROLLER ---
-    st.markdown("#### 🎙️ Voice Control Panel")
+    # --- VOICE WIDGET & TEXT INPUT ---
+    st.markdown("#### 🎙️ Voice & Text Input")
     
-    js_recorder_code = """
-    <div style="font-family: sans-serif; display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-        <button id="startBtn" onclick="startRecording()" style="padding: 10px 16px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
-            ▶️ Start Speaking
-        </button>
-        <button id="stopBtn" onclick="stopRecording()" disabled style="padding: 10px 16px; background-color: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; opacity: 0.5;">
-            ⏹️ Stop & Send
-        </button>
-        <span id="status" style="font-size: 14px; color: #555;">Ready</span>
-    </div>
-
-    <script>
-        let mediaRecorder;
-        let audioChunks = [];
-
-        async function startRecording() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
-
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = () => {
-                        const base64Audio = reader.result.split(',')[1];
-                        window.parent.postMessage({
-                            type: 'streamlit:setComponentValue',
-                            value: base64Audio
-                        }, '*');
-                    };
-                };
-
-                mediaRecorder.start();
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('startBtn').style.opacity = '0.5';
-                document.getElementById('stopBtn').disabled = false;
-                document.getElementById('stopBtn').style.opacity = '1.0';
-                document.getElementById('status').innerText = '🔴 Recording...';
-            } catch (err) {
-                document.getElementById('status').innerText = '⚠️ Microphone Access Denied';
-            }
-        }
-
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('startBtn').style.opacity = '1.0';
-                document.getElementById('stopBtn').disabled = true;
-                document.getElementById('stopBtn').style.opacity = '0.5';
-                document.getElementById('status').innerText = '⏳ Processing Audio...';
-            }
-        }
-    </script>
-    """
-    
-    voice_b64 = components.html(js_recorder_code, height=60)
-
-    if voice_b64 and isinstance(voice_b64, str) and len(voice_b64) > 100:
-        try:
-            audio_bytes = base64.b64decode(voice_b64)
-            transcribed = transcribe_audio(audio_bytes)
-            if transcribed:
-                user_input = transcribed
-        except Exception:
-            st.warning("Failed to process voice input.")
+    try:
+        audio_value = st.audio_input("Record your voice response", disabled=not user_email, key="voice_mic_input")
+        if audio_value is not None:
+            audio_bytes = audio_value.read()
+            if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.get("last_processed_audio"):
+                with st.status("⚡ Transcribing audio with Whisper...", expanded=False) as status:
+                    transcribed = transcribe_audio(audio_bytes)
+                    if transcribed:
+                        user_input = transcribed
+                        st.session_state.last_processed_audio = audio_bytes
+                        status.update(label="✅ Voice captured!", state="complete")
+                    else:
+                        status.update(label="⚠️ Speech not recognized. Please try typing below.", state="error")
+    except Exception:
+        st.caption("🎙️ Voice input ready.")
 
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
@@ -445,25 +397,38 @@ with col_chat:
         except Exception as e:
             st.error(f"AI Processing Error: {e}")
 
-# --- RIGHT COLUMN: DASHBOARD ---
+# --- RIGHT COLUMN: DASHBOARD & REPORT GENERATION ---
 with col_profile:
     st.subheader("📊 Strategic Live Profile")
     p = st.session_state.profile
     facts = p.get("facts", {})
     interp = p.get("interpretation", {})
 
-    tab_overview, tab_analytics = st.tabs(["📋 Profile Summary", "📈 Operational Charts"])
+    tab_overview, tab_analytics = st.tabs(["📋 Executive Summary", "📈 Analytics & Diagrams"])
 
     with tab_overview:
+        def render_card(label, item):
+            val = item.get("value")
+            conflict = item.get("conflict_flag", False)
+            old_val = item.get("old_value")
+
+            if conflict:
+                st.warning(f"**{label}:** {val}\n\n⚠️ *Contradiction detected — Previously stated:* `{old_val}`")
+            elif val and val != "Not specified yet":
+                st.success(f"**{label}:** {val}")
+            else:
+                st.info(f"**{label}:** *Not specified yet*")
+
         st.markdown("### 🏢 Operational Facts")
-        st.write(f"**Industry Domain:** {facts.get('industry', {}).get('value') or 'Not specified'}")
-        st.write(f"**Direct Team Scope:** {facts.get('direct_team_size', {}).get('value') or 'Not specified'}")
-        st.write(f"**Company Scale:** {facts.get('company_size', {}).get('value') or 'Not specified'}")
-        st.write(f"**Tech Stack:** {facts.get('tools', {}).get('value') or 'Not specified'}")
+        render_card("Industry", facts.get("industry", {}))
+        render_card("Direct Team Size", facts.get("direct_team_size", {}))
+        render_card("Company Size (Overall)", facts.get("company_size", {}))
+        render_card("Current Tools", facts.get("tools", {}))
 
         st.markdown("### 🎯 Strategic Insights")
-        st.write(f"**Primary Bottleneck:** {interp.get('primary_pain', {}).get('value') or 'Not specified'}")
-        st.write(f"**Key Concern / Risk:** {interp.get('fear', {}).get('value') or 'Not specified'}")
+        render_card("Primary Pain Point", interp.get("primary_pain", {}))
+        render_card("Market Trigger", interp.get("trigger", {}))
+        render_card("Executive Fear / Concern", interp.get("fear", {}))
 
     with tab_analytics:
         st.markdown("### 📊 Scope Scale Breakdown")
@@ -520,8 +485,6 @@ with col_profile:
     if "current_report" in st.session_state:
         st.markdown("---")
         st.markdown(st.session_state.current_report)
-        pdf_bytes = generate_pdf_report(p, st.session_state.current_report, fig_bar=fig_bar, fig_radar=fig_radar)
-        st.download_button("📥 Download Executive Diagnostic (PDF)", data=pdf_bytes, file_name="Executive_Diagnostic.pdf", mime="application/pdf")
 
         try:
             pdf_bytes = generate_pdf_report(p, st.session_state.current_report, fig_bar=fig_bar, fig_radar=fig_radar)
