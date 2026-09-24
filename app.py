@@ -178,7 +178,7 @@ def play_audio_response(text: str):
             </audio>
         """
         st.markdown(audio_html, unsafe_allow_html=True)
-    except Exception as e:
+    except Exception:
         st.caption("Voice playback currently unavailable.")
 
 def clean_text_for_pdf(text: str) -> str:
@@ -270,13 +270,12 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     
     pdf.ln(4)
 
-    # --- 2. EMBED PLOTLY CHARTS INTO PDF ---
+    # 2. Plotly Charts in PDF
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 8, text="2. Operational Analytics & Strategic Radar", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
 
-    # Save Plotly figures as temporary PNG files and place them side-by-side
     tmp_files = []
     try:
         if fig_bar and fig_radar:
@@ -284,7 +283,6 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
             tmp_radar = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
             tmp_files.extend([tmp_bar.name, tmp_radar.name])
 
-            # Export Plotly to static PNG
             fig_bar.write_image(tmp_bar.name, format="png", width=500, height=300)
             fig_radar.write_image(tmp_radar.name, format="png", width=500, height=300)
 
@@ -292,7 +290,7 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
             pdf.image(tmp_bar.name, x=10, y=chart_y, w=90)
             pdf.image(tmp_radar.name, x=105, y=chart_y, w=90)
             pdf.set_y(chart_y + 55)
-    except Exception as chart_err:
+    except Exception:
         pdf.set_font("Helvetica", style="I", size=9)
         pdf.cell(0, 6, text="(Charts rendering fallback enabled)", new_x="LMARGIN", new_y="NEXT")
     finally:
@@ -305,7 +303,7 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
 
     pdf.ln(4)
 
-    # 3. Strategic Diagnostic & Action Plan
+    # 3. Strategic Diagnostic Report
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 8, text="3. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
@@ -428,6 +426,9 @@ user_email = st.text_input("📧 Enter your business email to start or restore y
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
 
+if "is_recording" not in st.session_state:
+    st.session_state.is_recording = False
+
 if "last_processed_audio" not in st.session_state:
     st.session_state.last_processed_audio = None
 
@@ -484,32 +485,54 @@ with col_chat:
 
     user_input = None
 
-    # Safe Voice Input Block
+    # --- VOICE INPUT SECTION WITH START / STOP BUTTONS ---
+    st.markdown("#### 🎙️ Voice Message Box")
+    
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        if st.button("▶️ Start Speaking (Démarrer)", disabled=not user_email, use_container_width=True):
+            st.session_state.is_recording = True
+            st.info("🎙️ Mic ready! Click the microphone below to start recording.")
+
+    with col_btn2:
+        if st.button("⏹️ Stop Speaking (Fin de prise de parole)", disabled=not user_email, use_container_width=True):
+            st.session_state.is_recording = False
+            st.success("✅ Voice capture stopped. Processing your audio...")
+
+    if st.session_state.is_recording:
+        st.warning("🔴 Recording in progress... Speak clearly into your microphone.")
+
     try:
-        audio_value = st.audio_input("🎙️ Speak to your AI Companion", disabled=not user_email, key="voice_input_widget")
+        audio_value = st.audio_input(
+            "Record your message", 
+            disabled=not user_email, 
+            key="voice_input_widget"
+        )
         if audio_value is not None:
             audio_bytes = audio_value.read()
             if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.get("last_processed_audio"):
-                with st.status("⚡ Transcribing audio...", expanded=False) as status:
+                with st.status("⚡ Transcribing audio with Whisper...", expanded=False) as status:
                     transcribed = transcribe_audio(audio_bytes)
                     if transcribed:
                         user_input = transcribed
                         st.session_state.last_processed_audio = audio_bytes
+                        st.session_state.is_recording = False
                         status.update(label="✅ Voice captured!", state="complete")
                     else:
                         status.update(label="⚠️ Speech not recognized. Please try typing below.", state="error")
-    except Exception as audio_err:
-        st.caption("🎙️ Voice input standby / ready for text input.")
+    except Exception:
+        st.caption("🎙️ Voice widget active.")
 
+    # --- TEXT INPUT FALLBACK ---
     text_val = st.chat_input("Or type your message here...", disabled=not user_email)
     if text_val and not user_input:
         user_input = text_val
 
+    # --- AI PIPELINE EXECUTION ---
     if user_input and user_email:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
         try:
-            # Call B: JSON extraction
             conv_text = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages])
             res_B = client.beta.chat.completions.parse(
                 model="gpt-4o",
@@ -523,7 +546,6 @@ with col_chat:
             raw_profile_dict = res_B.choices[0].message.parsed.model_dump()
             st.session_state.profile = enforce_conflict_flags(raw_profile_dict)
 
-            # Call A: Consultant response
             gatekeeper_is_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
             gatekeeper_status_str = "UNLOCKED" if gatekeeper_is_unlocked else "LOCKED"
 
@@ -588,7 +610,6 @@ with col_profile:
         render_card("Market Trigger", interp.get("trigger", {}))
         render_card("Executive Fear / Concern", interp.get("fear", {}))
 
-    # --- TAB 2: PLOTLY FIGURES GENERATION ---
     with tab_analytics:
         st.markdown("### 📊 Operational Scope Breakdown")
         
@@ -649,7 +670,6 @@ with col_profile:
         st.markdown(st.session_state.current_report)
 
         try:
-            # Generate PDF passing the active Plotly figures for chart embedding
             pdf_bytes = generate_pdf_report(p, st.session_state.current_report, fig_bar=fig_bar, fig_radar=fig_radar)
             st.download_button(
                 label="📥 Download Executive Diagnostic (PDF with Charts)",
