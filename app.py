@@ -4,7 +4,6 @@ import re
 import base64
 import tempfile
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -23,7 +22,7 @@ st.set_page_config(
 )
 
 st.title("🎙️ Smart Companion - Voice & Executive Diagnostic")
-st.caption("AI-Powered Executive Profiling with WebRTC Voice Control & Dynamic Flow")
+st.caption("AI-Powered Executive Profiling with Realtime Voice Assistant & Interactive Analytics")
 
 DATA_DIR = "saved_profiles"
 if not os.path.exists(DATA_DIR):
@@ -37,7 +36,15 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 # -----------------------------------------------------------------------------
-# 2. PYDANTIC SCHEMAS
+# 2. EMAIL VALIDATION FUNCTION (LIMOR'S FEEDBACK)
+# -----------------------------------------------------------------------------
+def is_valid_email(email: str) -> bool:
+    """Strict regex validation for executive email addresses."""
+    pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+    return bool(re.match(pattern, email.strip()))
+
+# -----------------------------------------------------------------------------
+# 3. PYDANTIC SCHEMAS
 # -----------------------------------------------------------------------------
 class ProfileAttribute(BaseModel):
     value: Optional[str] = Field(default=None)
@@ -63,7 +70,7 @@ class ExecutiveProfile(BaseModel):
     interpretation: InterpretationGroup = Field(default_factory=InterpretationGroup)
 
 # -----------------------------------------------------------------------------
-# 3. SYSTEM PROMPTS
+# 4. SYSTEM PROMPTS
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive.
@@ -76,10 +83,10 @@ RULE FOR OFF-TOPIC, VAGUE, OR CASUAL INPUTS (e.g., "hi", "coucou", "ok", "I don'
 2. REPHRASE THE CURRENT QUESTION: Rephrase the current missing question in a fresh, engaging, or simpler way.
 3. ABSOLUTE BLOCK: DO NOT move to the next topic until the current step's required field is populated in the profile state.
 
-SEQUENTIAL FLOW:
+SEQUENTIAL FLOW & PSYCHOLOGICAL UX PROGRESSION:
 - STEP 1 (Role & Industry):
   Condition: Is `industry.value` filled?
-  If NO -> Acknowledge, REPHRASE and re-ask about their executive role and industry sector. DO NOT ask about team size or tools yet.
+  If NO -> Acknowledge, REPHRASE and re-ask about their executive role and industry sector.
 
 - STEP 2 (Direct Team vs Company Scope):
   Condition: Is `direct_team_size.value` or `company_size.value` filled?
@@ -96,7 +103,7 @@ SEQUENTIAL FLOW:
 GATEKEEPER UNLOCKED RULE:
 - IF `GATEKEEPER STATUS` is "UNLOCKED":
   Directly inform the executive:
-  "The diagnostic is now complete and ready! I invite you to click the 'Generate Human Diagnostic Report' button on the right sidebar to review your tailored strategy. However, if any point feels unclear or if you would like to add more precision or additional context to any section, please feel free to share it with me here, and I will continuously refine and optimize the analysis for you."
+  "The diagnostic is now complete and ready! I invite you to click the 'Generate Human Diagnostic Report' button on the right sidebar to review your 3-day pragmatic action plan. However, if any point feels unclear or if you would like to add more precision or additional context, please feel free to share it with me here, and I will continuously refine and optimize the analysis for you."
 """
 
 CALL_B_SYSTEM_PROMPT = """
@@ -112,16 +119,18 @@ EXTRACTION RULES:
 HUMAN_DIAGNOSIS_PROMPT = """
 You are a trusted executive strategist writing directly to a CEO/Executive. 
 Your tone must be warm, highly empathetic, direct, and pragmatic.
-Provide 3 concrete, short-term actions to execute within 3 days.
+
+CRITICAL REQUIREMENT (LIMOR'S FEEDBACK):
+Provide immediate high-impact value. Focus on a 3-Day Execution Plan with 3 concrete, low-overhead FIRST STEPS.
 
 Structure your report as follows:
-1. The Reality Check: Acknowledge their exact situation directly, referencing team scale, tools, and main risks.
-2. Immediate High-Impact Action (3-Day Execution Plan): Recommend 3 pragmatic, low-overhead first steps.
-3. Leadership Direction: Reassure the executive on how to realign focus.
+1. The Reality Check: Acknowledge their exact situation directly, referencing direct team size, company size, tech stack, and primary bottleneck.
+2. Immediate High-Impact Action (3-Day Execution Plan): Recommend 3 pragmatic, concrete steps to complete in 72 hours.
+3. Leadership Direction: Reassure the executive on how to realign focus and navigate operational priorities.
 """
 
 # -----------------------------------------------------------------------------
-# 4. HELPERS & PDF GENERATOR
+# 5. HELPERS & PDF GENERATOR
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
@@ -278,9 +287,16 @@ def parse_number(val_str: Optional[str]) -> int:
     return int(nums[0]) if nums else 0
 
 # -----------------------------------------------------------------------------
-# 5. SESSION INITIALIZATION
+# 6. SESSION INITIALIZATION WITH EMAIL VALIDATION (LIMOR REQUIREMENT)
 # -----------------------------------------------------------------------------
 user_email = st.text_input("📧 Enter your business email to start or restore your session:", key="email_input")
+
+valid_email_state = False
+if user_email:
+    if is_valid_email(user_email):
+        valid_email_state = True
+    else:
+        st.error("⚠️ Please enter a valid email address (e.g., executive@company.com) to enable the assistant.")
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
@@ -288,12 +304,13 @@ if "current_user" not in st.session_state:
 if "last_reply_text" not in st.session_state:
     st.session_state.last_reply_text = None
 
-if user_email and user_email != st.session_state.current_user:
+if valid_email_state and user_email != st.session_state.current_user:
     st.session_state.current_user = user_email
     existing_data = load_user_data(user_email)
     if existing_data:
         st.session_state.profile = existing_data.get("profile", ExecutiveProfile().model_dump())
         st.session_state.messages = existing_data.get("chat_history", [])
+        st.success(f"Welcome back! Profile restored for {user_email}")
     else:
         st.session_state.profile = ExecutiveProfile().model_dump()
         st.session_state.messages = [{
@@ -312,7 +329,7 @@ if "profile" not in st.session_state:
     st.session_state.profile = ExecutiveProfile().model_dump()
 
 # -----------------------------------------------------------------------------
-# 6. LAYOUT & INTERFACE
+# 7. LAYOUT & INTERFACE
 # -----------------------------------------------------------------------------
 col_chat, col_profile = st.columns([3, 2])
 
@@ -321,7 +338,7 @@ with col_chat:
     st.subheader("💬 Executive Consultation (Voice & Text)")
     
     progress_val = calculate_progress(st.session_state.profile)
-    st.progress(progress_val, text=f"Diagnostic Readiness: {int(progress_val * 100)}%")
+    st.progress(progress_val, text=f"Diagnostic Progress: {int(progress_val * 100)}% (Step {int(progress_val * 4)} of 4 Completed)")
 
     for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
@@ -331,87 +348,30 @@ with col_chat:
 
     user_input = None
 
-    # --- WEBRTC JS VOICE BUTTONS (START / STOP) ---
-    st.markdown("#### 🎙️ Voice Control Panel")
+    # --- VOICE & TEXT INPUT ---
+    st.markdown("#### 🎙️ Voice & Text Input")
     
-    js_recorder_code = """
-    <div style="font-family: sans-serif; display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-        <button id="startBtn" onclick="startRecording()" style="padding: 10px 16px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
-            ▶️ Start Speaking
-        </button>
-        <button id="stopBtn" onclick="stopRecording()" disabled style="padding: 10px 16px; background-color: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; opacity: 0.5;">
-            ⏹️ Stop & Send
-        </button>
-        <span id="status" style="font-size: 14px; color: #555;">Ready</span>
-    </div>
+    try:
+        audio_value = st.audio_input("Record your voice response", disabled=not valid_email_state, key="voice_mic_input")
+        if audio_value is not None:
+            audio_bytes = audio_value.read()
+            if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.get("last_processed_audio"):
+                with st.status("⚡ Transcribing voice input...", expanded=False) as status:
+                    transcribed = transcribe_audio(audio_bytes)
+                    if transcribed:
+                        user_input = transcribed
+                        st.session_state.last_processed_audio = audio_bytes
+                        status.update(label="✅ Voice captured!", state="complete")
+                    else:
+                        status.update(label="⚠️ Speech not recognized. Please try typing below.", state="error")
+    except Exception:
+        st.caption("🎙️ Voice input ready.")
 
-    <script>
-        let mediaRecorder;
-        let audioChunks = [];
-
-        async function startRecording() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
-
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = () => {
-                        const base64Audio = reader.result.split(',')[1];
-                        window.parent.postMessage({
-                            type: 'streamlit:setComponentValue',
-                            value: base64Audio
-                        }, '*');
-                    };
-                };
-
-                mediaRecorder.start();
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('startBtn').style.opacity = '0.5';
-                document.getElementById('stopBtn').disabled = false;
-                document.getElementById('stopBtn').style.opacity = '1.0';
-                document.getElementById('status').innerText = '🔴 Recording...';
-            } catch (err) {
-                document.getElementById('status').innerText = '⚠️ Microphone Access Denied';
-            }
-        }
-
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('startBtn').style.opacity = '1.0';
-                document.getElementById('stopBtn').disabled = true;
-                document.getElementById('stopBtn').style.opacity = '0.5';
-                document.getElementById('status').innerText = '⏳ Processing Audio...';
-            }
-        }
-    </script>
-    """
-    
-    voice_b64 = components.html(js_recorder_code, height=60)
-
-    if voice_b64 and isinstance(voice_b64, str) and len(voice_b64) > 100:
-        try:
-            audio_bytes = base64.b64decode(voice_b64)
-            transcribed = transcribe_audio(audio_bytes)
-            if transcribed:
-                user_input = transcribed
-        except Exception:
-            st.warning("Failed to process voice input.")
-
-    text_val = st.chat_input("Or type your message here...", disabled=not user_email)
+    text_val = st.chat_input("Or type your message here...", disabled=not valid_email_state)
     if text_val and not user_input:
         user_input = text_val
 
-    if user_input and user_email:
+    if user_input and valid_email_state:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
         try:
@@ -430,7 +390,7 @@ with col_chat:
             gatekeeper_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
             status_str = "UNLOCKED" if gatekeeper_unlocked else "LOCKED"
 
-            with st.spinner("Processing insights..."):
+            with st.spinner("Processing strategic insights..."):
                 sys_inst = f"{CALL_A_SYSTEM_PROMPT}\n\nPROFILE STATE:\n{json.dumps(st.session_state.profile)}\nGATEKEEPER STATUS: {status_str}"
                 
                 res_A = client.chat.completions.create(
