@@ -4,6 +4,7 @@ import re
 import base64
 import tempfile
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -11,7 +12,6 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from typing import Optional
 from fpdf import FPDF
-from streamlit_mic_recorder import mic_recorder
 
 # -----------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION & DIRECTORY SETUP
@@ -346,22 +346,80 @@ with col_chat:
 
     user_input = None
 
-    # --- RELIABLE STREAMLIT MIC RECORDER ---
-    st.markdown("#### 🎙️ Voice Input")
-    audio = mic_recorder(
-        start_prompt="▶️ Start Recording",
-        stop_prompt="⏹️ Stop & Analyze",
-        key='recorder'
-    )
+    # --- DIRECT BROWSER NATIVE VOICE RECORDER ---
+    st.markdown("#### 🎙️ Voice & Text Input")
+    
+    audio_data = st.text_input("Audio Data Transfer", key="audio_b64_transfer", label_visibility="collapsed")
+    
+    html_recorder = """
+    <div style="font-family: sans-serif; display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+        <button id="recordBtn" onclick="toggleRecording()" style="padding: 10px 18px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+            ▶️ Start Voice Recording
+        </button>
+        <span id="recStatus" style="font-size: 14px; color: #555;">Ready</span>
+    </div>
 
-    if audio and 'bytes' in audio and audio['bytes']:
-        audio_bytes = audio['bytes']
-        if audio_bytes != st.session_state.get('last_audio_bytes'):
-            st.session_state.last_audio_bytes = audio_bytes
-            with st.spinner("Transcribing audio with Whisper..."):
-                transcribed = transcribe_audio(audio_bytes)
-                if transcribed:
-                    user_input = transcribed
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRec = false;
+
+        async function toggleRecording() {
+            const btn = document.getElementById('recordBtn');
+            const status = document.getElementById('recStatus');
+
+            if (!isRec) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = event => { audioChunks.push(event.data); };
+
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const reader = new FileReader();
+                        reader.readAsDataURL(audioBlob);
+                        reader.onloadend = () => {
+                            const base64Audio = reader.result.split(',')[1];
+                            const input = window.parent.document.querySelector('input[aria-label="Audio Data Transfer"]');
+                            if (input) {
+                                input.value = base64Audio;
+                                input.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        };
+                    };
+
+                    mediaRecorder.start();
+                    isRec = true;
+                    btn.innerText = "⏹️ Stop & Process";
+                    btn.style.backgroundColor = "#dc3545";
+                    status.innerText = "🔴 Recording...";
+                } catch (err) {
+                    status.innerText = "⚠️ Microphone Permission Denied";
+                }
+            } else {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    isRec = false;
+                    btn.innerText = "▶️ Start Voice Recording";
+                    btn.style.backgroundColor = "#28a745";
+                    status.innerText = "⏳ Transcribing...";
+                }
+            }
+        }
+    </script>
+    """
+    components.html(html_recorder, height=55)
+
+    if audio_data and len(audio_data) > 100:
+        try:
+            raw_bytes = base64.b64decode(audio_data)
+            transcribed = transcribe_audio(raw_bytes)
+            if transcribed:
+                user_input = transcribed
+        except Exception:
+            pass
 
     text_val = st.chat_input("Or type your message here...", disabled=not valid_email_state)
     if text_val and not user_input:
