@@ -4,7 +4,6 @@ import re
 import base64
 import tempfile
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -12,6 +11,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from typing import Optional
 from fpdf import FPDF
+from streamlit_mic_recorder import mic_recorder
 
 # -----------------------------------------------------------------------------
 # 1. PAGE CONFIGURATION & DIRECTORY SETUP
@@ -346,81 +346,22 @@ with col_chat:
 
     user_input = None
 
-    # --- STABLE WEBRTC VOICE RECORDER ---
-    st.markdown("#### 🎙️ Voice & Text Input")
-    
-    js_recorder_code = """
-    <div style="font-family: sans-serif; display: flex; gap: 10px; align-items: center; margin-bottom: 12px;">
-        <button id="startBtn" onclick="startRecording()" style="padding: 10px 18px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
-            ▶️ Record Voice
-        </button>
-        <button id="stopBtn" onclick="stopRecording()" disabled style="padding: 10px 18px; background-color: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; opacity: 0.5;">
-            ⏹️ Stop & Send
-        </button>
-        <span id="status" style="font-size: 14px; color: #555;">Ready</span>
-    </div>
+    # --- RELIABLE STREAMLIT MIC RECORDER ---
+    st.markdown("#### 🎙️ Voice Input")
+    audio = mic_recorder(
+        start_prompt="▶️ Start Recording",
+        stop_prompt="⏹️ Stop & Analyze",
+        key='recorder'
+    )
 
-    <script>
-        let mediaRecorder;
-        let audioChunks = [];
-
-        async function startRecording() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                audioChunks = [];
-
-                mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
-                };
-
-                mediaRecorder.onstop = async () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                    const reader = new FileReader();
-                    reader.readAsDataURL(audioBlob);
-                    reader.onloadend = () => {
-                        const base64Audio = reader.result.split(',')[1];
-                        window.parent.postMessage({
-                            type: 'streamlit:setComponentValue',
-                            value: base64Audio
-                        }, '*');
-                    };
-                };
-
-                mediaRecorder.start();
-                document.getElementById('startBtn').disabled = true;
-                document.getElementById('startBtn').style.opacity = '0.5';
-                document.getElementById('stopBtn').disabled = false;
-                document.getElementById('stopBtn').style.opacity = '1.0';
-                document.getElementById('status').innerText = '🔴 Recording... Speak now';
-            } catch (err) {
-                document.getElementById('status').innerText = '⚠️ Microphone Permission Denied';
-            }
-        }
-
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('startBtn').style.opacity = '1.0';
-                document.getElementById('stopBtn').disabled = true;
-                document.getElementById('stopBtn').style.opacity = '0.5';
-                document.getElementById('status').innerText = '⏳ Processing Audio...';
-            }
-        }
-    </script>
-    """
-    
-    voice_b64 = components.html(js_recorder_code, height=60)
-
-    if voice_b64 and isinstance(voice_b64, str) and len(voice_b64) > 100:
-        try:
-            audio_bytes = base64.b64decode(voice_b64)
-            transcribed = transcribe_audio(audio_bytes)
-            if transcribed:
-                user_input = transcribed
-        except Exception:
-            st.warning("Audio processing error. Please try again or use text input.")
+    if audio and 'bytes' in audio and audio['bytes']:
+        audio_bytes = audio['bytes']
+        if audio_bytes != st.session_state.get('last_audio_bytes'):
+            st.session_state.last_audio_bytes = audio_bytes
+            with st.spinner("Transcribing audio with Whisper..."):
+                transcribed = transcribe_audio(audio_bytes)
+                if transcribed:
+                    user_input = transcribed
 
     text_val = st.chat_input("Or type your message here...", disabled=not valid_email_state)
     if text_val and not user_input:
