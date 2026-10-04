@@ -128,18 +128,26 @@ Structure your report as follows:
 """
 
 # -----------------------------------------------------------------------------
-# 5. HELPERS & PDF GENERATOR
+# 5. HELPERS & AUDIO TRANSCRIPTION
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
-def transcribe_audio(audio_bytes) -> str:
-    if not audio_bytes or len(audio_bytes) < 1000:
+def transcribe_audio_file(audio_file) -> str:
+    if not audio_file:
         return ""
+    
+    # Save the audio stream safely to a temporary file
+    suffix = ".wav"
+    if hasattr(audio_file, "type") and "webm" in audio_file.type:
+        suffix = ".webm"
+    elif hasattr(audio_file, "type") and "ogg" in audio_file.type:
+        suffix = ".ogg"
+
     tmp_file_path = None
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-            tmp_file.write(audio_bytes)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+            tmp_file.write(audio_file.getbuffer())
             tmp_file_path = tmp_file.name
 
         with open(tmp_file_path, "rb") as f:
@@ -149,7 +157,7 @@ def transcribe_audio(audio_bytes) -> str:
             )
         return transcript.text.strip()
     except Exception as e:
-        st.warning(f"Voice transcription error: {e}")
+        st.error(f"Voice transcription error: {e}")
         return ""
     finally:
         if tmp_file_path and os.path.exists(tmp_file_path):
@@ -346,26 +354,25 @@ with col_chat:
 
     user_input = None
 
-    # --- NATIVE STREAMLIT AUDIO INPUT ---
-    st.markdown("#### 🎙️ Voice & Text Input")
+    # --- VOICE INPUT SECTION ---
+    st.markdown("#### 🎙️️ Voice Input")
+    audio_val = st.audio_input("Record your voice", disabled=not valid_email_state, key="native_audio_input")
     
-    try:
-        audio_val = st.audio_input("Record your response", disabled=not valid_email_state, key="native_audio_input")
-        if audio_val is not None:
-            audio_bytes = audio_val.read()
-            if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.get("last_processed_audio"):
-                with st.spinner("Transcribing voice input..."):
-                    transcribed = transcribe_audio(audio_bytes)
-                    if transcribed:
-                        user_input = transcribed
-                        st.session_state.last_processed_audio = audio_bytes
-    except Exception:
-        pass
+    if audio_val is not None:
+        file_id = getattr(audio_val, "name", str(len(audio_val.getbuffer())))
+        if file_id != st.session_state.get("last_audio_id"):
+            with st.spinner("Transcribing audio..."):
+                transcribed = transcribe_audio_file(audio_val)
+                if transcribed:
+                    user_input = transcribed
+                    st.session_state.last_audio_id = file_id
 
+    # --- TEXT INPUT SECTION ---
     text_val = st.chat_input("Or type your message here...", disabled=not valid_email_state)
     if text_val and not user_input:
         user_input = text_val
 
+    # --- PROCESSING PIPELINE ---
     if user_input and valid_email_state:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
@@ -385,7 +392,7 @@ with col_chat:
             gatekeeper_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
             status_str = "UNLOCKED" if gatekeeper_unlocked else "LOCKED"
 
-            with st.spinner("Processing strategic insights..."):
+            with st.spinner("Processing strategic response..."):
                 sys_inst = f"{CALL_A_SYSTEM_PROMPT}\n\nPROFILE STATE:\n{json.dumps(st.session_state.profile)}\nGATEKEEPER STATUS: {status_str}"
                 
                 res_A = client.chat.completions.create(
