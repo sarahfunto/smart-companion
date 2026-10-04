@@ -17,13 +17,13 @@ from fpdf import FPDF
 # 1. PAGE CONFIGURATION & DIRECTORY SETUP
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Smart Companion - Executive Profiler (Realtime Voice)",
+    page_title="Smart Companion - Executive Profiler",
     page_icon="🎙️",
     layout="wide"
 )
 
-st.title("🎙️ Smart Companion - OpenAI Realtime Voice & Executive Diagnostic")
-st.caption("AI-Powered Executive Profiling powered by OpenAI Realtime Voice API (WebSocket)")
+st.title("🎙️ Smart Companion - Voice & Executive Diagnostic")
+st.caption("AI-Powered Executive Profiling with Voice Assistant & Interactive Analytics")
 
 DATA_DIR = "saved_profiles"
 if not os.path.exists(DATA_DIR):
@@ -40,7 +40,6 @@ client = OpenAI(api_key=api_key)
 # 2. EMAIL VALIDATION FUNCTION
 # -----------------------------------------------------------------------------
 def is_valid_email(email: str) -> bool:
-    """Strict regex validation for executive email addresses."""
     pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     return bool(re.match(pattern, email.strip()))
 
@@ -74,7 +73,7 @@ class ExecutiveProfile(BaseModel):
 # 4. SYSTEM PROMPTS
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
-You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive via Realtime Voice.
+You are a warm, highly empathetic senior AI strategy consultant speaking directly to an executive via Voice.
 
 STRICT MANDATE ON REPHRASING & SEQUENTIAL PROGRESSION:
 You must strictly obtain valid factual information for the current active step before moving forward.
@@ -133,6 +132,49 @@ Structure your report as follows:
 # -----------------------------------------------------------------------------
 def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
+
+def transcribe_audio(audio_bytes) -> str:
+    if not audio_bytes or len(audio_bytes) < 1000:
+        return ""
+    tmp_file_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_file.write(audio_bytes)
+            tmp_file_path = tmp_file.name
+
+        with open(tmp_file_path, "rb") as f:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f
+            )
+        return transcript.text.strip()
+    except Exception as e:
+        st.warning(f"Voice transcription error: {e}")
+        return ""
+    finally:
+        if tmp_file_path and os.path.exists(tmp_file_path):
+            try:
+                os.remove(tmp_file_path)
+            except Exception:
+                pass
+
+def play_audio_response(text: str):
+    try:
+        response = client.audio.speech.create(
+            model="tts-1",
+            voice="alloy",
+            input=text
+        )
+        audio_bytes = response.content
+        b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
+        audio_html = f"""
+            <audio autoplay controls style="width: 100%; margin-top: 10px;">
+                <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
+            </audio>
+        """
+        st.markdown(audio_html, unsafe_allow_html=True)
+    except Exception:
+        pass
 
 def clean_text_for_pdf(text: str) -> str:
     if not text:
@@ -257,6 +299,9 @@ if user_email:
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
 
+if "last_reply_text" not in st.session_state:
+    st.session_state.last_reply_text = None
+
 if valid_email_state and user_email != st.session_state.current_user:
     st.session_state.current_user = user_email
     existing_data = load_user_data(user_email)
@@ -286,90 +331,96 @@ if "profile" not in st.session_state:
 # -----------------------------------------------------------------------------
 col_chat, col_profile = st.columns([3, 2])
 
-# --- LEFT COLUMN: CONSULTATION CHAT & OPENAI REALTIME VOICE ---
+# --- LEFT COLUMN: CONSULTATION CHAT ---
 with col_chat:
-    st.subheader("💬 Realtime Voice Consultation (OpenAI Live API)")
+    st.subheader("💬 Executive Consultation (Voice & Text)")
     
     progress_val = calculate_progress(st.session_state.profile)
     st.progress(progress_val, text=f"Diagnostic Progress: {int(progress_val * 100)}% (Step {int(progress_val * 4)} of 4 Completed)")
 
-    for msg in st.session_state.messages:
+    for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
+            if msg["role"] == "assistant" and idx == len(st.session_state.messages) - 1 and st.session_state.last_reply_text:
+                play_audio_response(st.session_state.last_reply_text)
 
     user_input = None
 
-    # --- REALTIME WEBSOCKET OPENAI AUDIO COMPONENT ---
-    st.markdown("#### ⚡ Realtime Voice Session (Zero-Latency)")
+    # --- STABLE WEBRTC VOICE RECORDER ---
+    st.markdown("#### 🎙️ Voice & Text Input")
     
-    realtime_widget_code = f"""
-    <div style="font-family: sans-serif; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; background: #f9f9f9;">
-        <button id="connectBtn" onclick="toggleRealtimeSession()" style="padding: 12px 20px; background-color: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
-            🎙️ Start Realtime Live Conversation
+    js_recorder_code = """
+    <div style="font-family: sans-serif; display: flex; gap: 10px; align-items: center; margin-bottom: 12px;">
+        <button id="startBtn" onclick="startRecording()" style="padding: 10px 18px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+            ▶️ Record Voice
         </button>
-        <div id="status" style="margin-top: 10px; font-size: 14px; color: #666; text-align: center;">Disconnected</div>
+        <button id="stopBtn" onclick="stopRecording()" disabled style="padding: 10px 18px; background-color: #dc3545; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; opacity: 0.5;">
+            ⏹️ Stop & Send
+        </button>
+        <span id="status" style="font-size: 14px; color: #555;">Ready</span>
     </div>
 
     <script>
-        let ws;
-        let isConnected = false;
-        const apiKey = "{api_key}";
+        let mediaRecorder;
+        let audioChunks = [];
 
-        function toggleRealtimeSession() {{
-            const btn = document.getElementById('connectBtn');
-            const status = document.getElementById('status');
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
 
-            if (!isConnected) {{
-                try {{
-                    const url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview";
-                    ws = new WebSocket(url, [
-                        "realtime",
-                        "openai-insecure-api-key." + apiKey,
-                        "openai-beta.realtime-v1"
-                    ]);
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
 
-                    ws.onopen = () => {{
-                        isConnected = true;
-                        btn.innerText = "⏹️ Stop Live Session";
-                        btn.style.backgroundColor = "#dc3545";
-                        status.innerText = "🟢 Connected (Live Audio-to-Audio Streaming)";
-                    }};
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(audioBlob);
+                    reader.onloadend = () => {
+                        const base64Audio = reader.result.split(',')[1];
+                        window.parent.postMessage({
+                            type: 'streamlit:setComponentValue',
+                            value: base64Audio
+                        }, '*');
+                    };
+                };
 
-                    ws.onmessage = (event) => {{
-                        const response = JSON.parse(event.data);
-                        if (response.type === 'conversation.item.created' && response.item.role === 'user') {{
-                            window.parent.postMessage({{
-                                type: 'streamlit:setComponentValue',
-                                value: response.item.content[0].text || "Voice input received"
-                            }}, '*');
-                        }}
-                    }};
+                mediaRecorder.start();
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('startBtn').style.opacity = '0.5';
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('stopBtn').style.opacity = '1.0';
+                document.getElementById('status').innerText = '🔴 Recording... Speak now';
+            } catch (err) {
+                document.getElementById('status').innerText = '⚠️ Microphone Permission Denied';
+            }
+        }
 
-                    ws.onerror = (err) => {{
-                        status.innerText = "⚠️ Realtime Connection Error. Check API key permissions.";
-                    }};
-
-                    ws.onclose = () => {{
-                        isConnected = false;
-                        btn.innerText = "🎙️ Start Realtime Live Conversation";
-                        btn.style.backgroundColor = "#007bff";
-                        status.innerText = "Disconnected";
-                    }};
-
-                }} catch (e) {{
-                    status.innerText = "⚠️ WebSockets not supported or blocked.";
-                }}
-            }} else {{
-                if (ws) ws.close();
-            }}
-        }}
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('startBtn').style.opacity = '1.0';
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('stopBtn').style.opacity = '0.5';
+                document.getElementById('status').innerText = '⏳ Processing Audio...';
+            }
+        }
     </script>
     """
     
-    realtime_event = components.html(realtime_widget_code, height=120)
+    voice_b64 = components.html(js_recorder_code, height=60)
 
-    if realtime_event and isinstance(realtime_event, str) and len(realtime_event) > 2:
-        user_input = realtime_event
+    if voice_b64 and isinstance(voice_b64, str) and len(voice_b64) > 100:
+        try:
+            audio_bytes = base64.b64decode(voice_b64)
+            transcribed = transcribe_audio(audio_bytes)
+            if transcribed:
+                user_input = transcribed
+        except Exception:
+            st.warning("Audio processing error. Please try again or use text input.")
 
     text_val = st.chat_input("Or type your message here...", disabled=not valid_email_state)
     if text_val and not user_input:
@@ -404,6 +455,7 @@ with col_chat:
                 )
                 reply = res_A.choices[0].message.content
                 st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.session_state.last_reply_text = reply
 
             save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
             st.rerun()
