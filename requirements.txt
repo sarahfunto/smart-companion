@@ -1,7 +1,7 @@
 streamlit
 openai
 pydantic
-requests
 pandas
 plotly
 fpdf2
+streamlit-mic-recorder
