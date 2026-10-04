@@ -443,7 +443,7 @@ with col_profile:
             "Headcount": [direct_n, max(0, total_n - direct_n)]
         })
         fig_bar = px.bar(df_chart, x="Scope", y="Headcount", color="Scope", title="Team Scope vs Company Scale")
-        st.plotly_chart(fig_bar, width="100%")
+        st.plotly_chart(fig_bar, use_container_width=True)
 
     st.divider()
     unlocked = check_gatekeeper_unlocked(p)
