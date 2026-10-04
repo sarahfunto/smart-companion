@@ -4,7 +4,6 @@ import re
 import base64
 import tempfile
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -40,6 +39,7 @@ client = OpenAI(api_key=api_key)
 # 2. EMAIL VALIDATION FUNCTION
 # -----------------------------------------------------------------------------
 def is_valid_email(email: str) -> bool:
+    """Strict regex validation for executive email addresses."""
     pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     return bool(re.match(pattern, email.strip()))
 
@@ -346,80 +346,21 @@ with col_chat:
 
     user_input = None
 
-    # --- DIRECT BROWSER NATIVE VOICE RECORDER ---
+    # --- NATIVE STREAMLIT AUDIO INPUT ---
     st.markdown("#### 🎙️ Voice & Text Input")
     
-    audio_data = st.text_input("Audio Data Transfer", key="audio_b64_transfer", label_visibility="collapsed")
-    
-    html_recorder = """
-    <div style="font-family: sans-serif; display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-        <button id="recordBtn" onclick="toggleRecording()" style="padding: 10px 18px; background-color: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
-            ▶️ Start Voice Recording
-        </button>
-        <span id="recStatus" style="font-size: 14px; color: #555;">Ready</span>
-    </div>
-
-    <script>
-        let mediaRecorder;
-        let audioChunks = [];
-        let isRec = false;
-
-        async function toggleRecording() {
-            const btn = document.getElementById('recordBtn');
-            const status = document.getElementById('recStatus');
-
-            if (!isRec) {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    mediaRecorder = new MediaRecorder(stream);
-                    audioChunks = [];
-
-                    mediaRecorder.ondataavailable = event => { audioChunks.push(event.data); };
-
-                    mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                        const reader = new FileReader();
-                        reader.readAsDataURL(audioBlob);
-                        reader.onloadend = () => {
-                            const base64Audio = reader.result.split(',')[1];
-                            const input = window.parent.document.querySelector('input[aria-label="Audio Data Transfer"]');
-                            if (input) {
-                                input.value = base64Audio;
-                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                            }
-                        };
-                    };
-
-                    mediaRecorder.start();
-                    isRec = true;
-                    btn.innerText = "⏹️ Stop & Process";
-                    btn.style.backgroundColor = "#dc3545";
-                    status.innerText = "🔴 Recording...";
-                } catch (err) {
-                    status.innerText = "⚠️ Microphone Permission Denied";
-                }
-            } else {
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                    isRec = false;
-                    btn.innerText = "▶️ Start Voice Recording";
-                    btn.style.backgroundColor = "#28a745";
-                    status.innerText = "⏳ Transcribing...";
-                }
-            }
-        }
-    </script>
-    """
-    components.html(html_recorder, height=55)
-
-    if audio_data and len(audio_data) > 100:
-        try:
-            raw_bytes = base64.b64decode(audio_data)
-            transcribed = transcribe_audio(raw_bytes)
-            if transcribed:
-                user_input = transcribed
-        except Exception:
-            pass
+    try:
+        audio_val = st.audio_input("Record your response", disabled=not valid_email_state, key="native_audio_input")
+        if audio_val is not None:
+            audio_bytes = audio_val.read()
+            if audio_bytes and len(audio_bytes) > 2000 and audio_bytes != st.session_state.get("last_processed_audio"):
+                with st.spinner("Transcribing voice input..."):
+                    transcribed = transcribe_audio(audio_bytes)
+                    if transcribed:
+                        user_input = transcribed
+                        st.session_state.last_processed_audio = audio_bytes
+    except Exception:
+        pass
 
     text_val = st.chat_input("Or type your message here...", disabled=not valid_email_state)
     if text_val and not user_input:
