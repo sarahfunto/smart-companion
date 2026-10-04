@@ -39,7 +39,6 @@ client = OpenAI(api_key=api_key)
 # 2. EMAIL VALIDATION FUNCTION
 # -----------------------------------------------------------------------------
 def is_valid_email(email: str) -> bool:
-    """Strict regex validation for executive email addresses."""
     pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     return bool(re.match(pattern, email.strip()))
 
@@ -78,7 +77,7 @@ You are a warm, highly empathetic senior AI strategy consultant speaking directl
 STRICT MANDATE ON REPHRASING & SEQUENTIAL PROGRESSION:
 You must strictly obtain valid factual information for the current active step before moving forward.
 
-RULE FOR OFF-TOPIC, VAGUE, OR CASUAL INPUTS (e.g., "hi", "coucou", "you", "ok", "I don't know"):
+RULE FOR OFF-TOPIC, VAGUE, OR CASUAL INPUTS (e.g., "hi", "hello", "ok", "I don't know"):
 1. ACKNOWLEDGE & REFRAME: Warmly acknowledge their response and adapt to their tone.
 2. REPHRASE THE CURRENT QUESTION: Rephrase the current missing question in a fresh, engaging, or simpler way.
 3. ABSOLUTE BLOCK: DO NOT move to the next topic until the current step's required field is populated in the profile state.
@@ -103,7 +102,7 @@ SEQUENTIAL FLOW:
 GATEKEEPER UNLOCKED RULE:
 - IF `GATEKEEPER STATUS` is "UNLOCKED":
   Directly inform the executive:
-  "The diagnostic is now complete and ready! I invite you to click the 'Generate Human Diagnostic Report' button on the right sidebar to review your 3-day pragmatic action plan. However, if any point feels unclear or if you would like to add more precision or additional context, please feel free to share it with me here, and I will continuously refine and optimize the analysis for you."
+  "The diagnostic is now complete and ready! I invite you to click the 'Generate Human Diagnostic Report' button on the right sidebar to review your 3-day pragmatic action plan."
 """
 
 CALL_B_SYSTEM_PROMPT = """
@@ -120,11 +119,6 @@ HUMAN_DIAGNOSIS_PROMPT = """
 You are a trusted executive strategist writing directly to a CEO/Executive. 
 Your tone must be warm, highly empathetic, direct, and pragmatic.
 Provide immediate high-impact value. Focus on a 3-Day Execution Plan with 3 concrete, low-overhead FIRST STEPS.
-
-Structure your report as follows:
-1. The Reality Check: Acknowledge their exact situation directly, referencing direct team size, company size, tech stack, and primary bottleneck.
-2. Immediate High-Impact Action (3-Day Execution Plan): Recommend 3 pragmatic, concrete steps to complete in 72 hours.
-3. Leadership Direction: Reassure the executive on how to realign focus and navigate operational priorities.
 """
 
 # -----------------------------------------------------------------------------
@@ -137,7 +131,6 @@ def transcribe_audio_file(audio_file) -> str:
     if not audio_file:
         return ""
     
-    # Save the audio stream safely to a temporary file
     suffix = ".wav"
     if hasattr(audio_file, "type") and "webm" in audio_file.type:
         suffix = ".webm"
@@ -146,16 +139,28 @@ def transcribe_audio_file(audio_file) -> str:
 
     tmp_file_path = None
     try:
+        audio_data = audio_file.getbuffer()
+        if len(audio_data) < 1000:
+            return ""
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
-            tmp_file.write(audio_file.getbuffer())
+            tmp_file.write(audio_data)
             tmp_file_path = tmp_file.name
 
         with open(tmp_file_path, "rb") as f:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
-                file=f
+                file=f,
+                prompt="Executive diagnostic, company, role, industry sector, tools."
             )
-        return transcript.text.strip()
+        
+        text = transcript.text.strip()
+        junk_phrases = ["you", "you.", "thank you", "thank you.", "mb", "amara.org", ""]
+        if text.lower() in junk_phrases or len(text) < 2:
+            return ""
+            
+        return text
+
     except Exception as e:
         st.error(f"Voice transcription error: {e}")
         return ""
@@ -190,7 +195,7 @@ def clean_text_for_pdf(text: str) -> str:
     text = text.replace("**", "").replace("#", "").replace("•", "-")
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = None, fig_radar: go.Figure = None) -> bytes:
+def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -204,7 +209,6 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     pdf.ln(4)
 
     facts = profile.get("facts", {})
-    interp = profile.get("interpretation", {})
 
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.cell(0, 8, text="1. Profile Context & Scope", new_x="LMARGIN", new_y="NEXT")
@@ -214,31 +218,6 @@ def generate_pdf_report(profile: dict, report_text: str, fig_bar: go.Figure = No
     pdf.cell(0, 6, text=clean_text_for_pdf(f"Tech Stack: {facts.get('tools', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
 
-    tmp_files = []
-    try:
-        if fig_bar and fig_radar:
-            tmp_bar = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-            tmp_radar = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-            tmp_files.extend([tmp_bar.name, tmp_radar.name])
-
-            fig_bar.write_image(tmp_bar.name, format="png", width=500, height=300)
-            fig_radar.write_image(tmp_radar.name, format="png", width=500, height=300)
-
-            chart_y = pdf.get_y()
-            pdf.image(tmp_bar.name, x=10, y=chart_y, w=90)
-            pdf.image(tmp_radar.name, x=105, y=chart_y, w=90)
-            pdf.set_y(chart_y + 55)
-    except Exception:
-        pass
-    finally:
-        for tmp_path in tmp_files:
-            if os.path.exists(tmp_path):
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
-
-    pdf.ln(4)
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
     pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
@@ -293,16 +272,27 @@ def parse_number(val_str: Optional[str]) -> int:
     return int(nums[0]) if nums else 0
 
 # -----------------------------------------------------------------------------
-# 6. SESSION INITIALIZATION
+# 6. SESSION INITIALIZATION & BANNER
 # -----------------------------------------------------------------------------
-user_email = st.text_input("📧 Enter your business email to start or restore your session:", key="email_input")
+st.markdown("""
+<div style='background-color: #f0f4f8; padding: 15px; border-radius: 10px; border-left: 5px solid #1f4e79; margin-bottom: 20px;'>
+    <h4 style='margin:0; color: #1f4e79;'>🚀 Quick Start Guide</h4>
+    <p style='margin: 5px 0 0 0; font-size: 14px; color: #333;'>
+        1. Enter your professional email address below.<br>
+        2. Click the microphone input and speak naturally to respond.<br>
+        3. The AI assistant will automatically parse your responses and guide you step by step.
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+user_email = st.text_input("📧 Enter your business email to start or retrieve your session:", key="email_input")
 
 valid_email_state = False
 if user_email:
     if is_valid_email(user_email):
         valid_email_state = True
     else:
-        st.error("⚠️ Please enter a valid email address (e.g., executive@company.com) to enable the assistant.")
+        st.error("⚠️ Please enter a valid business email address (e.g., executive@company.com).")
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
@@ -316,7 +306,7 @@ if valid_email_state and user_email != st.session_state.current_user:
     if existing_data:
         st.session_state.profile = existing_data.get("profile", ExecutiveProfile().model_dump())
         st.session_state.messages = existing_data.get("chat_history", [])
-        st.success(f"Welcome back! Profile restored for {user_email}")
+        st.success(f"Welcome back! Session restored for {user_email}")
     else:
         st.session_state.profile = ExecutiveProfile().model_dump()
         st.session_state.messages = [{
@@ -339,12 +329,18 @@ if "profile" not in st.session_state:
 # -----------------------------------------------------------------------------
 col_chat, col_profile = st.columns([3, 2])
 
-# --- LEFT COLUMN: CONSULTATION CHAT ---
 with col_chat:
     st.subheader("💬 Executive Consultation (Voice & Text)")
     
     progress_val = calculate_progress(st.session_state.profile)
     st.progress(progress_val, text=f"Diagnostic Progress: {int(progress_val * 100)}% (Step {int(progress_val * 4)} of 4 Completed)")
+
+    if not valid_email_state:
+        st.info("👈 Please enter a valid business email above to unlock the voice assistant.")
+    else:
+        st.markdown("### 🎙️ Voice Input")
+
+    audio_val = st.audio_input("Click to record your voice", disabled=not valid_email_state, key="native_audio_input")
 
     for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
@@ -354,25 +350,21 @@ with col_chat:
 
     user_input = None
 
-    # --- VOICE INPUT SECTION ---
-    st.markdown("#### 🎙️️ Voice Input")
-    audio_val = st.audio_input("Record your voice", disabled=not valid_email_state, key="native_audio_input")
-    
     if audio_val is not None:
         file_id = getattr(audio_val, "name", str(len(audio_val.getbuffer())))
         if file_id != st.session_state.get("last_audio_id"):
-            with st.spinner("Transcribing audio..."):
+            with st.spinner("Transcribing voice audio..."):
                 transcribed = transcribe_audio_file(audio_val)
+                st.session_state.last_audio_id = file_id
                 if transcribed:
                     user_input = transcribed
-                    st.session_state.last_audio_id = file_id
+                else:
+                    st.warning("⚠️ Voice not recognized or audio too quiet. Please speak louder and try again.")
 
-    # --- TEXT INPUT SECTION ---
     text_val = st.chat_input("Or type your message here...", disabled=not valid_email_state)
     if text_val and not user_input:
         user_input = text_val
 
-    # --- PROCESSING PIPELINE ---
     if user_input and valid_email_state:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
@@ -410,7 +402,6 @@ with col_chat:
         except Exception as e:
             st.error(f"AI Processing Error: {e}")
 
-# --- RIGHT COLUMN: DASHBOARD & REPORT GENERATION ---
 with col_profile:
     st.subheader("📊 Strategic Live Profile")
     p = st.session_state.profile
@@ -444,7 +435,6 @@ with col_profile:
         render_card("Executive Fear / Concern", interp.get("fear", {}))
 
     with tab_analytics:
-        st.markdown("### 📊 Scope Scale Breakdown")
         direct_n = parse_number(facts.get("direct_team_size", {}).get("value"))
         total_n = parse_number(facts.get("company_size", {}).get("value"))
 
@@ -452,28 +442,8 @@ with col_profile:
             "Scope": ["Direct Team", "Remaining Workforce"],
             "Headcount": [direct_n, max(0, total_n - direct_n)]
         })
-        fig_bar = px.bar(df_chart, x="Scope", y="Headcount", color="Scope", title="Team Scope vs Company Scale", text_auto=True)
-        fig_bar.update_layout(showlegend=False, height=280)
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-        st.markdown("### 🎯 Strategic Alignment Radar")
-        categories = ['Operational Clarity', 'Tool Alignment', 'Risk Mitigation', 'Strategic Focus']
-        score_clarity = 80 if facts.get("industry", {}).get("value") else 30
-        score_tools = 80 if facts.get("tools", {}).get("value") else 20
-        score_risk = 40 if interp.get("fear", {}).get("value") else 80
-        score_focus = 40 if interp.get("primary_pain", {}).get("value") else 80
-
-        fig_radar = go.Figure(data=go.Scatterpolar(
-            r=[score_clarity, score_tools, score_risk, score_focus],
-            theta=categories,
-            fill='toself'
-        ))
-        fig_radar.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-            showlegend=False,
-            height=300
-        )
-        st.plotly_chart(fig_radar, use_container_width=True)
+        fig_bar = px.bar(df_chart, x="Scope", y="Headcount", color="Scope", title="Team Scope vs Company Scale")
+        st.plotly_chart(fig_bar, width="100%")
 
     st.divider()
     unlocked = check_gatekeeper_unlocked(p)
@@ -500,15 +470,12 @@ with col_profile:
         st.markdown(st.session_state.current_report)
 
         try:
-            pdf_bytes = generate_pdf_report(p, st.session_state.current_report, fig_bar=fig_bar, fig_radar=fig_radar)
+            pdf_bytes = generate_pdf_report(p, st.session_state.current_report)
             st.download_button(
-                label="📥 Download Executive Diagnostic (PDF with Charts)",
+                label="📥 Download Executive Diagnostic Report (PDF)",
                 data=pdf_bytes,
                 file_name="Executive_Diagnostic_Report.pdf",
                 mime="application/pdf"
             )
         except Exception as e:
             st.error(f"PDF Generation Error: {e}")
-
-    with st.expander("🛠 Raw JSON State (Debug Mode)"):
-        st.json(p)
