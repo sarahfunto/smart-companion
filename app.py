@@ -117,7 +117,7 @@ STRICT FIELD DISCRIMINATION & EXTRACTION RULES:
 
 1. PRIMARY PAIN POINT (`primary_pain`):
    - Extract operational friction, daily bottlenecks, data issues, or workflow delays (e.g., "sales forecasts are unreliable", "fragmented data across tools", "takes too long to consolidate report").
-   - Operational impacts or consequences on reporting (e.g., "hard to present accurate data to the board") belong to `primary_pain` or evidence, NOT to `fear`.
+   - Operational impacts or consequences on reporting belong to `primary_pain` or evidence, NOT to `fear`.
 
 2. EXECUTIVE FEAR / CONCERN (`fear`):
    - DO NOT INFER OR GUESS A FEAR FROM AN OPERATIONAL PAIN.
@@ -127,7 +127,7 @@ STRICT FIELD DISCRIMINATION & EXTRACTION RULES:
 
 3. CONFLICT & CORRECTION DETECTION:
    - Compare new factual statements with the PREVIOUS profile state.
-   - If the user explicitly corrects or changes a previously stated numerical value or factual detail (e.g., changing headcount or correcting a fear):
+   - If the user explicitly corrects or changes a previously stated numerical value or factual detail:
      a. Update `value` with the NEW corrected fact.
      b. Set `conflict_flag` = true.
      c. Set `old_value` = the PREVIOUS value that was replaced.
@@ -141,19 +141,25 @@ HUMAN_DIAGNOSIS_PROMPT = """
 You are a pragmatic, highly experienced executive AI strategy consultant writing directly to a CEO/COO.
 Your goal is to provide immediate, realistic, and high-impact guidance tailored to their exact technology stack and business context.
 
-CRITICAL RELEVANCE & STACK ALIGNMENT RULES:
-1. PRACTICAL INTEGRATION OVER COMPLEX MACHINE LEARNING:
-   - Base all recommendations strictly on the tools mentioned (e.g., HubSpot, PostgreSQL, CRM, databases).
-   - DO NOT recommend heavy ML frameworks or generic AI platforms (e.g., TensorFlow, PyTorch, DataRobot, AWS SageMaker) unless the executive explicitly asks for custom model training.
-   - Focus on data unification, automated reporting pipelines, lightweight AI/LLM automation layer (e.g., automated account risk scoring, LLM-driven churn warning on CRM/DB data), and pipeline reconciliation.
+STRICT MANDATE ON ARCHITECTURE & LOGICAL SEQUENCING:
+1. STRICT NEGATIVE CONSTRAINT (DO NOT SUGGEST TENSORFLOW / DATAROBOT):
+   - ABSOLUTELY FORBIDDEN to mention TensorFlow, PyTorch, DataRobot, AWS SageMaker, or generic enterprise ML frameworks.
+   - Do NOT propose complex machine learning models at this stage.
 
-2. CONSTRAINTS RESPECT:
+2. MANDATORY LOGICAL SEQUENCING FOR DATA FRAGMENTATION:
+   You MUST order your recommendations in this exact logical order:
+   - Step 1: Data Integration Layer (Connecting fragmented sources like HubSpot + PostgreSQL).
+   - Step 2: Automated Data Reconciliation & Pipeline Automation.
+   - Step 3: BI & Risk Reporting Dashboard (e.g., Power BI / Looker) for automated customer risk indicators.
+   - Step 4 (Optional future scope ONLY): Predictive ML for churn detection only after integration and reporting are fully stabilized.
+
+3. CONSTRAINTS RESPECT:
    - Respect budget, team capacity, and infrastructure constraints (e.g., "no total stack replacement").
    - Recommend a phased, low-overhead 3-Day Execution Plan starting with low-risk pilot automation.
 
-3. STRUCTURE OF THE REPORT:
+4. STRUCTURE OF THE REPORT:
    - Executive Context & Problem Reframe (Focusing on Pain + Risk)
-   - 3-Day Practical Action Plan (Step 1: Data Integration & Unification, Step 2: Automated Churn Risk Scoring / Reporting, Step 3: Governance & Pilot Feedback Loop)
+   - 3-Day Practical Action Plan (Step 1: Integration & Pipeline Automation, Step 2: Reconciliation & Power BI Dashboard, Step 3: Governance & Pilot Feedback Loop)
    - Immediate Next Steps
 """
 
@@ -345,7 +351,6 @@ if "last_reply_text" not in st.session_state:
 if valid_email_state and user_email != st.session_state.current_user:
     st.session_state.current_user = user_email
     
-    # CLEAR PREVIOUS USER'S REPORT
     if "current_report" in st.session_state:
         del st.session_state["current_report"]
 
@@ -418,7 +423,6 @@ with col_chat:
         st.session_state.messages.append({"role": "user", "content": user_input})
 
         try:
-            # SECURE DATA FORMATTING TO PREVENT PROMPT INJECTION
             formatted_history = ""
             for m in st.session_state.messages:
                 role = m['role'].upper()
@@ -445,14 +449,12 @@ with col_chat:
             new_profile_dict = res_B.choices[0].message.parsed.model_dump()
             old_profile_dict = st.session_state.profile
 
-            # AUTOMATED PYTHON FALLBACK FOR DETERMINISTIC CONFLICT DETECTION
             for group in ["facts", "interpretation"]:
                 for field, attr in new_profile_dict.get(group, {}).items():
                     old_attr = old_profile_dict.get(group, {}).get(field, {})
                     old_val = old_attr.get("value")
                     new_val = attr.get("value")
 
-                    # If a previously established value was changed/corrected
                     if old_val and new_val and old_val != new_val and new_val != "Not specified yet":
                         attr["conflict_flag"] = True
                         attr["old_value"] = old_val
