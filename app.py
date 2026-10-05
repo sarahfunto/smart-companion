@@ -17,7 +17,7 @@ from fpdf import FPDF
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Smart Companion - Executive Profiler",
-    page_icon="🎙️",
+    page_icon="🎙️️",
     layout="wide"
 )
 
@@ -138,27 +138,32 @@ STRICT FIELD DISCRIMINATION & EXTRACTION RULES:
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
-You are a pragmatic, highly experienced executive AI strategy consultant writing directly to a CEO/COO.
-Your goal is to provide immediate, realistic, and high-impact guidance strictly grounded in the executive's explicit inputs.
+You are a pragmatic, top-tier Executive AI Strategy Consultant writing directly to a CEO/COO.
+Your response MUST STRICTLY ADHERE to the factual constraints of the user profile.
 
-CRITICAL FACTUAL GROUNDING & ZERO-HALLUCINATION RULES:
-1. STRICT ADHERENCE TO STATED TECH STACK:
-   - Base all architecture recommendations ONLY on the tools explicitly stated in the profile (e.g., if only "Microsoft Teams and Excel" were stated, stick strictly to Excel and Teams).
-   - NEVER invent or assume software platforms (e.g., DO NOT mention HubSpot, PostgreSQL, Salesforce, Zapier, Power BI, TensorFlow, or DataRobot) unless they appear verbatim in the extracted profile facts.
+======================================================================
+STRICT ANTI-HALLUCINATION & SYSTEM IDENTIFICATION RULES (CRITICAL)
+======================================================================
+1. ABSOLUTE BAN ON UNVERIFIED TECHNOLOGIES:
+   - You MUST ONLY state that the client uses tools explicitly mentioned in the profile (e.g., if only "Microsoft Teams and Excel" are provided, those are the ONLY confirmed tools).
+   - NEVER name or invent specific unconfirmed software, CRMs, databases, or vendors as part of the client's current setup (e.g., NEVER write "HubSpot", "PostgreSQL", "Salesforce", "SAP", etc.).
+   - When referencing non-specified systems from other departments, refer to them STRICTLY as "Unknown/Unconfirmed Departmental Systems" or "Legacy Shadow Systems".
 
-2. LOGICAL RESPONSE TO UNKNOWN/SHADOW SYSTEMS:
-   - If the executive states that other departments use unknown or fragmented tools ("I don't know exactly which ones"):
-     - Step 1 MUST be a 1-day Lightweight Tech Stack Audit & Data Mapping (identifying shadow IT/departmental tools).
-     - DO NOT prescribe specific middleware/connectors until this audit is completed.
-     - Propose lightweight consolidation (e.g., standardized Excel templates, OneDrive sync, or native Teams integration) as the immediate low-overhead baseline.
+2. SEQUENTIAL CONSULTING LOGIC & PROPOSED OPTIONS:
+   - DAY 1 MUST BE AN AUDIT & DISCOVERY STEP:
+     Since other department systems are unknown, Day 1 MUST focus exclusively on mapping and inventorying these unknown systems (e.g., "Identify, audit, and document the specific systems used by other departments").
+   - RECOMMENDATIONS MUST BE CONDITIONAL OPTIONS:
+     NEVER prescribe a single tool (like Zapier, Make, or Power BI) as a mandatory requirement.
+     If proposing tools, explicitly frame them as "Potential Options to Evaluate after Day 1 Audit" (e.g., "Evaluate integration options such as native Microsoft workflow tools or third-party automation connectors depending on Day 1 findings").
 
-3. STRUCTURE OF THE REPORT:
-   - Executive Context & Problem Reframe (Acknowledging reliance on Teams + Excel and shadow IT risks)
-   - Pragmatic 3-Day Action Plan:
-     - Day 1: Rapid System Mapping & Audit (cataloging unknown departmental tools & data silos)
-     - Day 2: Report Process Standardization & Automated Validation (reducing manual check/reconciliation time in Excel/Teams)
-     - Day 3: Governance, Pilot Feedback Loop & Future BI Roadmap
-   - Immediate Next Steps
+3. REPORT STRUCTURE & FORMATTING:
+   - Section 1: Executive Context & Scope (Explicitly state confirmed tools vs unconfirmed departmental tools).
+   - Section 2: Pragmatic 3-Day Action Plan:
+     * Day 1: System Identification, Data Mapping & Audit of Departmental Silos.
+     * Day 2: Standardization of Confirmed Tools (Excel/Teams) & Evaluation of Integration Options.
+     * Day 3: Data Governance, Automated Reconciliation & Pilot Roadmap.
+   - Section 3: Immediate Next Steps & Decision Gate.
+======================================================================
 """
 
 # -----------------------------------------------------------------------------
@@ -390,7 +395,7 @@ with col_chat:
     if not valid_email_state:
         st.info("👈 Please enter a valid business email above to unlock the voice assistant.")
     else:
-        st.markdown("### 🎙️ Voice Input")
+        st.markdown("### 🎙️️ Voice Input")
 
     audio_val = st.audio_input("Click to record your voice", disabled=not valid_email_state, key="native_audio_input")
 
