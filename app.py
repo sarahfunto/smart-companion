@@ -116,7 +116,7 @@ CRITICAL SECURITY & PROMPT INJECTION PROTECTION:
 STRICT FIELD DISCRIMINATION & EXTRACTION RULES:
 
 1. PRIMARY PAIN POINT (`primary_pain`):
-   - Extract operational friction, daily bottlenecks, data issues, or workflow delays (e.g., "sales forecasts are unreliable", "fragmented data across tools", "takes too long to consolidate report").
+   - Extract operational friction, daily bottlenecks, data issues, or workflow delays.
    - Operational impacts or consequences on reporting belong to `primary_pain` or evidence, NOT to `fear`.
 
 2. EXECUTIVE FEAR / CONCERN (`fear`):
@@ -139,27 +139,25 @@ STRICT FIELD DISCRIMINATION & EXTRACTION RULES:
 
 HUMAN_DIAGNOSIS_PROMPT = """
 You are a pragmatic, highly experienced executive AI strategy consultant writing directly to a CEO/COO.
-Your goal is to provide immediate, realistic, and high-impact guidance tailored to their exact technology stack and business context.
+Your goal is to provide immediate, realistic, and high-impact guidance strictly grounded in the executive's explicit inputs.
 
-STRICT MANDATE ON ARCHITECTURE & LOGICAL SEQUENCING:
-1. STRICT NEGATIVE CONSTRAINT (DO NOT SUGGEST TENSORFLOW / DATAROBOT):
-   - ABSOLUTELY FORBIDDEN to mention TensorFlow, PyTorch, DataRobot, AWS SageMaker, or generic enterprise ML frameworks.
-   - Do NOT propose complex machine learning models at this stage.
+CRITICAL FACTUAL GROUNDING & ZERO-HALLUCINATION RULES:
+1. STRICT ADHERENCE TO STATED TECH STACK:
+   - Base all architecture recommendations ONLY on the tools explicitly stated in the profile (e.g., if only "Microsoft Teams and Excel" were stated, stick strictly to Excel and Teams).
+   - NEVER invent or assume software platforms (e.g., DO NOT mention HubSpot, PostgreSQL, Salesforce, Zapier, Power BI, TensorFlow, or DataRobot) unless they appear verbatim in the extracted profile facts.
 
-2. MANDATORY LOGICAL SEQUENCING FOR DATA FRAGMENTATION:
-   You MUST order your recommendations in this exact logical order:
-   - Step 1: Data Integration Layer (Connecting fragmented sources like HubSpot + PostgreSQL).
-   - Step 2: Automated Data Reconciliation & Pipeline Automation.
-   - Step 3: BI & Risk Reporting Dashboard (e.g., Power BI / Looker) for automated customer risk indicators.
-   - Step 4 (Optional future scope ONLY): Predictive ML for churn detection only after integration and reporting are fully stabilized.
+2. LOGICAL RESPONSE TO UNKNOWN/SHADOW SYSTEMS:
+   - If the executive states that other departments use unknown or fragmented tools ("I don't know exactly which ones"):
+     - Step 1 MUST be a 1-day Lightweight Tech Stack Audit & Data Mapping (identifying shadow IT/departmental tools).
+     - DO NOT prescribe specific middleware/connectors until this audit is completed.
+     - Propose lightweight consolidation (e.g., standardized Excel templates, OneDrive sync, or native Teams integration) as the immediate low-overhead baseline.
 
-3. CONSTRAINTS RESPECT:
-   - Respect budget, team capacity, and infrastructure constraints (e.g., "no total stack replacement").
-   - Recommend a phased, low-overhead 3-Day Execution Plan starting with low-risk pilot automation.
-
-4. STRUCTURE OF THE REPORT:
-   - Executive Context & Problem Reframe (Focusing on Pain + Risk)
-   - 3-Day Practical Action Plan (Step 1: Integration & Pipeline Automation, Step 2: Reconciliation & Power BI Dashboard, Step 3: Governance & Pilot Feedback Loop)
+3. STRUCTURE OF THE REPORT:
+   - Executive Context & Problem Reframe (Acknowledging reliance on Teams + Excel and shadow IT risks)
+   - Pragmatic 3-Day Action Plan:
+     - Day 1: Rapid System Mapping & Audit (cataloging unknown departmental tools & data silos)
+     - Day 2: Report Process Standardization & Automated Validation (reducing manual check/reconciliation time in Excel/Teams)
+     - Day 3: Governance, Pilot Feedback Loop & Future BI Roadmap
    - Immediate Next Steps
 """
 
@@ -543,7 +541,7 @@ with col_profile:
                     {"role": "system", "content": HUMAN_DIAGNOSIS_PROMPT},
                     {"role": "user", "content": f"Profile Data:\n{json.dumps(p)}"}
                 ],
-                temperature=0.7
+                temperature=0.0
             )
             report_content = diag_res.choices[0].message.content
             st.session_state.current_report = report_content
