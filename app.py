@@ -106,13 +106,27 @@ GATEKEEPER UNLOCKED RULE:
 """
 
 CALL_B_SYSTEM_PROMPT = """
-You are a strict JSON data extraction engine updating the executive profile from full conversation history.
+You are a strict JSON data extraction engine updating an executive profile based on conversation history.
 
-EXTRACTION RULES:
-1. SEPARATE SCOPES: Extract `direct_team_size` separately from `company_size`.
-2. CLARIFICATION HANDLING: Refinement of vague input is NOT a conflict. Set `conflict_flag` = true ONLY for direct contradictions.
-3. TOOLS: Extract explicit software and tool names. Ignore generic terms like "usual tools".
-4. PAINS & RISKS: Extract clear operational bottlenecks into `primary_pain` and key business fears into `fear`.
+STRICT CONFLICT & CORRECTION DETECTION RULES:
+1. CONFLICT / CONTRADICTION DETECTION:
+   - Compare the NEW information provided in the user's latest message with the PREVIOUS profile state provided.
+   - If the user explicitly corrects, denies, or changes a previously stated numerical value or factual detail (e.g., changing headcount from 50 to 500, or correcting 500 to 200, or saying "No, actually..."):
+     a. Update `value` with the NEW corrected information.
+     b. Set `conflict_flag` = true.
+     c. Set `old_value` = the PREVIOUS value that was replaced (e.g., "50 employees" or "500 employees").
+     d. Store the user's exact corrective quote in `evidence`.
+
+2. REFINEMENT VS CONFLICT:
+   - Adding missing details (e.g., specifying tool names when none were given before) is NOT a conflict (`conflict_flag` = false).
+   - Direct changes, corrections, or negations of previously stored values MUST set `conflict_flag` = true.
+
+3. SCOPE SEPARATION:
+   - Keep `direct_team_size` and `company_size` strictly separate.
+
+4. TOOL & PAIN EXTRACTION:
+   - Extract explicit software names into `tools`.
+   - Extract bottlenecks into `primary_pain` and concerns into `fear`.
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
@@ -305,11 +319,11 @@ if "current_user" not in st.session_state:
 if "last_reply_text" not in st.session_state:
     st.session_state.last_reply_text = None
 
-# FIX BUG: Clear state and reset session report when user changes
+# RESET SESSION STATE & PREVENT CROSS-USER DATA LEAKAGE
 if valid_email_state and user_email != st.session_state.current_user:
     st.session_state.current_user = user_email
     
-    # CLEAR PREVIOUS REPORT FROM SESSION TO PREVENT CROSS-USER DATA LEAK
+    # CLEAR PREVIOUS USER'S REPORT
     if "current_report" in st.session_state:
         del st.session_state["current_report"]
 
@@ -387,12 +401,28 @@ with col_chat:
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": CALL_B_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"Previous Profile:\n{json.dumps(st.session_state.profile)}\n\nHistory:\n{conv_text}"}
+                    {"role": "user", "content": f"Previous Profile State:\n{json.dumps(st.session_state.profile)}\n\nFull Conversation History:\n{conv_text}"}
                 ],
                 response_format=ExecutiveProfile,
                 temperature=0.0
             )
-            st.session_state.profile = res_B.choices[0].message.parsed.model_dump()
+            
+            new_profile_dict = res_B.choices[0].message.parsed.model_dump()
+            old_profile_dict = st.session_state.profile
+
+            # AUTOMATED PYTHON FALLBACK FOR DETERMINISTIC CONFLICT DETECTION
+            for group in ["facts", "interpretation"]:
+                for field, attr in new_profile_dict.get(group, {}).items():
+                    old_attr = old_profile_dict.get(group, {}).get(field, {})
+                    old_val = old_attr.get("value")
+                    new_val = attr.get("value")
+
+                    # If a previously established value was changed/corrected
+                    if old_val and new_val and old_val != new_val and new_val != "Not specified yet":
+                        attr["conflict_flag"] = True
+                        attr["old_value"] = old_val
+
+            st.session_state.profile = new_profile_dict
 
             gatekeeper_unlocked = check_gatekeeper_unlocked(st.session_state.profile)
             status_str = "UNLOCKED" if gatekeeper_unlocked else "LOCKED"
@@ -458,7 +488,6 @@ with col_profile:
         })
         fig_bar = px.bar(df_chart, x="Scope", y="Headcount", color="Scope", title="Team Scope vs Company Scale")
         
-        # FIX BUG: use_container_width=True instead of width="100%"
         st.plotly_chart(fig_bar, use_container_width=True)
 
     st.divider()
