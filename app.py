@@ -376,9 +376,9 @@ st.markdown("""
 <div style='background-color: #f0f4f8; padding: 15px; border-radius: 10px; border-left: 5px solid #1f4e79; margin-bottom: 20px;'>
     <h4 style='margin:0; color: #1f4e79;'>🚀 Quick Start Guide</h4>
     <p style='margin: 5px 0 0 0; font-size: 14px; color: #333;'>
-        1. Enter your professional email address below.<br>
-        2. Click the microphone input and speak naturally to respond.<br>
-        3. The AI assistant will automatically parse your responses and guide you step by step.
+        1. Enter your professional or personal email address below.<br>
+        2. The AI assistant will automatically speak out the first question.<br>
+        3. Click the microphone input or type to respond naturally.
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -390,13 +390,15 @@ if user_email:
     if is_valid_email(user_email):
         valid_email_state = True
     else:
-        st.error("⚠️ Please enter a valid email address (e.g., executive@company.com or user@gmail.com).")
+        st.error("⚠️️ Please enter a valid email address (e.g., executive@company.com or user@gmail.com).")
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
 
 if "last_reply_text" not in st.session_state:
     st.session_state.last_reply_text = None
+
+FIRST_QUESTION = "Welcome! I am your strategic AI companion. To begin, could you please share your executive role, the name of your company, and your industry sector?"
 
 # RESET SESSION STATE & PREVENT CROSS-USER DATA LEAKAGE
 if valid_email_state and user_email != st.session_state.current_user:
@@ -412,19 +414,23 @@ if valid_email_state and user_email != st.session_state.current_user:
         if existing_data.get("report"):
             st.session_state.current_report = existing_data["report"]
         st.success(f"Welcome back! Session restored for {user_email}")
+        st.session_state.last_reply_text = None
     else:
         st.session_state.profile = ExecutiveProfile().model_dump()
         st.session_state.messages = [{
             "role": "assistant",
-            "content": "Welcome! I am your strategic AI companion. To begin, could you please share your executive role, the name of your company, and your industry sector?"
+            "content": FIRST_QUESTION
         }]
+        # TRIGGER VOICE AUTOMATICALLY ON SESSION START
+        st.session_state.last_reply_text = FIRST_QUESTION
         save_and_sync_data(user_email, st.session_state.profile, st.session_state.messages)
 
 if "messages" not in st.session_state:
     st.session_state.messages = [{
         "role": "assistant",
-        "content": "Welcome! I am your strategic AI companion. To begin, could you please share your executive role, the name of your company, and your industry sector?"
+        "content": FIRST_QUESTION
     }]
+    st.session_state.last_reply_text = FIRST_QUESTION
 
 if "profile" not in st.session_state:
     st.session_state.profile = ExecutiveProfile().model_dump()
