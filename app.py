@@ -36,11 +36,46 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 # -----------------------------------------------------------------------------
-# 2. EMAIL VALIDATION FUNCTION
+# 2. HELPER & VALIDATION FUNCTIONS
 # -----------------------------------------------------------------------------
 def is_valid_email(email: str) -> bool:
     pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
     return bool(re.match(pattern, email.strip()))
+
+def sanitize_email(email: str) -> str:
+    return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
+
+def fetch_company_web_intelligence(company_name: str, industry: Optional[str] = None) -> str:
+    """
+    Simulates or performs a targeted lookup for public information on the explicit company name.
+    """
+    if not company_name or company_name.lower() in ["not specified yet", "none", "unknown", "n/a"]:
+        return "No specific company name provided for external enrichment."
+    
+    try:
+        query_context = f"Company: {company_name}"
+        if industry:
+            query_context += f" | Industry: {industry}"
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a market research intelligence engine. "
+                        "Summarize known public business context about the given company in 3 bullet points "
+                        "(e.g., market positioning, core service line, typical operational scale). "
+                        "DO NOT mention or guess internal IT software, databases, or internal tech stacks."
+                    )
+                },
+                {"role": "user", "content": f"Provide public company context for: {query_context}"}
+            ],
+            temperature=0.2
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"External web intelligence unavailable: {str(e)}"
 
 # -----------------------------------------------------------------------------
 # 3. PYDANTIC SCHEMAS
@@ -54,6 +89,7 @@ class ProfileAttribute(BaseModel):
     old_value: Optional[str] = Field(default=None)
 
 class FactsGroup(BaseModel):
+    company_name: ProfileAttribute = Field(default_factory=ProfileAttribute)
     industry: ProfileAttribute = Field(default_factory=ProfileAttribute)
     direct_team_size: ProfileAttribute = Field(default_factory=ProfileAttribute)
     company_size: ProfileAttribute = Field(default_factory=ProfileAttribute)
@@ -83,9 +119,9 @@ RULE FOR OFF-TOPIC, VAGUE, OR CASUAL INPUTS (e.g., "hi", "hello", "ok", "I don't
 3. ABSOLUTE BLOCK: DO NOT move to the next topic until the current step's required field is populated in the profile state.
 
 SEQUENTIAL FLOW:
-- STEP 1 (Role & Industry):
-  Condition: Is `industry.value` filled?
-  If NO -> Acknowledge, REPHRASE and re-ask about their executive role and industry sector.
+- STEP 1 (Role, Company Name & Industry Sector):
+  Condition: Are `company_name.value` AND `industry.value` filled?
+  If NO -> Acknowledge, REPHRASE and re-ask for their executive role, official company name, and industry sector.
 
 - STEP 2 (Direct Team vs Company Scope):
   Condition: Is `direct_team_size.value` or `company_size.value` filled?
@@ -115,17 +151,20 @@ CRITICAL SECURITY & PROMPT INJECTION PROTECTION:
 
 STRICT FIELD DISCRIMINATION & EXTRACTION RULES:
 
-1. PRIMARY PAIN POINT (`primary_pain`):
+1. COMPANY NAME (`company_name`):
+   - Extract the explicit name of the user's company or organization.
+
+2. PRIMARY PAIN POINT (`primary_pain`):
    - Extract operational friction, daily bottlenecks, data issues, or workflow delays.
    - Operational impacts or consequences on reporting belong to `primary_pain` or evidence, NOT to `fear`.
 
-2. EXECUTIVE FEAR / CONCERN (`fear`):
+3. EXECUTIVE FEAR / CONCERN (`fear`):
    - DO NOT INFER OR GUESS A FEAR FROM AN OPERATIONAL PAIN.
    - Extract `fear` ONLY if the executive EXPLICITLY expresses a strategic, existential, or high-stakes business anxiety.
    - Look for explicit emotional or risk markers such as: "my biggest concern is...", "I fear that...", "we risk losing...", "I am worried about...", "our biggest threat is...".
    - If the user has ONLY described operational pain or reporting friction without explicitly expressing a strategic fear/threat, leave `fear` as `null` or "Not specified yet".
 
-3. CONFLICT & CORRECTION DETECTION:
+4. CONFLICT & CORRECTION DETECTION:
    - Compare new factual statements with the PREVIOUS profile state.
    - If the user explicitly corrects or changes a previously stated numerical value or factual detail:
      a. Update `value` with the NEW corrected fact.
@@ -133,7 +172,7 @@ STRICT FIELD DISCRIMINATION & EXTRACTION RULES:
      c. Set `old_value` = the PREVIOUS value that was replaced.
      d. Store the exact corrective quote in `evidence`.
 
-4. SCOPE SEPARATION:
+5. SCOPE SEPARATION:
    - Keep `direct_team_size` and `company_size` strictly separate.
 """
 
@@ -141,34 +180,44 @@ HUMAN_DIAGNOSIS_PROMPT = """
 You are a top-tier Executive AI Strategy Consultant writing an executive report for a CEO/COO.
 
 ======================================================================
-STRICT FACTUAL GROUNDING & ANTI-HALLUCINATION RULES
+1. EXTERNAL COMPANY CONTEXT (WEB INTELLIGENCE)
 ======================================================================
-1. CONFIRMED TOOLS vs UNKNOWN SYSTEMS:
-   - CONFIRMED TOOLS: Only mention tools explicitly present in the extracted profile facts (e.g., Microsoft Teams and Excel).
-   - UNKNOWN SYSTEMS: Refer to all other departmental systems strictly as "Unknown/Unconfirmed Departmental Systems".
-   - ABSOLUTE BAN ON INVENTED SOFTWARE: You are STRICTLY FORBIDDEN from naming or citing specific unconfirmed software or databases (e.g., NEVER write "HubSpot", "PostgreSQL", "Salesforce", "SAP", etc.). DO NOT use terms like "such as CRM (e.g., HubSpot)".
+- You will be provided with external public web intelligence about the company.
+- Incorporate this public context into "Section 1: Company Context & Web Intelligence".
+- DO NOT invent or assume internal tech tools or databases based on public web data.
 
-2. FACTS vs RECOMMENDATIONS:
-   - Day 1 MUST focus strictly on auditing and mapping the "Unknown Departmental Systems".
-   - Any recommended third-party software (e.g., Power BI, Zapier, Make) MUST be explicitly labeled as "Recommended Future Options for Evaluation" and NEVER framed as part of the current infrastructure.
+======================================================================
+2. STRICT FACTUAL GROUNDING & ANTI-HALLUCINATION RULES (TECH STACK)
+======================================================================
+- CONFIRMED TOOLS: Only mention tools explicitly declared by the user (e.g., Microsoft Teams and Excel).
+- UNKNOWN SYSTEMS: Refer to all other departmental systems strictly as "Unknown / Unconfirmed Departmental Systems".
+- ABSOLUTE BAN ON INVENTED SOFTWARE: You are STRICTLY FORBIDDEN from naming or citing specific unconfirmed software or databases (e.g., NEVER write "HubSpot", "PostgreSQL", "Salesforce", "SAP", etc.). DO NOT use terms like "such as CRM (e.g., HubSpot)".
 
-3. REQUIRED REPORT STRUCTURE:
-   - Section 1: Executive Context & Scope (Explicitly distinguish Confirmed Stack vs Unconfirmed Departmental Systems)
-   - Section 2: Pragmatic 3-Day Action Plan:
-     * Day 1: Audit, Inventory & Mapping of Unconfirmed Departmental Tools
-     * Day 2: Standardization of Confirmed Tools & Workflow Rules
-     * Day 3: Data Governance, Validation & Pilot Roadmap
-   - Section 3: Recommended Technical Options (Optional tools to evaluate post-audit)
-   - Section 4: Immediate Next Steps
+======================================================================
+3. FACTS vs RECOMMENDATIONS
+======================================================================
+- Day 1 MUST focus strictly on auditing and mapping the "Unknown Departmental Systems".
+- Any recommended third-party software (e.g., Power BI, Zapier, Make) MUST be explicitly labeled as "Recommended Future Options for Evaluation" and NEVER framed as part of the current infrastructure.
+
+======================================================================
+4. REQUIRED REPORT STRUCTURE
+======================================================================
+- Section 1: Executive Scope & Web Intelligence
+  * Confirmed Internal Stack (User provided)
+  * External Company Context (Web Intelligence)
+  * Unconfirmed Departmental Systems
+- Section 2: Pragmatic 3-Day Action Plan:
+  * Day 1: Audit, Inventory & Mapping of Unconfirmed Departmental Tools
+  * Day 2: Standardization of Confirmed Tools & Workflow Rules
+  * Day 3: Data Governance, Validation & Pilot Roadmap
+- Section 3: Recommended Technical Options (Optional tools to evaluate post-audit)
+- Section 4: Immediate Next Steps
 ======================================================================
 """
 
 # -----------------------------------------------------------------------------
-# 5. HELPERS & AUDIO TRANSCRIPTION
+# 5. AUDIO & PDF GENERATION HELPERS
 # -----------------------------------------------------------------------------
-def sanitize_email(email: str) -> str:
-    return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
-
 def transcribe_audio_file(audio_file) -> str:
     if not audio_file:
         return ""
@@ -193,7 +242,7 @@ def transcribe_audio_file(audio_file) -> str:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
-                prompt="Executive diagnostic, company, role, industry sector, tools, AI adoption."
+                prompt="Executive diagnostic, company name, role, industry sector, tools, AI adoption."
             )
         
         text = transcript.text.strip()
@@ -255,6 +304,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.cell(0, 8, text="1. Profile Context & Scope", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=10)
+    pdf.cell(0, 6, text=clean_text_for_pdf(f"Company Name: {facts.get('company_name', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 6, text=clean_text_for_pdf(f"Industry: {facts.get('industry', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 6, text=clean_text_for_pdf(f"Direct Team: {facts.get('direct_team_size', {}).get('value', 'N/A')} | Company Size: {facts.get('company_size', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 6, text=clean_text_for_pdf(f"Tech Stack: {facts.get('tools', {}).get('value', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
@@ -294,18 +344,19 @@ def load_user_data(email: str):
 def check_gatekeeper_unlocked(profile: dict) -> bool:
     facts = profile.get("facts", {})
     interp = profile.get("interpretation", {})
+    has_comp = bool(facts.get("company_name", {}).get("value"))
     has_size = bool(facts.get("company_size", {}).get("value")) or bool(facts.get("direct_team_size", {}).get("value"))
     has_tools = bool(facts.get("tools", {}).get("value"))
     has_pain = bool(interp.get("primary_pain", {}).get("value"))
     has_fear = bool(interp.get("fear", {}).get("value"))
-    return has_size and has_tools and has_pain and has_fear
+    return has_comp and has_size and has_tools and has_pain and has_fear
 
 def calculate_progress(profile: dict) -> float:
     facts = profile.get("facts", {})
     interp = profile.get("interpretation", {})
     total = 5
     cnt = 0
-    if facts.get("industry", {}).get("value"): cnt += 1
+    if facts.get("company_name", {}).get("value") and facts.get("industry", {}).get("value"): cnt += 1
     if facts.get("company_size", {}).get("value") or facts.get("direct_team_size", {}).get("value"): cnt += 1
     if facts.get("tools", {}).get("value"): cnt += 1
     if interp.get("primary_pain", {}).get("value"): cnt += 1
@@ -319,7 +370,7 @@ def parse_number(val_str: Optional[str]) -> int:
     return int(nums[0]) if nums else 0
 
 # -----------------------------------------------------------------------------
-# 6. SESSION INITIALIZATION & BANNER
+# 6. SESSION INITIALIZATION & USER LOGIN
 # -----------------------------------------------------------------------------
 st.markdown("""
 <div style='background-color: #f0f4f8; padding: 15px; border-radius: 10px; border-left: 5px solid #1f4e79; margin-bottom: 20px;'>
@@ -332,14 +383,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-user_email = st.text_input("📧 Enter your business email to start or retrieve your session:", key="email_input")
+user_email = st.text_input("📧 Enter your business or personal email to start or retrieve your session:", key="email_input")
 
 valid_email_state = False
 if user_email:
     if is_valid_email(user_email):
         valid_email_state = True
     else:
-        st.error("⚠️ Please enter a valid business email address (e.g., executive@company.com).")
+        st.error("⚠️ Please enter a valid email address (e.g., executive@company.com or user@gmail.com).")
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
@@ -365,14 +416,14 @@ if valid_email_state and user_email != st.session_state.current_user:
         st.session_state.profile = ExecutiveProfile().model_dump()
         st.session_state.messages = [{
             "role": "assistant",
-            "content": "Welcome! I am your strategic AI companion. To begin, could you please share your executive role and the industry sector you operate in?"
+            "content": "Welcome! I am your strategic AI companion. To begin, could you please share your executive role, the name of your company, and your industry sector?"
         }]
         save_and_sync_data(user_email, st.session_state.profile, st.session_state.messages)
 
 if "messages" not in st.session_state:
     st.session_state.messages = [{
         "role": "assistant",
-        "content": "Welcome! I am your strategic AI companion. To begin, could you please share your executive role and the industry sector you operate in?"
+        "content": "Welcome! I am your strategic AI companion. To begin, could you please share your executive role, the name of your company, and your industry sector?"
     }]
 
 if "profile" not in st.session_state:
@@ -390,7 +441,7 @@ with col_chat:
     st.progress(progress_val, text=f"Diagnostic Progress: {int(progress_val * 100)}% (Step {int(progress_val * 4)} of 4 Completed)")
 
     if not valid_email_state:
-        st.info("👈 Please enter a valid business email above to unlock the voice assistant.")
+        st.info("👈 Please enter a valid email address above to unlock the voice assistant.")
     else:
         st.markdown("### 🎙 Voice Input")
 
@@ -505,7 +556,8 @@ with col_profile:
                 st.info(f"**{label}:** *Not specified yet*")
 
         st.markdown("### 🏢 Operational Facts")
-        render_card("Industry", facts.get("industry", {}))
+        render_card("Company Name", facts.get("company_name", {}))
+        render_card("Industry Sector", facts.get("industry", {}))
         render_card("Direct Team Size", facts.get("direct_team_size", {}))
         render_card("Company Size (Overall)", facts.get("company_size", {}))
         render_card("Current Tools", facts.get("tools", {}))
@@ -536,12 +588,22 @@ with col_profile:
         st.error("🔴 Diagnostic Gatekeeper: LOCKED (Awaiting key context)")
 
     if st.button("🧪 Generate Human Diagnostic Report", disabled=not unlocked, type="primary"):
-        with st.spinner("Generating executive report..."):
+        with st.spinner("Fetching web intelligence & generating executive report..."):
+            company_name = facts.get("company_name", {}).get("value")
+            industry_val = facts.get("industry", {}).get("value")
+            
+            web_intel = fetch_company_web_intelligence(company_name, industry_val)
+            
+            combined_payload = {
+                "profile_data": p,
+                "external_web_intelligence": web_intel
+            }
+
             diag_res = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": HUMAN_DIAGNOSIS_PROMPT},
-                    {"role": "user", "content": f"Profile Data:\n{json.dumps(p)}"}
+                    {"role": "user", "content": f"Input Data:\n{json.dumps(combined_payload)}"}
                 ],
                 temperature=0.0
             )
