@@ -46,9 +46,6 @@ def sanitize_email(email: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_.-]', '_', email.strip().lower())
 
 def fetch_company_web_intelligence(company_name: str, industry: Optional[str] = None) -> str:
-    """
-    Simulates or performs a targeted lookup for public information on the explicit company name.
-    """
     if not company_name or company_name.lower() in ["not specified yet", "none", "unknown", "n/a"]:
         return "No specific company name provided for external enrichment."
     
@@ -377,7 +374,7 @@ st.markdown("""
     <h4 style='margin:0; color: #1f4e79;'>🚀 Quick Start Guide</h4>
     <p style='margin: 5px 0 0 0; font-size: 14px; color: #333;'>
         1. Enter your professional or personal email address below.<br>
-        2. The AI assistant will automatically speak out the first question.<br>
+        2. Once entered, the AI assistant will automatically speak the first question.<br>
         3. Click the microphone input or type to respond naturally.
     </p>
 </div>
@@ -390,7 +387,7 @@ if user_email:
     if is_valid_email(user_email):
         valid_email_state = True
     else:
-        st.error("⚠️️ Please enter a valid email address (e.g., executive@company.com or user@gmail.com).")
+        st.error("⚠ Please enter a valid email address (e.g., executive@company.com or user@gmail.com).")
 
 if "current_user" not in st.session_state:
     st.session_state.current_user = ""
@@ -421,7 +418,7 @@ if valid_email_state and user_email != st.session_state.current_user:
             "role": "assistant",
             "content": FIRST_QUESTION
         }]
-        # TRIGGER VOICE AUTOMATICALLY ON SESSION START
+        # ACTIVE LE VOCAL SEULEMENT QUAND LE MAIL EST VALIDE
         st.session_state.last_reply_text = FIRST_QUESTION
         save_and_sync_data(user_email, st.session_state.profile, st.session_state.messages)
 
@@ -430,7 +427,6 @@ if "messages" not in st.session_state:
         "role": "assistant",
         "content": FIRST_QUESTION
     }]
-    st.session_state.last_reply_text = FIRST_QUESTION
 
 if "profile" not in st.session_state:
     st.session_state.profile = ExecutiveProfile().model_dump()
@@ -456,12 +452,13 @@ with col_chat:
     for idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
-            if msg["role"] == "assistant" and idx == len(st.session_state.messages) - 1 and st.session_state.last_reply_text:
+            # VÉRIFICATION STRICTE DE VALID_EMAIL_STATE AVANT DE JOUER L'AUDIO
+            if valid_email_state and msg["role"] == "assistant" and idx == len(st.session_state.messages) - 1 and st.session_state.last_reply_text:
                 play_audio_response(st.session_state.last_reply_text)
 
     user_input = None
 
-    if audio_val is not None:
+    if audio_val is not None and valid_email_state:
         file_id = getattr(audio_val, "name", str(len(audio_val.getbuffer())))
         if file_id != st.session_state.get("last_audio_id"):
             with st.spinner("Transcribing voice audio..."):
