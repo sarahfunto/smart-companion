@@ -17,7 +17,7 @@ from fpdf import FPDF
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Smart Companion - Executive Profiler",
-    page_icon="🎙️️",
+    page_icon="🎙",
     layout="wide"
 )
 
@@ -138,31 +138,28 @@ STRICT FIELD DISCRIMINATION & EXTRACTION RULES:
 """
 
 HUMAN_DIAGNOSIS_PROMPT = """
-You are a pragmatic, top-tier Executive AI Strategy Consultant writing directly to a CEO/COO.
-Your response MUST STRICTLY ADHERE to the factual constraints of the user profile.
+You are a top-tier Executive AI Strategy Consultant writing an executive report for a CEO/COO.
 
 ======================================================================
-STRICT ANTI-HALLUCINATION & SYSTEM IDENTIFICATION RULES (CRITICAL)
+STRICT FACTUAL GROUNDING & ANTI-HALLUCINATION RULES
 ======================================================================
-1. ABSOLUTE BAN ON UNVERIFIED TECHNOLOGIES:
-   - You MUST ONLY state that the client uses tools explicitly mentioned in the profile (e.g., if only "Microsoft Teams and Excel" are provided, those are the ONLY confirmed tools).
-   - NEVER name or invent specific unconfirmed software, CRMs, databases, or vendors as part of the client's current setup (e.g., NEVER write "HubSpot", "PostgreSQL", "Salesforce", "SAP", etc.).
-   - When referencing non-specified systems from other departments, refer to them STRICTLY as "Unknown/Unconfirmed Departmental Systems" or "Legacy Shadow Systems".
+1. CONFIRMED TOOLS vs UNKNOWN SYSTEMS:
+   - CONFIRMED TOOLS: Only mention tools explicitly present in the extracted profile facts (e.g., Microsoft Teams and Excel).
+   - UNKNOWN SYSTEMS: Refer to all other departmental systems strictly as "Unknown/Unconfirmed Departmental Systems".
+   - ABSOLUTE BAN ON INVENTED SOFTWARE: You are STRICTLY FORBIDDEN from naming or citing specific unconfirmed software or databases (e.g., NEVER write "HubSpot", "PostgreSQL", "Salesforce", "SAP", etc.). DO NOT use terms like "such as CRM (e.g., HubSpot)".
 
-2. SEQUENTIAL CONSULTING LOGIC & PROPOSED OPTIONS:
-   - DAY 1 MUST BE AN AUDIT & DISCOVERY STEP:
-     Since other department systems are unknown, Day 1 MUST focus exclusively on mapping and inventorying these unknown systems (e.g., "Identify, audit, and document the specific systems used by other departments").
-   - RECOMMENDATIONS MUST BE CONDITIONAL OPTIONS:
-     NEVER prescribe a single tool (like Zapier, Make, or Power BI) as a mandatory requirement.
-     If proposing tools, explicitly frame them as "Potential Options to Evaluate after Day 1 Audit" (e.g., "Evaluate integration options such as native Microsoft workflow tools or third-party automation connectors depending on Day 1 findings").
+2. FACTS vs RECOMMENDATIONS:
+   - Day 1 MUST focus strictly on auditing and mapping the "Unknown Departmental Systems".
+   - Any recommended third-party software (e.g., Power BI, Zapier, Make) MUST be explicitly labeled as "Recommended Future Options for Evaluation" and NEVER framed as part of the current infrastructure.
 
-3. REPORT STRUCTURE & FORMATTING:
-   - Section 1: Executive Context & Scope (Explicitly state confirmed tools vs unconfirmed departmental tools).
+3. REQUIRED REPORT STRUCTURE:
+   - Section 1: Executive Context & Scope (Explicitly distinguish Confirmed Stack vs Unconfirmed Departmental Systems)
    - Section 2: Pragmatic 3-Day Action Plan:
-     * Day 1: System Identification, Data Mapping & Audit of Departmental Silos.
-     * Day 2: Standardization of Confirmed Tools (Excel/Teams) & Evaluation of Integration Options.
-     * Day 3: Data Governance, Automated Reconciliation & Pilot Roadmap.
-   - Section 3: Immediate Next Steps & Decision Gate.
+     * Day 1: Audit, Inventory & Mapping of Unconfirmed Departmental Tools
+     * Day 2: Standardization of Confirmed Tools & Workflow Rules
+     * Day 3: Data Governance, Validation & Pilot Roadmap
+   - Section 3: Recommended Technical Options (Optional tools to evaluate post-audit)
+   - Section 4: Immediate Next Steps
 ======================================================================
 """
 
@@ -395,7 +392,7 @@ with col_chat:
     if not valid_email_state:
         st.info("👈 Please enter a valid business email above to unlock the voice assistant.")
     else:
-        st.markdown("### 🎙️️ Voice Input")
+        st.markdown("### 🎙 Voice Input")
 
     audio_val = st.audio_input("Click to record your voice", disabled=not valid_email_state, key="native_audio_input")
 
