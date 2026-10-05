@@ -118,7 +118,7 @@ EXTRACTION RULES:
 HUMAN_DIAGNOSIS_PROMPT = """
 You are a trusted executive strategist writing directly to a CEO/Executive. 
 Your tone must be warm, highly empathetic, direct, and pragmatic.
-Provide immediate high-impact value. Focus on a 3-Day Execution Plan with 3 concrete, low-overhead FIRST STEPS.
+Provide immediate high-impact value. Focus on a 3-Day Execution Plan with 3 concrete, low-overhead FIRST STEPS for integrating AI into their company.
 """
 
 # -----------------------------------------------------------------------------
@@ -151,7 +151,7 @@ def transcribe_audio_file(audio_file) -> str:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
-                prompt="Executive diagnostic, company, role, industry sector, tools."
+                prompt="Executive diagnostic, company, role, industry sector, tools, AI adoption."
             )
         
         text = transcript.text.strip()
@@ -205,7 +205,7 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
     
     pdf.set_font("Helvetica", size=18, style="B")
     pdf.set_text_color(*PRIMARY)
-    pdf.cell(0, 10, text="Executive Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="L")
+    pdf.cell(0, 10, text="Executive AI Diagnostic Report", new_x="LMARGIN", new_y="NEXT", align="L")
     pdf.ln(4)
 
     facts = profile.get("facts", {})
@@ -220,17 +220,22 @@ def generate_pdf_report(profile: dict, report_text: str) -> bytes:
 
     pdf.set_font("Helvetica", size=12, style="B")
     pdf.set_text_color(*PRIMARY)
-    pdf.cell(0, 8, text="2. Strategic Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, text="2. Strategic AI Diagnostic & Action Plan", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", size=10)
     pdf.set_text_color(*TEXT_COLOR)
     
     pdf.multi_cell(0, 5, text=clean_text_for_pdf(report_text), new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
 
-def save_and_sync_data(email: str, profile_data: dict, messages: list):
+def save_and_sync_data(email: str, profile_data: dict, messages: list, report: Optional[str] = None):
     if not email:
         return
-    payload = {"user_email": email, "profile": profile_data, "chat_history": messages}
+    payload = {
+        "user_email": email, 
+        "profile": profile_data, 
+        "chat_history": messages,
+        "report": report
+    }
     safe_name = sanitize_email(email)
     path = os.path.join(DATA_DIR, f"{safe_name}.json")
     with open(path, "w", encoding="utf-8") as f:
@@ -300,12 +305,20 @@ if "current_user" not in st.session_state:
 if "last_reply_text" not in st.session_state:
     st.session_state.last_reply_text = None
 
+# FIX BUG: Clear state and reset session report when user changes
 if valid_email_state and user_email != st.session_state.current_user:
     st.session_state.current_user = user_email
+    
+    # CLEAR PREVIOUS REPORT FROM SESSION TO PREVENT CROSS-USER DATA LEAK
+    if "current_report" in st.session_state:
+        del st.session_state["current_report"]
+
     existing_data = load_user_data(user_email)
     if existing_data:
         st.session_state.profile = existing_data.get("profile", ExecutiveProfile().model_dump())
         st.session_state.messages = existing_data.get("chat_history", [])
+        if existing_data.get("report"):
+            st.session_state.current_report = existing_data["report"]
         st.success(f"Welcome back! Session restored for {user_email}")
     else:
         st.session_state.profile = ExecutiveProfile().model_dump()
@@ -396,7 +409,8 @@ with col_chat:
                 st.session_state.messages.append({"role": "assistant", "content": reply})
                 st.session_state.last_reply_text = reply
 
-            save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages)
+            current_rep = st.session_state.get("current_report")
+            save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages, current_rep)
             st.rerun()
 
         except Exception as e:
@@ -443,6 +457,8 @@ with col_profile:
             "Headcount": [direct_n, max(0, total_n - direct_n)]
         })
         fig_bar = px.bar(df_chart, x="Scope", y="Headcount", color="Scope", title="Team Scope vs Company Scale")
+        
+        # FIX BUG: use_container_width=True instead of width="100%"
         st.plotly_chart(fig_bar, use_container_width=True)
 
     st.divider()
@@ -463,7 +479,9 @@ with col_profile:
                 ],
                 temperature=0.7
             )
-            st.session_state.current_report = diag_res.choices[0].message.content
+            report_content = diag_res.choices[0].message.content
+            st.session_state.current_report = report_content
+            save_and_sync_data(st.session_state.current_user, st.session_state.profile, st.session_state.messages, report_content)
 
     if "current_report" in st.session_state:
         st.markdown("---")
