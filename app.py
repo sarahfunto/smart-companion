@@ -1,3 +1,4 @@
+
 import base64
 import hashlib
 import json
@@ -215,7 +216,7 @@ FIELDS:
 1. company_name: explicit name of the executive's company.
 2. industry: the sector of the company.
 3. direct_team_size vs company_size: keep strictly separate.
-4. tools: only software/platforms explicitly named by the executive.
+4. tools: ALL software/platforms explicitly named by the executive (list every one, comma-separated). Fix obvious speech-to-text errors (for example 'massive Excel spring sheet' means 'a large Excel spreadsheet').
 5. primary_pain: operational friction, bottlenecks, data issues, workflow delays, margin or profitability problems.
 6. fear: ONLY if the executive explicitly expresses a strategic or high-stakes anxiety
    ("my biggest concern is...", "I fear...", "we risk losing...", "I am worried about...").
@@ -256,6 +257,7 @@ STRICT FACTUAL GROUNDING:
 - Never name unconfirmed software as part of their current infrastructure.
 - Use external_web_intelligence only for public company positioning, never to guess internal systems.
 - Day 1 must not depend on tools you do not know they have.
+- Each action must name the exact artifact to produce (for example a one-page diagram, a 3-column table, a 15-minute meeting invite) and must reference the executive's own words or confirmed tools. Avoid generic actions such as 'identify quick wins' or 'set up regular check-ins'.
 """
  
 # -----------------------------------------------------------------------------
@@ -378,7 +380,7 @@ def transcribe_audio_file(audio_file) -> str:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
-                prompt="Executive diagnostic, company name, role, industry sector, tools, AI adoption.",
+                prompt="Executive diagnostic, company name, role, industry sector, Excel spreadsheet, ERP, Sage, software tools, AI adoption.",
             )
         text = transcript.text.strip()
         junk = {"you", "you.", "thank you", "thank you.", "mb", "amara.org", ""}
@@ -658,6 +660,31 @@ def process_user_message(user_input: str):
 # -----------------------------------------------------------------------------
 # 11. REPORT GENERATION & INTERACTIVE RENDERING
 # -----------------------------------------------------------------------------
+# Software names/categories the model tends to slip in. Extend this list over time.
+SOFTWARE_TERMS = [
+    "crm", "hubspot", "salesforce", "sap", "power bi", "tableau", "zapier",
+    "microsoft teams", "slack", "odoo", "jira", "trello", "asana",
+    "postgresql", "mysql", "sql server", "oracle", "airtable", "make.com",
+]
+ 
+ 
+def find_unconfirmed_tools(report: dict, allowed_text: str) -> List[str]:
+    """Return software terms used in the report that the executive never mentioned."""
+    # tool_option may suggest tools (it is labeled as a future option), so it is excluded from the check
+    parts = [report.get("understood", ""), report.get("insight", ""), report.get("comeback_message", "")]
+    for a in report.get("actions", []):
+        parts += [a.get("title", ""), a.get("why", ""), a.get("done_when", "")]
+    text = normalize_text(" ".join(parts))
+    allowed = normalize_text(allowed_text)
+    found = []
+    for term in SOFTWARE_TERMS:
+        t = normalize_text(term)
+        pattern = rf"\b{re.escape(t)}\b"
+        if re.search(pattern, text) and not re.search(pattern, allowed):
+            found.append(term)
+    return found
+ 
+ 
 def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
     user_quotes = [m["content"] for m in messages if m["role"] == "user"][-10:]
     payload = {
@@ -665,19 +692,35 @@ def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
         "user_quotes": user_quotes,
         "external_web_intelligence": web_intel.get("summary"),
     }
-    res = client.beta.chat.completions.parse(
-        model=CHAT_MODEL,
-        messages=[
-            {"role": "system", "content": REPORT_SYSTEM_PROMPT},
-            {"role": "user", "content": f"Input data:\n{json.dumps(payload, ensure_ascii=False)}"},
-        ],
-        response_format=DiagnosticReport,
-        temperature=0.2,
-    )
-    parsed = res.choices[0].message.parsed
-    if parsed is None:
-        raise ValueError("The report model returned no structured output.")
-    report = parsed.model_dump()
+    # Anything the executive actually said is allowed (profile tools + all their messages)
+    allowed_text = " ".join(m["content"] for m in messages if m["role"] == "user")
+    allowed_text += " " + str(get_val(profile, "facts", "tools") or "")
+ 
+    extra_rule = ""
+    report = None
+    for _attempt in range(2):
+        res = client.beta.chat.completions.parse(
+            model=CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": REPORT_SYSTEM_PROMPT + extra_rule},
+                {"role": "user", "content": f"Input data:\n{json.dumps(payload, ensure_ascii=False)}"},
+            ],
+            response_format=DiagnosticReport,
+            temperature=0.2,
+        )
+        parsed = res.choices[0].message.parsed
+        if parsed is None:
+            raise ValueError("The report model returned no structured output.")
+        report = parsed.model_dump()
+        violations = find_unconfirmed_tools(report, allowed_text)
+        if not violations:
+            break
+        extra_rule = (
+            "\n\nCRITICAL CORRECTION: your previous draft mentioned software the executive never named: "
+            + ", ".join(violations)
+            + ". Rewrite WITHOUT these words. Refer only to the confirmed tools."
+        )
+ 
     report["actions"] = [dict(a, done=False) for a in report["actions"][:3]]
     report["web_intel"] = web_intel
     report["id"] = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -978,3 +1021,4 @@ with col_profile:
  
     if isinstance(st.session_state.get("current_report"), dict):
         render_report(st.session_state.current_report, p)
+
