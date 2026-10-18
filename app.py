@@ -23,8 +23,9 @@ CHAT_MODEL = "gpt-4o"                 # conversation + report
 EXTRACTION_MODEL = "gpt-4o-mini"      # faster/cheaper profile extraction
 WEB_SEARCH_MODEL = "gpt-4o"           # used with the Responses API web search tool
 HISTORY_WINDOW = 6                    # last N messages sent to the extractor
-FEAR_FALLBACK_TURNS = 8               # unlock step 4 after N user turns if no explicit fear was stated
+FEAR_FALLBACK_TURNS = 8               # unlock step 4 after N user turns if fear/impact were not stated
 STRICT_EVIDENCE = True                # reject extracted values whose evidence isn't a real user quote
+CHAT_TEMPERATURE = 0.4                # lower = fewer inventions in the conversation
 
 st.set_page_config(
     page_title="Smart Companion - Executive Profiler",
@@ -109,6 +110,7 @@ class FactsGroup(BaseModel):
 
 class InterpretationGroup(BaseModel):
     primary_pain: ProfileAttribute = Field(default_factory=ProfileAttribute)
+    pain_impact: ProfileAttribute = Field(default_factory=ProfileAttribute)  # NEW: user's own figures
     trigger: ProfileAttribute = Field(default_factory=ProfileAttribute)
     fear: ProfileAttribute = Field(default_factory=ProfileAttribute)
 
@@ -123,12 +125,17 @@ class ActionItem(BaseModel):
     why: str
     day: int
     duration_min: int
+    steps: List[str]                       # NEW: 3 to 5 concrete steps
     done_when: str
+    ai_prompt: Optional[str] = None        # NEW: ready-to-paste prompt
+    gain_estimate: Optional[str] = None    # NEW: only computed from the user's own figures
     tool_option: Optional[str] = None
 
 
 class DiagnosticReport(BaseModel):
     understood: str
+    priority_pain: str                     # NEW
+    priority_reason: str                   # NEW
     insight: str
     actions: List[ActionItem]
     comeback_message: str
@@ -148,8 +155,10 @@ STEP_GUIDANCE = [
     "Ask for the executive's role, official company name and industry sector.",
     "Ask them to clarify their direct team size versus the overall company size.",
     "Ask which software and platforms their teams use every day.",
-    "Ask about the main operational bottlenecks. Once a bottleneck is known but no strategic concern is "
-    "stated, ask explicitly: 'If this is not solved, what is your biggest concern for the business?'",
+    "Ask about the main operational bottlenecks (let them list several). Then ask ONE quantifying question about "
+    "the most costly one (hours per week, frequency, people affected, or money lost). Once pain and figures are "
+    "known but no strategic concern is stated, ask: 'If this is not solved, what is your biggest concern "
+    "for the business?'",
 ]
 
 
@@ -166,8 +175,10 @@ def steps_status(profile: dict, user_turns: int) -> List[bool]:
     s2 = is_filled(get_val(profile, "facts", "company_size")) or is_filled(get_val(profile, "facts", "direct_team_size"))
     s3 = is_filled(get_val(profile, "facts", "tools"))
     has_pain = is_filled(get_val(profile, "interpretation", "primary_pain"))
+    has_impact = is_filled(get_val(profile, "interpretation", "pain_impact"))
     has_fear = is_filled(get_val(profile, "interpretation", "fear"))
-    s4 = has_pain and (has_fear or user_turns >= FEAR_FALLBACK_TURNS)
+    # Step 4 needs pain + a figure + a concern. The turn-count fallback prevents any dead end.
+    s4 = has_pain and ((has_fear and has_impact) or user_turns >= FEAR_FALLBACK_TURNS)
     return [s1, s2, s3, s4]
 
 
@@ -176,11 +187,43 @@ def check_gatekeeper_unlocked(profile: dict, user_turns: int) -> bool:
 
 
 # -----------------------------------------------------------------------------
-# 4. PROMPTS
+# 4. AI TOOL CATALOG (curated by YOU: the LLM may only pick from here)
+# -----------------------------------------------------------------------------
+# Review this list regularly: tool names and capabilities change fast.
+AI_TOOL_CATALOG = {
+    "general_assistant": {
+        "label": "General AI assistant (writing, summaries, drafts, analysis of pasted text)",
+        "examples": ["ChatGPT", "Claude", "Gemini", "Microsoft Copilot"],
+    },
+    "meeting_notes": {
+        "label": "Automatic meeting transcription and summaries",
+        "examples": ["Fireflies", "Otter", "Microsoft Copilot"],
+    },
+    "document_qa": {
+        "label": "Ask questions to your own documents",
+        "examples": ["NotebookLM", "ChatGPT", "Claude"],
+    },
+    "automation": {
+        "label": "Automate repetitive steps between apps",
+        "examples": ["Zapier", "Make.com"],
+    },
+}
+
+
+def catalog_for_prompt() -> str:
+    return "\n".join(f"- {v['label']}: {', '.join(v['examples'])}" for v in AI_TOOL_CATALOG.values())
+
+
+def catalog_tool_names() -> set:
+    return {n.lower() for v in AI_TOOL_CATALOG.values() for n in v["examples"]}
+
+
+# -----------------------------------------------------------------------------
+# 5. PROMPTS
 # -----------------------------------------------------------------------------
 CALL_A_SYSTEM_PROMPT = """
 You are a warm, empathetic senior AI strategy companion speaking directly to an executive (often by voice).
-Always reply in the language the executive is using. Keep replies short (2-3 sentences) and ask ONE question at a time.
+Always reply in the language the executive is using. Keep replies short (2-4 sentences) and ask at most ONE question.
 
 RULES:
 1. Acknowledge what the executive just said, using their own words when possible.
@@ -190,6 +233,24 @@ RULES:
 4. Never mention step numbers or progress: the interface already shows them.
 5. Never invent facts or software. Only reuse what is in the profile state.
 6. If an ACTION PLAN STATUS is provided, you may refer to it and ask how the actions are going.
+
+DEPTH RULES:
+7. Every reply must give VALUE, not only a question: after acknowledging, add ONE concrete, specific observation
+   or mini-suggestion tied to the executive's own words and the profile (never generic).
+8. PRIORITIES: ask which problem is the priority AT MOST ONCE. If the executive answers "all of them" or refuses
+   to choose, DECIDE for them: pick one using their stated figures (cost, frequency, urgency) and say it in one
+   sentence ("I suggest we start with X because you told me Y. Tell me if you disagree."). Then move on.
+9. If the executive says "go further", "be more concrete" or "how exactly?", stop asking questions: give the
+   concrete steps immediately (what to do, with which input document, in how many minutes).
+10. AI TOOLS: when the executive asks which tools, answer with names taken ONLY from the AI TOOL CATALOG below, as
+    options to evaluate. Never claim they already have them.
+11. Never end with a generic question (consultant, "anything else?"). End with a concrete next step or ONE
+    precise question that moves the diagnostic forward.
+12. Never state a figure that is not in the profile state.
+
+COACHING MODE (when ACTION PLAN STATUS is provided): when the executive picks an action, walk through it step by
+step, give the ready-to-paste prompt from the plan, and ask them to paste a NON-confidential extract so you can
+work on it together.
 
 GATEKEEPER:
 - If GATEKEEPER STATUS is "UNLOCKED": tell the executive their diagnostic is ready, and invite them to click the
@@ -217,6 +278,9 @@ FIELDS:
 3. direct_team_size vs company_size: keep strictly separate.
 4. tools: ALL software/platforms explicitly named by the executive (list every one, comma-separated). Fix obvious speech-to-text errors (for example 'massive Excel spring sheet' means 'a large Excel spreadsheet').
 5. primary_pain: operational friction, bottlenecks, data issues, workflow delays, margin or profitability problems.
+   If the executive lists several pains, keep ALL of them in one string separated by " ; " (never keep only one).
+5b. pain_impact: ONLY figures the executive stated about the cost of the pain (hours/week, frequency, number of
+   people, money, delays). Quote them verbatim in `evidence`. Never estimate or compute a figure yourself.
 6. fear: ONLY if the executive explicitly expresses a strategic or high-stakes anxiety
    ("my biggest concern is...", "I fear...", "we risk losing...", "I am worried about...").
    Do NOT infer a fear from an operational pain.
@@ -239,39 +303,51 @@ The executive must feel an immediate, tangible benefit.
 Return a JSON object with:
 - understood: 2-3 sentences showing what you understood about them, quoting their exact words
   (use `user_quotes` from the input).
+- priority_pain: the ONE pain to attack first. If the executive did not choose (e.g. "all three"), choose it
+  yourself from their stated figures and facts.
+- priority_reason: one sentence justifying the choice with THEIR words/figures, and saying it is your proposal.
 - insight: the "aha" moment. 2-3 sentences linking their main pain to their concern/stakes
   (for example, how their current way of working feeds the risk they fear).
-- actions: EXACTLY 3 actions. Each action is:
+- actions: EXACTLY 3 actions, all aimed at priority_pain, building on each other (day 1 -> day 3). Each action has:
     * title: short and concrete (what to do, starting with a verb)
     * why: one sentence on the benefit for them
     * day: 1, 2 or 3 (a different day for each action)
     * duration_min: at most 60, doable by the executive alone without any contractor
+    * steps: 3 to 5 imperative steps, each naming the exact input (document, file, meeting) and the exact output
     * done_when: a verifiable "done when..." criterion
-    * tool_option: optional. If you suggest a third-party tool, write it as
-      "Option to evaluate (not part of your current stack): <tool>". Otherwise null.
+    * ai_prompt: for at least one action, a ready-to-paste prompt written in the executive's language, with
+      [BRACKETED] placeholders for their data. No product names, no confidential data. Otherwise null.
+    * gain_estimate: ONLY if profile_data.interpretation.pain_impact contains figures; show the simple
+      calculation from THEIR numbers (e.g. "3 h/week x 4 = about 12 h/month"). Otherwise null.
+    * tool_option: "Option to evaluate (not part of your current stack): <name>", where <name> MUST come from
+      ai_tool_catalog. Otherwise null.
 - comeback_message: 1-2 sentences inviting them to come back once the 3 actions are done.
+
+FORBIDDEN generic actions: "identify quick wins", "set up regular check-ins", "define a strategy",
+"raise awareness", "assess your needs".
 
 STRICT FACTUAL GROUNDING:
 - Confirmed tools = ONLY those in profile_data.facts.tools. Never claim or assume any other software exists in their company.
 - Never name unconfirmed software as part of their current infrastructure.
 - Use external_web_intelligence only for public company positioning, never to guess internal systems.
 - Day 1 must not depend on tools you do not know they have.
+- Never invent a figure: every number must come from profile_data or user_quotes.
 - PRAGMATIC AI: at least one of the 3 actions must show the executive, in plain words, how to use an AI assistant
   on top of the tools they already use (for example: ask an AI assistant to summarize a past project document,
   draft a first version of a proposal from past material, or turn meeting notes into a standard one-page summary).
   Name the exact task and the exact input document. A purely organizational plan (new folders, meetings, templates
   only) is NOT acceptable: AI must visibly help the executive.
 - Frame the AI assistant as a suggestion: put any product name ONLY in `tool_option`
-  ("Option to evaluate (not part of your current stack): <tool>"). In the other fields write "an AI assistant".
+  (and only names from ai_tool_catalog). In the other fields write "an AI assistant".
 - When an action involves an AI assistant, add a short privacy safeguard in `why` or `done_when`
   (use non-confidential or anonymized content, and check your company's AI policy first).
 - Plain, everyday language only. Never use technical jargon such as: knowledge graph, vector, RAG, embeddings,
   semantic search, microservices, architecture, orchestration, LLM, API, ontology.
-- Each action must name the exact artifact to produce (for example a one-page diagram, a 3-column table, a 15-minute meeting invite) and must reference the executive's own words or confirmed tools. Avoid generic actions such as 'identify quick wins' or 'set up regular check-ins'.
+- Each action must name the exact artifact to produce (for example a one-page diagram, a 3-column table, a 15-minute meeting invite) and must reference the executive's own words or confirmed tools.
 """
 
 # -----------------------------------------------------------------------------
-# 5. PROFILE MERGING & EVIDENCE CHECK
+# 6. PROFILE MERGING & EVIDENCE CHECK
 # -----------------------------------------------------------------------------
 def evidence_supported(evidence: Optional[str], user_text_norm: str) -> bool:
     ev = normalize_text(evidence or "")
@@ -328,7 +404,7 @@ def merge_profiles(old: dict, new: dict, user_text_norm: str) -> dict:
 
 
 # -----------------------------------------------------------------------------
-# 6. WEB INTELLIGENCE (real web search through the Responses API)
+# 7. WEB INTELLIGENCE (real web search through the Responses API)
 # -----------------------------------------------------------------------------
 def fetch_company_web_intelligence(company_name: Optional[str], industry: Optional[str] = None) -> dict:
     result = {"summary": "No company name provided for external enrichment.", "sources": [], "ok": False}
@@ -366,7 +442,7 @@ def fetch_company_web_intelligence(company_name: Optional[str], industry: Option
 
 
 # -----------------------------------------------------------------------------
-# 7. AUDIO HELPERS
+# 8. AUDIO HELPERS
 # -----------------------------------------------------------------------------
 def transcribe_audio_file(audio_file) -> str:
     if not audio_file:
@@ -437,7 +513,7 @@ def play_audio(audio_bytes: bytes):
 
 
 # -----------------------------------------------------------------------------
-# 8. PDF GENERATION
+# 9. PDF GENERATION
 # -----------------------------------------------------------------------------
 FONT_CANDIDATES = [
     "DejaVuSans.ttf",
@@ -487,7 +563,6 @@ def generate_pdf_report(profile: dict, report: dict) -> bytes:
         pdf.multi_cell(0, h, text=txt(text), new_x="LMARGIN", new_y="NEXT")
 
     PRIMARY, BODY = (31, 78, 121), (40, 40, 40)
-    facts = profile.get("facts", {})
 
     font(18, True)
     pdf.set_text_color(*PRIMARY)
@@ -501,7 +576,12 @@ def generate_pdf_report(profile: dict, report: dict) -> bytes:
     line(f"Current tools: {get_val(profile, 'facts', 'tools') or 'N/A'}")
     pdf.ln(3)
 
-    for title, body in (("What I understood", report.get("understood")), ("Your insight", report.get("insight"))):
+    sections = [("What I understood", report.get("understood"))]
+    if report.get("priority_pain"):
+        sections.append(("Priority", f"{report['priority_pain']}\n{report.get('priority_reason', '')}"))
+    sections.append(("Your insight", report.get("insight")))
+
+    for title, body in sections:
         font(12, True)
         pdf.set_text_color(*PRIMARY)
         line(title, 8)
@@ -523,6 +603,12 @@ def generate_pdf_report(profile: dict, report: dict) -> bytes:
         line(f"Day {a.get('day')} - about {a.get('duration_min')} min", 5)
         line(f"Why: {a.get('why', '')}", 5)
         line(f"Done when: {a.get('done_when', '')}", 5)
+        for s in a.get("steps", []):
+            line(f"- {s}", 5)
+        if a.get("ai_prompt"):
+            line(f"Prompt: {a['ai_prompt']}", 5)
+        if a.get("gain_estimate"):
+            line(f"Estimated gain: {a['gain_estimate']}", 5)
         if a.get("tool_option"):
             line(a["tool_option"], 5)
         pdf.ln(2)
@@ -534,7 +620,7 @@ def generate_pdf_report(profile: dict, report: dict) -> bytes:
 
 
 # -----------------------------------------------------------------------------
-# 9. PERSISTENCE
+# 10. PERSISTENCE
 # -----------------------------------------------------------------------------
 def save_and_sync_data(email: str, profile_data: dict, messages: list, report: Optional[dict] = None):
     if not email:
@@ -566,7 +652,7 @@ def save_current_session():
 
 
 # -----------------------------------------------------------------------------
-# 10. CONVERSATION ENGINE
+# 11. CONVERSATION ENGINE
 # -----------------------------------------------------------------------------
 FIRST_QUESTION = (
     "Welcome! I am your strategic AI companion. To begin, could you please share your executive role, "
@@ -596,8 +682,13 @@ def build_welcome_back_message(report: Optional[dict]) -> str:
 def action_plan_status(report: Optional[dict]) -> str:
     if not report or not report.get("actions"):
         return ""
-    lines = [f"- {a['title']} ({'done' if a.get('done') else 'not done yet'})" for a in report["actions"]]
-    return "\n\nACTION PLAN STATUS:\n" + "\n".join(lines)
+    out = []
+    for a in report["actions"]:
+        out.append(f"- {a['title']} ({'done' if a.get('done') else 'not done yet'})")
+        out += [f"    step: {s}" for s in a.get("steps", [])]
+        if a.get("ai_prompt"):
+            out.append(f"    ready prompt: {a['ai_prompt']}")
+    return "\n\nACTION PLAN STATUS:\n" + "\n".join(out)
 
 
 def process_user_message(user_input: str):
@@ -646,7 +737,8 @@ def process_user_message(user_input: str):
     next_step = next((i for i, d in enumerate(new_done) if not d), None)
     next_instruction = STEP_GUIDANCE[next_step] if next_step is not None else "None - the diagnostic is complete."
     sys_inst = (
-        f"{CALL_A_SYSTEM_PROMPT}\n\nPROFILE STATE:\n{json.dumps(st.session_state.profile)}\n"
+        f"{CALL_A_SYSTEM_PROMPT}\n\nAI TOOL CATALOG:\n{catalog_for_prompt()}\n\n"
+        f"PROFILE STATE:\n{json.dumps(st.session_state.profile)}\n"
         f"GATEKEEPER STATUS: {'UNLOCKED' if unlocked else 'LOCKED'}\n"
         f"NEXT REQUIRED STEP: {next_instruction}"
         f"{action_plan_status(st.session_state.get('current_report'))}"
@@ -654,7 +746,7 @@ def process_user_message(user_input: str):
     res_A = client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[{"role": "system", "content": sys_inst}, *messages],
-        temperature=0.7,
+        temperature=CHAT_TEMPERATURE,
     )
     reply = res_A.choices[0].message.content
 
@@ -668,7 +760,7 @@ def process_user_message(user_input: str):
 
 
 # -----------------------------------------------------------------------------
-# 11. REPORT GENERATION & INTERACTIVE RENDERING
+# 12. REPORT GENERATION, VALIDATORS & INTERACTIVE RENDERING
 # -----------------------------------------------------------------------------
 # Software names/categories the model tends to slip in. Extend this list over time.
 SOFTWARE_TERMS = [
@@ -677,15 +769,47 @@ SOFTWARE_TERMS = [
     "postgresql", "mysql", "sql server", "oracle", "airtable", "make.com",
     "copilot", "chatgpt", "gemini",
 ]
+# Catalog product names must never leak outside tool_option: reuse the same validator
+SOFTWARE_TERMS = list(dict.fromkeys(SOFTWARE_TERMS + sorted(catalog_tool_names())))
+
+JARGON_TERMS = [
+    "knowledge graph", "vector", "rag", "embedding", "embeddings", "semantic", "microservice",
+    "microservices", "architecture", "orchestration", "llm", "api", "ontology",
+]
+
+# Generic phrases that signal a vague, "bateau" action. Add other languages if your users need them.
+GENERIC_PHRASES = [
+    "quick win", "quick wins", "regular check", "define a strategy", "raise awareness", "assess your needs",
+]
+
+
+def report_text_parts(report: dict, include_tool_option: bool = False) -> List[str]:
+    """All user-facing text of the report that must be checked by the validators."""
+    parts = [
+        report.get("understood", ""),
+        report.get("priority_pain", ""),
+        report.get("priority_reason", ""),
+        report.get("insight", ""),
+        report.get("comeback_message", ""),
+    ]
+    for a in report.get("actions", []):
+        parts += [
+            a.get("title", ""),
+            a.get("why", ""),
+            a.get("done_when", ""),
+            *(a.get("steps") or []),
+            a.get("ai_prompt") or "",
+            a.get("gain_estimate") or "",
+        ]
+        if include_tool_option:
+            parts.append(a.get("tool_option") or "")
+    return parts
 
 
 def find_unconfirmed_tools(report: dict, allowed_text: str) -> List[str]:
-    """Return software terms used in the report that the executive never mentioned."""
-    # tool_option may suggest tools (it is labeled as a future option), so it is excluded from the check
-    parts = [report.get("understood", ""), report.get("insight", ""), report.get("comeback_message", "")]
-    for a in report.get("actions", []):
-        parts += [a.get("title", ""), a.get("why", ""), a.get("done_when", "")]
-    text = normalize_text(" ".join(parts))
+    """Return software terms used in the report that the executive never mentioned.
+    tool_option is excluded: it is the only place where catalog tools may appear."""
+    text = normalize_text(" ".join(report_text_parts(report)))
     allowed = normalize_text(allowed_text)
     found = []
     for term in SOFTWARE_TERMS:
@@ -696,27 +820,39 @@ def find_unconfirmed_tools(report: dict, allowed_text: str) -> List[str]:
     return found
 
 
-JARGON_TERMS = [
-    "knowledge graph", "vector", "rag", "embedding", "embeddings", "semantic", "microservice",
-    "microservices", "architecture", "orchestration", "llm", "api", "ontology",
-]
-
-
 def find_jargon(report: dict) -> List[str]:
-    parts = [report.get("understood", ""), report.get("insight", ""), report.get("comeback_message", "")]
-    for a in report.get("actions", []):
-        parts += [a.get("title", ""), a.get("why", ""), a.get("done_when", ""), a.get("tool_option") or ""]
-    text = normalize_text(" ".join(parts))
+    text = normalize_text(" ".join(report_text_parts(report, include_tool_option=True)))
     return [t for t in JARGON_TERMS if re.search(rf"\b{re.escape(normalize_text(t))}\b", text)]
 
 
 def has_ai_action(report: dict) -> bool:
     """At least one action must visibly use an AI assistant (not a purely organizational plan)."""
     for a in report.get("actions", []):
-        text = normalize_text(" ".join([a.get("title", ""), a.get("why", ""), a.get("done_when", "")]))
+        text = normalize_text(" ".join([a.get("title", ""), a.get("why", ""), a.get("done_when", ""),
+                                        *(a.get("steps") or [])]))
         if re.search(r"\b(ai|artificial intelligence|assistant)\b", text):
             return True
     return False
+
+
+def find_quality_problems(report: dict) -> List[str]:
+    """Precision checks done in code, not in the prompt."""
+    problems = []
+    allowed_names = catalog_tool_names()
+    for i, a in enumerate(report.get("actions", []), 1):
+        steps = a.get("steps") or []
+        if not 3 <= len(steps) <= 5:
+            problems.append(f"action {i} needs 3 to 5 concrete steps")
+        text = normalize_text(" ".join([a.get("title", ""), *steps]))
+        for g in GENERIC_PHRASES:
+            if normalize_text(g) in text:
+                problems.append(f"action {i} is generic ('{g}')")
+        opt = (a.get("tool_option") or "").lower()
+        if opt and not any(n in opt for n in allowed_names):
+            problems.append(f"action {i}: tool_option must use a name from ai_tool_catalog")
+    if not any(a.get("ai_prompt") for a in report.get("actions", [])):
+        problems.append("at least one action needs a ready-to-paste ai_prompt")
+    return problems
 
 
 def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
@@ -725,6 +861,7 @@ def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
         "profile_data": profile,
         "user_quotes": user_quotes,
         "external_web_intelligence": web_intel.get("summary"),
+        "ai_tool_catalog": AI_TOOL_CATALOG,
     }
     # Anything the executive actually said is allowed (profile tools + all their messages)
     allowed_text = " ".join(m["content"] for m in messages if m["role"] == "user")
@@ -761,6 +898,7 @@ def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
                 "no action shows how an AI assistant helps on top of the executive's existing tools. "
                 "At least one action must name a concrete AI-assisted task and its input document."
             )
+        problems += find_quality_problems(report)
         if not problems:
             break
         extra_rule = "\n\nCRITICAL CORRECTION: your previous draft had these problems: " + " | ".join(problems)
@@ -782,6 +920,11 @@ def render_report(report: dict, profile: dict):
     st.markdown("---")
     st.markdown("### 👋 What I understood")
     st.write(report.get("understood", ""))
+
+    if report.get("priority_pain"):
+        st.markdown(f"### 🎯 Priority: {report['priority_pain']}")
+        st.caption(report.get("priority_reason", ""))
+
     st.markdown("### 💡 Your insight")
     st.info(report.get("insight", ""))
 
@@ -797,6 +940,13 @@ def render_report(report: dict, profile: dict):
             args=(i, key),
         )
         st.caption(f"{a['why']} — **Done when:** {a['done_when']}")
+        for s in a.get("steps", []):
+            st.markdown(f"- {s}")
+        if a.get("ai_prompt"):
+            st.caption("📋 Ready-to-paste prompt (use non-confidential content)")
+            st.code(a["ai_prompt"], language=None)
+        if a.get("gain_estimate"):
+            st.caption(f"📈 {a['gain_estimate']}")
         if a.get("tool_option"):
             st.caption(f"🧰 {a['tool_option']}")
 
@@ -828,7 +978,7 @@ def render_report(report: dict, profile: dict):
 
 
 # -----------------------------------------------------------------------------
-# 12. SESSION INITIALIZATION & LOGIN
+# 13. SESSION INITIALIZATION & LOGIN
 # -----------------------------------------------------------------------------
 st.markdown(
     """
@@ -895,7 +1045,7 @@ elif not session_ready and st.session_state.current_user:
     fresh_state()
 
 # -----------------------------------------------------------------------------
-# 13. UI HELPERS
+# 14. UI HELPERS
 # -----------------------------------------------------------------------------
 def render_card(label: str, item: dict):
     val = item.get("value")
@@ -919,6 +1069,7 @@ RADAR_FIELDS = [
     ("Company size", "facts", "company_size"),
     ("Tools", "facts", "tools"),
     ("Pain", "interpretation", "primary_pain"),
+    ("Impact", "interpretation", "pain_impact"),
     ("Trigger", "interpretation", "trigger"),
     ("Concern", "interpretation", "fear"),
 ]
@@ -945,7 +1096,7 @@ def completeness_radar(profile: dict):
 
 
 # -----------------------------------------------------------------------------
-# 14. LAYOUT
+# 15. LAYOUT
 # -----------------------------------------------------------------------------
 col_chat, col_profile = st.columns([3, 2])
 
@@ -1022,6 +1173,7 @@ with col_profile:
 
         st.markdown("### 🎯 Strategic Insights")
         render_card("Primary Pain Point", interp.get("primary_pain", {}))
+        render_card("Pain Impact (your figures)", interp.get("pain_impact", {}))
         render_card("Market Trigger", interp.get("trigger", {}))
         render_card("Executive Fear / Concern", interp.get("fear", {}))
 
