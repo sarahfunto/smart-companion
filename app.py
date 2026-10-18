@@ -344,7 +344,14 @@ ACTION QUALITY RULES:
 - gain_estimate: ONLY on the last action. Never imply that an earlier action already delivers the gain.
   Word it with "up to", because it assumes the task disappears entirely.
 - Every action that uses an AI assistant MUST state, in `why` or `done_when`, a privacy safeguard
-  (non-confidential or anonymized content, company AI policy checked).
+  (non-confidential or anonymized content, company AI policy checked). Never mention AI privacy or an AI policy
+  in an action that does not use an AI assistant.
+- Never ask the executive to build, set up or test an automation or integration alone. If a tool could solve the
+  pain, day 3 prepares a one-page brief (fields to move, who does it today, what "done" looks like) for whoever
+  will implement it.
+- Every action must work directly on the priority_pain (what is re-typed, where, by whom). No generic templates,
+  training or "streamlining".
+- gain_estimate: use the executive's own unit (e.g. days) and only their numbers. Never convert days to hours.
 - insight: never claim consequences the executive did not state (errors, delays, lost clients) unless they said so.
   If no concern was stated, link the pain to their own figure instead.
 
@@ -557,7 +564,7 @@ def find_unicode_font() -> Optional[str]:
 def generate_pdf_report(profile: dict, report: dict) -> bytes:
     font_path = find_unicode_font()
     pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=10)
     pdf.add_page()
     unicode_ok = False
     if font_path:
@@ -821,6 +828,37 @@ GENERIC_PHRASES = [
 ]
 
 
+# Words that mean "build or set up an automation" (the executive works alone and is not technical)
+BUILD_TERMS = ["automate", "automation", "automated", "automatically", "integrate", "integration"]
+
+NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+                "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
+FIGURE_CONSTANTS = {4, 12, 52}  # weeks per month, months per year, weeks per year
+
+
+def extract_numbers(text: str) -> set:
+    t = (text or "").lower()
+    nums = {int(n) for n in re.findall(r"\d+", t)}
+    nums |= {v for w, v in NUMBER_WORDS.items() if re.search(rf"\b{w}\b", t)}
+    return nums
+
+
+def find_unsupported_figures(report: dict, profile: dict) -> List[str]:
+    """gain_estimate may only use the executive's own numbers (and simple x4 / x12 / x52 scaling)."""
+    gains = [a.get("gain_estimate") or "" for a in report.get("actions", [])]
+    if not any(gains):
+        return []
+    base = extract_numbers(get_val(profile, "interpretation", "pain_impact") or "")
+    allowed = set(base) | FIGURE_CONSTANTS
+    allowed |= {b * c for b in base for c in FIGURE_CONSTANTS}
+    allowed |= {x * y for x in base for y in base if x != y}
+    bad = sorted(n for g in gains for n in extract_numbers(g) if n not in allowed)
+    if bad:
+        return ["gain_estimate uses numbers the executive never gave (" + ", ".join(map(str, bad))
+                + "). Use only their figures in their own unit (e.g. days, not hours), scaled by 4 at most."]
+    return []
+
+
 # The prompt must state an output format (table, checklist, bullets, one page...)
 FORMAT_CUES = (r"\b(format|checklist|bullet|bullets|columns?|one[- ]page|1[- ]page|no more than|maximum|"
                r"in \d+|in one|in a table|as a table|as a list|as a checklist)\b")
@@ -828,18 +866,21 @@ FORMAT_CUES = (r"\b(format|checklist|bullet|bullets|columns?|one[- ]page|1[- ]pa
 # Consequences the narrative sections may only mention if the executive said them first
 CONSEQUENCE_TERMS = ["error", "errors", "mistake", "mistakes", "delay", "delays", "risk", "risks",
                      "revenue", "profit", "cost", "costs", "penalty", "penalties",
-                     "complaint", "complaints", "compliance"]
+                     "complaint", "complaints", "compliance", "productivity", "strategic",
+                     "inefficiency", "inefficiencies", "morale"]
 
 
 def find_unstated_claims(report: dict, allowed_text: str) -> List[str]:
     """Consequences claimed in understood / priority_reason / insight that the executive never stated."""
-    text = normalize_text(" ".join([report.get("understood", ""), report.get("priority_reason", ""),
-                                    report.get("insight", "")]))
+    text = normalize_text(" ".join(
+        [report.get("understood", ""), report.get("priority_reason", ""), report.get("insight", "")]
+        + [f"{a.get('why', '')} {a.get('done_when', '')}" for a in report.get("actions", [])]
+    ))
     allowed = normalize_text(allowed_text)
     found = [t for t in CONSEQUENCE_TERMS
              if re.search(rf"\b{re.escape(t)}\b", text) and not re.search(rf"\b{re.escape(t)}\b", allowed)]
     if found:
-        return ["understood/priority_reason/insight claim consequences the executive never stated ("
+        return ["the text claims consequences or benefits the executive never stated ("
                 + ", ".join(found) + "). Remove them and link the pain to their own words and figures instead."]
     return []
 
@@ -910,10 +951,12 @@ def find_quality_problems(report: dict, profile: Optional[dict] = None) -> List[
         for g in GENERIC_PHRASES:
             if normalize_text(g) in text:
                 problems.append(f"action {i} is generic ('{g}')")
-        full = normalize_text(" ".join([a.get("title", ""), a.get("why", ""), a.get("done_when", ""), *steps]))
-        if re.search(r"\b(ai|assistant)\b", full):
-            ai_actions += 1
         prompt = a.get("ai_prompt") or ""
+        # AI usage is judged on what the executive DOES (title / steps / prompt), not on mentions in `why`
+        ai_text = normalize_text(" ".join([a.get("title", ""), *steps]))
+        uses_ai = bool(prompt) or bool(re.search(r"\b(ai|assistant)\b", ai_text))
+        if uses_ai:
+            ai_actions += 1
         if prompt:
             if not re.search(r"\[[^\]]{2,}\]", prompt):
                 problems.append(f"action {i}: ai_prompt needs at least one [BRACKETED] placeholder")
@@ -922,11 +965,18 @@ def find_quality_problems(report: dict, profile: Optional[dict] = None) -> List[
                                 "(e.g. 'as a 3-column table', 'in 5 bullet points', 'in one page')")
             if re.search(r"confidential|ai policy", prompt, re.I):
                 problems.append(f"action {i}: privacy warnings belong in why/done_when, not in ai_prompt")
-        if (prompt or re.search(r"\b(ai|assistant)\b", full)) and not re.search(
-            r"confidential|anonym|policy", " ".join([a.get("why", ""), a.get("done_when", ""), *steps]), re.I
-        ):
+        safeguard_text = " ".join([a.get("why", ""), a.get("done_when", "")])
+        if uses_ai and not re.search(r"confidential|anonym|policy", safeguard_text, re.I):
             problems.append(f"action {i}: uses an AI assistant but has no privacy safeguard in why or done_when "
                             "(non-confidential or anonymized content; company AI policy checked)")
+        if not uses_ai and re.search(r"ai policy|confidential|anonym", safeguard_text, re.I):
+            problems.append(f"action {i}: mentions AI privacy/policy but does not use an AI assistant; "
+                            "either use one or remove the mention")
+        build_text = normalize_text(" ".join([a.get("title", ""), a.get("done_when", ""), *steps]))
+        hit = next((t for t in BUILD_TERMS if re.search(rf"\b{t}\b", build_text)), None)
+        if hit:
+            problems.append(f"action {i}: the executive must not build or set up '{hit}' alone; "
+                            "prepare a one-page brief, a checklist or a decision instead")
         opt = (a.get("tool_option") or "").lower()
         if opt and not any(n in opt for n in allowed_names):
             problems.append(f"action {i}: tool_option must use a name from ai_tool_catalog")
@@ -987,6 +1037,7 @@ def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
             )
         problems += find_quality_problems(report, profile)
         problems += find_unstated_claims(report, allowed_text)
+        problems += find_unsupported_figures(report, profile)
         if best is None or len(problems) < best[0]:
             best = (len(problems), report, list(problems))
         if not problems:
