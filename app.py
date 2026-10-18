@@ -321,7 +321,8 @@ Return a JSON object with:
     * steps: 3 to 5 imperative steps, each naming the exact input (document, file, meeting) and the exact output
     * done_when: a verifiable "done when..." criterion
     * ai_prompt: for every action that uses an AI assistant, a ready-to-paste prompt written in the executive's
-      language, with at least 2 [BRACKETED] placeholders for their data. No product names. Otherwise null.
+      language, with at least 1 [BRACKETED] placeholder for their data and the exact output format
+      (e.g. 'as a 3-column table', 'in 5 bullet points'). No product names. Otherwise null.
     * gain_estimate: ONLY on the day-3 action, and ONLY if profile_data.interpretation.pain_impact contains
       figures. Start with "Potential gain once solved:" then show the simple calculation from THEIR numbers
       (e.g. "3 h/week x 4 = about 12 h/month"). Otherwise null on every action.
@@ -338,9 +339,12 @@ ACTION QUALITY RULES:
 - At least 2 of the 3 actions must use an AI assistant, each with an ai_prompt. AI must appear by day 2 at the latest.
 - The executive works alone and is not technical: never propose scripts, macros, code or building an automation.
   Propose reviewing, summarizing, drafting or checking with the AI assistant.
-- ai_prompt: at least 2 [BRACKETED] placeholders, the exact task and the exact output format. Never put privacy or
+- ai_prompt: at least 1 [BRACKETED] placeholder, the exact task and the exact output format. Never put privacy or
   policy warnings inside the prompt (they go in `why` or `done_when`).
 - gain_estimate: ONLY on the last action. Never imply that an earlier action already delivers the gain.
+  Word it with "up to", because it assumes the task disappears entirely.
+- Every action that uses an AI assistant MUST state, in `why` or `done_when`, a privacy safeguard
+  (non-confidential or anonymized content, company AI policy checked).
 - insight: never claim consequences the executive did not state (errors, delays, lost clients) unless they said so.
   If no concern was stated, link the pain to their own figure instead.
 
@@ -817,6 +821,29 @@ GENERIC_PHRASES = [
 ]
 
 
+# The prompt must state an output format (table, checklist, bullets, one page...)
+FORMAT_CUES = (r"\b(format|checklist|bullet|bullets|columns?|one[- ]page|1[- ]page|no more than|maximum|"
+               r"in \d+|in one|in a table|as a table|as a list|as a checklist)\b")
+
+# Consequences the narrative sections may only mention if the executive said them first
+CONSEQUENCE_TERMS = ["error", "errors", "mistake", "mistakes", "delay", "delays", "risk", "risks",
+                     "revenue", "profit", "cost", "costs", "penalty", "penalties",
+                     "complaint", "complaints", "compliance"]
+
+
+def find_unstated_claims(report: dict, allowed_text: str) -> List[str]:
+    """Consequences claimed in understood / priority_reason / insight that the executive never stated."""
+    text = normalize_text(" ".join([report.get("understood", ""), report.get("priority_reason", ""),
+                                    report.get("insight", "")]))
+    allowed = normalize_text(allowed_text)
+    found = [t for t in CONSEQUENCE_TERMS
+             if re.search(rf"\b{re.escape(t)}\b", text) and not re.search(rf"\b{re.escape(t)}\b", allowed)]
+    if found:
+        return ["understood/priority_reason/insight claim consequences the executive never stated ("
+                + ", ".join(found) + "). Remove them and link the pain to their own words and figures instead."]
+    return []
+
+
 def report_text_parts(report: dict, include_tool_option: bool = False) -> List[str]:
     """All user-facing text of the report that must be checked by the validators."""
     parts = [
@@ -888,10 +915,18 @@ def find_quality_problems(report: dict, profile: Optional[dict] = None) -> List[
             ai_actions += 1
         prompt = a.get("ai_prompt") or ""
         if prompt:
-            if len(re.findall(r"\[[^\]]{2,}\]", prompt)) < 2:
-                problems.append(f"action {i}: ai_prompt needs at least 2 [BRACKETED] placeholders")
+            if not re.search(r"\[[^\]]{2,}\]", prompt):
+                problems.append(f"action {i}: ai_prompt needs at least one [BRACKETED] placeholder")
+            if not re.search(FORMAT_CUES, prompt, re.I):
+                problems.append(f"action {i}: ai_prompt must state the exact output format "
+                                "(e.g. 'as a 3-column table', 'in 5 bullet points', 'in one page')")
             if re.search(r"confidential|ai policy", prompt, re.I):
                 problems.append(f"action {i}: privacy warnings belong in why/done_when, not in ai_prompt")
+        if (prompt or re.search(r"\b(ai|assistant)\b", full)) and not re.search(
+            r"confidential|anonym|policy", " ".join([a.get("why", ""), a.get("done_when", ""), *steps]), re.I
+        ):
+            problems.append(f"action {i}: uses an AI assistant but has no privacy safeguard in why or done_when "
+                            "(non-confidential or anonymized content; company AI policy checked)")
         opt = (a.get("tool_option") or "").lower()
         if opt and not any(n in opt for n in allowed_names):
             problems.append(f"action {i}: tool_option must use a name from ai_tool_catalog")
@@ -920,7 +955,7 @@ def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
     allowed_text += " " + str(get_val(profile, "facts", "tools") or "")
 
     extra_rule = ""
-    report = None
+    best = None
     for _attempt in range(3):
         res = client.beta.chat.completions.parse(
             model=CHAT_MODEL,
@@ -951,9 +986,15 @@ def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
                 "At least one action must name a concrete AI-assisted task and its input document."
             )
         problems += find_quality_problems(report, profile)
+        problems += find_unstated_claims(report, allowed_text)
+        if best is None or len(problems) < best[0]:
+            best = (len(problems), report, list(problems))
         if not problems:
             break
         extra_rule = "\n\nCRITICAL CORRECTION: your previous draft had these problems: " + " | ".join(problems)
+
+    report = best[1]  # the attempt with the fewest remaining problems
+    report["quality_warnings"] = best[2]
 
     report["actions"] = [dict(a, done=False) for a in report["actions"][:3]]
     report["web_intel"] = web_intel
@@ -1009,6 +1050,11 @@ def render_report(report: dict, profile: dict):
         st.success("🎉 Bravo! All actions are done. Come back and tell me how it went: let's plan your next phase.")
     else:
         st.write(f"💬 {report.get('comeback_message', '')}")
+
+    if report.get("quality_warnings"):
+        with st.expander("🛠 Quality checks not fully resolved (testing only)"):
+            for w in report["quality_warnings"]:
+                st.caption(f"- {w}")
 
     web = report.get("web_intel") or {}
     if web.get("ok"):
