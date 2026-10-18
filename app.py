@@ -829,7 +829,11 @@ GENERIC_PHRASES = [
 
 
 # Words that mean "build or set up an automation" (the executive works alone and is not technical)
-BUILD_TERMS = ["automate", "automation", "automated", "automatically", "integrate", "integration"]
+BUILD_PATTERN = re.compile(
+    r"\b(automate|automates|automated|automatically)\b|"
+    r"\b(set up|setup|build|configure|install|implement|connect|launch|test|run)\b(?:\W+\w+){0,5}?\W+"
+    r"(automation|integration|workflow|zap|script)\b"
+)
 
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
                 "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
@@ -867,22 +871,32 @@ FORMAT_CUES = (r"\b(format|checklist|bullet|bullets|columns?|one[- ]page|1[- ]pa
 CONSEQUENCE_TERMS = ["error", "errors", "mistake", "mistakes", "delay", "delays", "risk", "risks",
                      "revenue", "profit", "cost", "costs", "penalty", "penalties",
                      "complaint", "complaints", "compliance", "productivity", "strategic",
-                     "inefficiency", "inefficiencies", "morale"]
+                     "inefficiency", "inefficiencies", "morale", "consultant", "consultants"]
 
 
-def find_unstated_claims(report: dict, allowed_text: str) -> List[str]:
-    """Consequences claimed in understood / priority_reason / insight that the executive never stated."""
-    text = normalize_text(" ".join(
-        [report.get("understood", ""), report.get("priority_reason", ""), report.get("insight", "")]
-        + [f"{a.get('why', '')} {a.get('done_when', '')}" for a in report.get("actions", [])]
-    ))
+FEAR_TERMS = ["concern", "concerns", "worry", "worries", "worried", "fear", "fears", "afraid"]
+
+
+def find_unstated_claims(report: dict, allowed_text: str, profile: Optional[dict] = None) -> List[str]:
+    """Consequences, benefits or emotions claimed in the text that the executive never stated."""
+    narrative = " ".join([report.get("understood", ""), report.get("priority_reason", ""),
+                          report.get("insight", "")])
+    details = " ".join(f"{a.get('why', '')} {a.get('done_when', '')}" for a in report.get("actions", []))
+    text = normalize_text(narrative + " " + details)
     allowed = normalize_text(allowed_text)
+    problems = []
     found = [t for t in CONSEQUENCE_TERMS
              if re.search(rf"\b{re.escape(t)}\b", text) and not re.search(rf"\b{re.escape(t)}\b", allowed)]
     if found:
-        return ["the text claims consequences or benefits the executive never stated ("
-                + ", ".join(found) + "). Remove them and link the pain to their own words and figures instead."]
-    return []
+        problems.append("the text claims consequences or benefits the executive never stated ("
+                        + ", ".join(found) + "). Remove them and link the pain to their own words and figures.")
+    if profile is not None and not is_filled(get_val(profile, "interpretation", "fear")):
+        n = normalize_text(narrative)
+        feared = [t for t in FEAR_TERMS if re.search(rf"\b{t}\b", n)]
+        if feared:
+            problems.append("the executive stated no concern or fear, so do not mention one ("
+                            + ", ".join(feared) + "). Link the pain to their own figure instead.")
+    return problems
 
 
 def report_text_parts(report: dict, include_tool_option: bool = False) -> List[str]:
@@ -973,10 +987,10 @@ def find_quality_problems(report: dict, profile: Optional[dict] = None) -> List[
             problems.append(f"action {i}: mentions AI privacy/policy but does not use an AI assistant; "
                             "either use one or remove the mention")
         build_text = normalize_text(" ".join([a.get("title", ""), a.get("done_when", ""), *steps]))
-        hit = next((t for t in BUILD_TERMS if re.search(rf"\b{t}\b", build_text)), None)
-        if hit:
-            problems.append(f"action {i}: the executive must not build or set up '{hit}' alone; "
-                            "prepare a one-page brief, a checklist or a decision instead")
+        m = BUILD_PATTERN.search(build_text)
+        if m:
+            problems.append(f"action {i}: the executive must not build or set up an automation alone "
+                            f"({m.group(0)}); prepare a one-page brief, a checklist or a decision instead")
         opt = (a.get("tool_option") or "").lower()
         if opt and not any(n in opt for n in allowed_names):
             problems.append(f"action {i}: tool_option must use a name from ai_tool_catalog")
@@ -1036,13 +1050,17 @@ def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
                 "At least one action must name a concrete AI-assisted task and its input document."
             )
         problems += find_quality_problems(report, profile)
-        problems += find_unstated_claims(report, allowed_text)
+        problems += find_unstated_claims(report, allowed_text, profile)
         problems += find_unsupported_figures(report, profile)
         if best is None or len(problems) < best[0]:
             best = (len(problems), report, list(problems))
         if not problems:
             break
-        extra_rule = "\n\nCRITICAL CORRECTION: your previous draft had these problems: " + " | ".join(problems)
+        extra_rule = (
+            "\n\nCRITICAL CORRECTION: your previous draft had these problems: " + " | ".join(problems)
+            + "\n\nPREVIOUS DRAFT (fix ONLY these problems, keep everything else unchanged):\n"
+            + json.dumps(report, ensure_ascii=False)
+        )
 
     report = best[1]  # the attempt with the fewest remaining problems
     report["quality_warnings"] = best[2]
