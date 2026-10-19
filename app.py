@@ -348,6 +348,8 @@ STYLE (sound human, not like a consultant's report):
   "valuable time", "pain points".
 - insight: never promise that time will be freed (day 2 may show the fix is not feasible). Say what they will
   know or have after day 3 (for example whether and how those two days can be recovered).
+  Never write "eliminate", "free them", "efficiency" or "directly impact": the plan finds out and prepares, it
+  does not deliver results.
 - comeback_message: one personal sentence that names something concrete to tell you next time
   (for example what the table showed on day 1).
 
@@ -945,6 +947,7 @@ BUZZWORDS = ["streamline", "streamlined", "streamlining", "optimize", "optimise"
              "pain points", "enhance", "facilitate", "free up", "more important", "important tasks",
              "set the stage", "setting the stage", "paving the way", "pave the way"]
 HEDGES = ["likely", "probably", "might", "potentially", "could be", "may be"]
+PROMISE_TERMS = ["eliminate", "free them", "free your team", "directly impact", "efficiency", "guarantee", "guaranteed"]
 
 
 def find_style_problems(report: dict) -> List[str]:
@@ -964,6 +967,10 @@ def find_style_problems(report: dict) -> List[str]:
     if hedges:
         problems.append("speculative wording (" + ", ".join(hedges)
                         + "): state only what the executive said or what the plan will concretely do.")
+    promises = [w for w in PROMISE_TERMS if re.search(rf"\b{re.escape(w)}\b", claims)]
+    if promises:
+        problems.append("overpromising (" + ", ".join(promises)
+                        + "): the plan finds out and prepares, it does not deliver results.")
     return problems
 
 
@@ -1115,6 +1122,11 @@ def find_quality_problems(report: dict, profile: Optional[dict] = None) -> List[
         opt = (a.get("tool_option") or "").lower()
         if opt and not any(n in opt for n in allowed_names):
             problems.append(f"action {i}: tool_option must use a name from ai_tool_catalog")
+        if opt and prompt:
+            ai_names = {n.lower() for k in ("general_assistant", "document_qa") for n in AI_TOOL_CATALOG[k]["examples"]}
+            if not any(n in opt for n in ai_names):
+                problems.append(f"action {i}: this action asks an AI assistant, so tool_option must be a general "
+                                "assistant from ai_tool_catalog, not another kind of tool")
         if a.get("gain_estimate"):
             if i != len(actions):
                 problems.append(f"action {i}: gain_estimate is only allowed on the last action")
@@ -1378,7 +1390,7 @@ def render_report(report: dict, profile: dict):
         except Exception as e:
             st.error(f"Plan update error: {e}")
 
-    if report.get("quality_warnings"):
+    if report.get("quality_warnings") and st.secrets.get("DEV_MODE"):  # testing panel, hidden in demos
         with st.expander("🛠 Quality checks not fully resolved (testing only)"):
             for w in report["quality_warnings"]:
                 st.caption(f"- {w}")
