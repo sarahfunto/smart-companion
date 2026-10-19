@@ -11,6 +11,7 @@ from typing import List, Optional
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import requests
 import streamlit as st
 from fpdf import FPDF
 from openai import OpenAI
@@ -345,6 +346,8 @@ STYLE (sound human, not like a consultant's report):
   the plan will concretely do.
 - Never use buzzwords: streamline, optimize, leverage, impactful, seamless, robust, holistic, empower, unlock,
   "valuable time", "pain points".
+- insight: never promise that time will be freed (day 2 may show the fix is not feasible). Say what they will
+  know or have after day 3 (for example whether and how those two days can be recovered).
 - comeback_message: one personal sentence that names something concrete to tell you next time
   (for example what the table showed on day 1).
 
@@ -711,6 +714,63 @@ def save_current_session():
 
 
 # -----------------------------------------------------------------------------
+# 10b. MAKE.COM WEBHOOK (client info -> Google Sheet)
+# -----------------------------------------------------------------------------
+MAKE_AUTO_SYNC = True  # send to Make automatically when a plan is generated or updated
+
+
+def make_webhook_configured() -> bool:
+    return bool(st.secrets.get("MAKE_WEBHOOK_URL"))
+
+
+def build_make_payload(event: str) -> dict:
+    """Original keys are kept (your Make scenario maps them). Flat keys are added for Google Sheet columns.
+    Notes and prompts written by the executive are NOT sent."""
+    profile = st.session_state.profile
+    report = st.session_state.get("current_report") or {}
+    actions = report.get("actions") or []
+    done = sum(1 for a in actions if a.get("done"))
+    payload = {
+        "user_email": st.session_state.current_user or "anonymous@example.com",
+        "profile": profile,
+        "chat_history": st.session_state.messages,
+        "timestamp": datetime.now().isoformat(),
+        # --- new keys ---
+        "event": event,  # plan_generated / plan_updated / manual_sync
+        "company_name": get_val(profile, "facts", "company_name"),
+        "industry": get_val(profile, "facts", "industry"),
+        "direct_team_size": get_val(profile, "facts", "direct_team_size"),
+        "company_size": get_val(profile, "facts", "company_size"),
+        "tools": get_val(profile, "facts", "tools"),
+        "primary_pain": get_val(profile, "interpretation", "primary_pain"),
+        "pain_impact": get_val(profile, "interpretation", "pain_impact"),
+        "trigger": get_val(profile, "interpretation", "trigger"),
+        "fear": get_val(profile, "interpretation", "fear"),
+        "priority_pain": report.get("priority_pain"),
+        "report_version": report.get("version"),
+        "actions_done": f"{done}/{len(actions)}" if actions else None,
+        "gain_estimate": next((a.get("gain_estimate") for a in actions if a.get("gain_estimate")), None),
+    }
+    for n in range(3):
+        payload[f"action_{n + 1}"] = actions[n].get("title") if n < len(actions) else None
+    return payload
+
+
+def send_to_make_webhook(event: str = "manual_sync") -> bool:
+    """Send the client profile and plan summary to Make.com. Never raises and never blocks the app for long.
+    Only sends if a webhook is configured AND the executive accepted the data notice."""
+    webhook_url = st.secrets.get("MAKE_WEBHOOK_URL")
+    if not webhook_url or not st.session_state.get("consent_box") or not st.session_state.get("current_user"):
+        return False
+    try:
+        response = requests.post(webhook_url, json=build_make_payload(event), timeout=5)
+        return 200 <= response.status_code < 300
+    except Exception as e:
+        print(f"Make webhook error: {type(e).__name__}")  # no URL in logs
+        return False
+
+
+# -----------------------------------------------------------------------------
 # 11. CONVERSATION ENGINE
 # -----------------------------------------------------------------------------
 FIRST_QUESTION = (
@@ -882,7 +942,8 @@ def extract_numbers(text: str) -> set:
 
 BUZZWORDS = ["streamline", "streamlined", "streamlining", "optimize", "optimise", "optimizing", "leverage",
              "impactful", "seamless", "robust", "holistic", "empower", "unlock", "valuable time",
-             "pain points", "enhance", "facilitate"]
+             "pain points", "enhance", "facilitate", "free up", "more important", "important tasks",
+             "set the stage", "setting the stage", "paving the way", "pave the way"]
 HEDGES = ["likely", "probably", "might", "potentially", "could be", "may be"]
 
 
@@ -1311,6 +1372,8 @@ def render_report(report: dict, profile: dict):
             st.session_state.messages.append({"role": "assistant", "content": msg})
             queue_audio(msg)
             save_current_session()
+            if MAKE_AUTO_SYNC:
+                send_to_make_webhook("plan_updated")
             st.rerun()
         except Exception as e:
             st.error(f"Plan update error: {e}")
@@ -1359,7 +1422,7 @@ st.markdown(
 user_email = st.text_input("📧 Enter your email to start or retrieve your session:", key="email_input")
 consent = st.checkbox(
     "I agree that my voice recordings are transcribed by an AI provider and that my answers are stored "
-    "to restore my session.",
+    "to restore my session" + (" and shared with our team in a Google Sheet." if st.secrets.get("MAKE_WEBHOOK_URL") else "."),
     key="consent_box",
 )
 
@@ -1460,6 +1523,17 @@ def completeness_radar(profile: dict):
 # -----------------------------------------------------------------------------
 # 15. LAYOUT
 # -----------------------------------------------------------------------------
+with st.sidebar:
+    st.subheader("Team sync")
+    if not make_webhook_configured():
+        st.caption("Make.com sync is off (add MAKE_WEBHOOK_URL in the app secrets).")
+    else:
+        if st.button("Sync data to Make.com", disabled=not session_ready):
+            if send_to_make_webhook("manual_sync"):
+                st.success("Synced to the Google Sheet via Make.")
+            else:
+                st.error("Sync failed. Check MAKE_WEBHOOK_URL in the secrets.")
+
 col_chat, col_profile = st.columns([3, 2])
 
 with col_chat:
@@ -1573,6 +1647,8 @@ with col_profile:
             })
             queue_audio(f"Your action plan is ready. {comeback}")
             save_current_session()
+            if MAKE_AUTO_SYNC:
+                send_to_make_webhook("plan_generated")
             st.rerun()
         except Exception as e:
             st.error(f"Report generation error: {e}")
