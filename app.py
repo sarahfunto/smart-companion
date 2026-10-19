@@ -322,7 +322,7 @@ Return a JSON object with:
     * done_when: a verifiable "done when..." criterion
     * ai_prompt: for every action that uses an AI assistant, a ready-to-paste prompt written in the executive's
       language, with at least 1 [BRACKETED] placeholder for their data and the exact output format
-      (e.g. 'as a 3-column table', 'in 5 bullet points'). No product names. Otherwise null.
+      (e.g. 'as a 3-column table', 'in 5 bullet points'). No AI product names (the executive's own tools may be named). Otherwise null.
     * gain_estimate: ONLY on the day-3 action, and ONLY if profile_data.interpretation.pain_impact contains
       figures. Start with "Potential gain once solved:" then show the simple calculation from THEIR numbers
       (e.g. "3 h/week x 4 = about 12 h/month"). Otherwise null on every action.
@@ -352,6 +352,14 @@ ACTION QUALITY RULES:
 - Every action must work directly on the priority_pain (what is re-typed, where, by whom). No generic templates,
   training or "streamlining".
 - gain_estimate: use the executive's own unit (e.g. days) and only their numbers. Never convert days to hours.
+- Never create a guide, template, training or procedure that helps the team keep doing the manual task more
+  consistently. Each action must remove the manual step or prepare its removal.
+- Drafting a brief is a task for the AI assistant: give the day-3 action an ai_prompt too.
+- Never send the executive to a consultant, specialist, expert or agency; they hand the brief to a colleague,
+  their IT contact or whoever administers their tools.
+- If input data contains `expert_playbook` AND it describes the same problem as priority_pain, build the 3 actions
+  by adapting ITS steps, prompts, order and AI usage to the executive's own tools and words. Do not invent steps
+  outside it. If it describes another problem, ignore it.
 - insight: never claim consequences the executive did not state (errors, delays, lost clients) unless they said so.
   If no concern was stated, link the pain to their own figure instead.
 
@@ -825,12 +833,13 @@ GENERIC_PHRASES = [
     "quick win", "quick wins", "regular check", "define a strategy", "raise awareness", "assess your needs",
     "map the current", "map current", "map the process", "draft a plan", "automation plan",
     "gather your team", "whiteboard", "identify steps", "identify key pain",
+    "data entry guide", "entry guide", "entry template", "standard entry", "training session",
 ]
 
 
 # Words that mean "build or set up an automation" (the executive works alone and is not technical)
 BUILD_PATTERN = re.compile(
-    r"\b(automate|automates|automated|automatically)\b|"
+    r"\b(automate|automatically)\b|"
     r"\b(set up|setup|build|configure|install|implement|connect|launch|test|run)\b(?:\W+\w+){0,5}?\W+"
     r"(automation|integration|workflow|zap|script)\b"
 )
@@ -865,13 +874,14 @@ def find_unsupported_figures(report: dict, profile: dict) -> List[str]:
 
 # The prompt must state an output format (table, checklist, bullets, one page...)
 FORMAT_CUES = (r"\b(format|checklist|bullet|bullets|columns?|one[- ]page|1[- ]page|no more than|maximum|"
-               r"in \d+|in one|in a table|as a table|as a list|as a checklist)\b")
+               r"in \d+|in one|in a table|as a table|as a list|as a checklist|output as|step[- ]by[- ]step)\b")
 
 # Consequences the narrative sections may only mention if the executive said them first
 CONSEQUENCE_TERMS = ["error", "errors", "mistake", "mistakes", "delay", "delays", "risk", "risks",
                      "revenue", "profit", "cost", "costs", "penalty", "penalties",
                      "complaint", "complaints", "compliance", "productivity", "strategic",
-                     "inefficiency", "inefficiencies", "morale", "consultant", "consultants"]
+                     "inefficiency", "inefficiencies", "morale", "consultant", "consultants",
+                     "specialist", "specialists", "expert", "experts", "agency", "freelancer"]
 
 
 FEAR_TERMS = ["concern", "concerns", "worry", "worries", "worried", "fear", "fears", "afraid"]
@@ -1006,6 +1016,68 @@ def find_quality_problems(report: dict, profile: Optional[dict] = None) -> List[
     return problems
 
 
+# Curated by YOU or a domain expert. Add one entry per recurring pain; review the prompts regularly.
+EXPERT_PLAYBOOKS = {
+    "double_entry": {
+        "label": "The same data is re-typed between two tools",
+        "keywords": ["re typ", "retyp", "re enter", "reenter", "re key", "double entry", "twice",
+                     "copy paste", "copy and paste", "ressaisie", "double saisie", "saisie en double",
+                     "saisir deux fois", "copier coller"],
+        "actions": [
+            {
+                "day": 1, "uses_ai": False,
+                "title": "Map what is re-typed",
+                "steps": [
+                    "Take the 5 most recent real cases handled in both tools.",
+                    "Build a table with 3 columns: field in tool A / matching column in tool B / who re-types it today.",
+                    "Mark the 3 fields that cost the most time.",
+                ],
+                "done_when": "the table covers 5 real cases and the 3 costliest fields are marked",
+            },
+            {
+                "day": 2, "uses_ai": True,
+                "title": "Ask an AI assistant for ways to stop re-typing",
+                "steps": [
+                    "Keep only the field names from your table: remove names, prices and any confidential value.",
+                    "Paste them into an AI assistant with the prompt below.",
+                    "For each option, check the tool's official documentation, then mark it feasible, not feasible or unknown.",
+                ],
+                "ai_prompt": "I re-type data between [TOOL A] and [TOOL B]. Field names involved: [PASTE FIELD NAMES]. "
+                             "List the usual ways to avoid re-typing (export/import, built-in connector, shared file, other). "
+                             "Provide the output as a 4-column table: option / effort for a non-technical person / "
+                             "prerequisites / what to check in the official documentation. "
+                             "Say clearly when you are not sure an option exists.",
+                "privacy": "use anonymized content (field names only) and check your company's AI policy first",
+                "done_when": "each option is marked feasible, not feasible or unknown after checking the official documentation",
+            },
+            {
+                "day": 3, "uses_ai": True,
+                "title": "Write the brief for whoever administers your tools",
+                "steps": [
+                    "List the feasible options from Day 2 and the 3 costliest fields.",
+                    "Ask an AI assistant to turn them into a one-page brief with the prompt below.",
+                    "Send it, or book 15 minutes, with a colleague or your IT contact who administers the tools.",
+                ],
+                "ai_prompt": "Write a one-page brief for the person who administers [TOOL A] and [TOOL B]. "
+                             "Context: [DESCRIBE THE RE-TYPING IN 2 SENTENCES]. Include: fields to move [LIST FIELDS], "
+                             "how often [FREQUENCY], what done looks like, and the feasible options [LIST OPTIONS]. "
+                             "Provide the output as a one-page document with 4 headings.",
+                "privacy": "use anonymized content and check your company's AI policy first",
+                "done_when": "the brief is sent or a 15-minute review is booked",
+            },
+        ],
+    },
+}
+
+
+def match_playbook(profile: dict) -> Optional[dict]:
+    pain = normalize_text(get_val(profile, "interpretation", "primary_pain") or "")
+    for pb in EXPERT_PLAYBOOKS.values():
+        if any(normalize_text(k) in pain for k in pb["keywords"]):
+            return {k: v for k, v in pb.items() if k != "keywords"}
+    return None
+
+
 def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
     user_quotes = [m["content"] for m in messages if m["role"] == "user"][-10:]
     payload = {
@@ -1014,6 +1086,9 @@ def generate_report(profile: dict, web_intel: dict, messages: list) -> dict:
         "external_web_intelligence": web_intel.get("summary"),
         "ai_tool_catalog": AI_TOOL_CATALOG,
     }
+    playbook = match_playbook(profile)
+    if playbook:
+        payload["expert_playbook"] = playbook
     # Anything the executive actually said is allowed (profile tools + all their messages)
     allowed_text = " ".join(m["content"] for m in messages if m["role"] == "user")
     allowed_text += " " + str(get_val(profile, "facts", "tools") or "")
